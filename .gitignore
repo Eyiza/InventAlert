@@ -63,6 +63,9 @@ nb-configuration.xml
 Thumbs.db
 desktop.ini
 
+# JetBrains Junie AI
+.junie/
+
 # Environment and secrets
 .env
 .env.local
