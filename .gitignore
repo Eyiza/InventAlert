@@ -27,6 +27,8 @@ replay_pid*
 erd.md
 plan.md
 prd.md
+DEV_A_DOMAIN_AND_USER_MANAGEMENT.md
+DEV_B_SECURITY_AND_AUTH.md
 
 # Maven build output
 target/
