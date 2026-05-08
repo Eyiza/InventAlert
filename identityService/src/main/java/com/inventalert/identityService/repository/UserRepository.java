@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, String> {
+    // Added at Dev B's request — needed for login (email is globally unique per V2 migration)
+    Optional<User> findByEmail(String email);
     Optional<User> findByCompanyIdAndEmail(String companyId, String email);
     List<User> findAllByCompanyId(String companyId);
     boolean existsByCompanyIdAndEmail(String companyId, String email);

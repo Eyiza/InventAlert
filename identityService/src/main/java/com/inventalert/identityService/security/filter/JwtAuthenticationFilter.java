@@ -1,0 +1,79 @@
+package com.inventalert.identityService.security.filter;
+
+import com.inventalert.identityService.model.CompanyStatus;
+import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.security.model.JwtUser;
+import com.inventalert.identityService.security.service.JwtUtil;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+/**
+ * Stateless JWT filter — runs on every request.
+ * Validates token, checks company suspension, and populates SecurityContext.
+ */
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtUtil jwtUtil;
+    private final CompanyRepository companyRepository;
+
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, CompanyRepository companyRepository) {
+        this.jwtUtil = jwtUtil;
+        this.companyRepository = companyRepository;
+    }
+
+    @Override
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain chain)
+            throws ServletException, IOException {
+
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.startsWith("Bearer ")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        String token = header.substring(7);
+        if (!jwtUtil.isTokenValid(token)) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
+            return;
+        }
+
+        String role      = jwtUtil.extractRole(token);
+        String companyId = jwtUtil.extractCompanyId(token);
+
+        // SuperAdmin tokens carry no companyId — skip suspension check
+        if (companyId != null && !"SUPER_ADMIN".equals(role)) {
+            boolean suspended = companyRepository.findById(companyId)
+                    .map(c -> c.getStatus() == CompanyStatus.SUSPENDED)
+                    .orElse(false);
+            if (suspended) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Company account is suspended");
+                return;
+            }
+        }
+
+        JwtUser principal = new JwtUser(
+                jwtUtil.extractUserId(token),
+                companyId,
+                role,
+                jwtUtil.extractWarehouseId(token)
+        );
+
+        UsernamePasswordAuthenticationToken auth =
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        chain.doFilter(request, response);
+    }
+}
