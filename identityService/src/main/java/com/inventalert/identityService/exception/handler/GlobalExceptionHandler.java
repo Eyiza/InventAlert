@@ -1,9 +1,12 @@
 package com.inventalert.identityService.exception.handler;
 
+import com.inventalert.identityService.dto.response.ErrorResponse;
 import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
 import com.inventalert.identityService.exception.UserAlreadyDeactivatedException;
 import com.inventalert.identityService.exception.UserNotFoundException;
+import com.inventalert.identityService.security.exception.InvalidCredentialsException;
+import com.inventalert.identityService.security.exception.SuspendedCompanyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -34,6 +37,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(409).body(new ErrorResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return ResponseEntity.status(401).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SuspendedCompanyException.class)
+    public ResponseEntity<ErrorResponse> handleSuspendedCompany(SuspendedCompanyException ex) {
+        return ResponseEntity.status(403).body(new ErrorResponse(ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
@@ -41,8 +54,4 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.joining(", "));
         return ResponseEntity.status(400).body(new ErrorResponse(message));
     }
-
-    // Dev B will add: InvalidCredentialsException → 401, SuspendedCompanyException → 403
 }
-
-record ErrorResponse(String message) {}

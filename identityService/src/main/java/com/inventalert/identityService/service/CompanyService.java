@@ -4,6 +4,7 @@ import com.inventalert.identityService.dto.response.CompanyResponse;
 import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.model.Company;
 import com.inventalert.identityService.model.CompanyStatus;
+import com.inventalert.identityService.kafka.CompanyEventProducer;
 import com.inventalert.identityService.repository.CompanyRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

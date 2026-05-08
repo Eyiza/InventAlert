@@ -12,8 +12,6 @@ import com.inventalert.identityService.model.User;
 import com.inventalert.identityService.model.WarehouseAssignment;
 import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,10 +26,9 @@ public class UserService {
     private final WarehouseAssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Autowired
     public UserService(UserRepository userRepository,
                        WarehouseAssignmentRepository assignmentRepository,
-                       @Lazy PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.passwordEncoder = passwordEncoder;
