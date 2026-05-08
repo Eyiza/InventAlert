@@ -4,6 +4,7 @@ import com.inventalert.identityService.dto.response.CompanyResponse;
 import com.inventalert.identityService.model.Company;
 import com.inventalert.identityService.model.CompanyStatus;
 import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.service.CompanyEventProducer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
