@@ -242,4 +242,51 @@ class UserServiceTest {
         assertThat(response.warehouseId()).isEqualTo(warehouseId);
         verify(assignmentRepository).save(any(WarehouseAssignment.class));
     }
+
+    @Test
+    void AssignToWarehouse_AlreadyAssigned_CheckIfReturnsExistingTest() {
+        String companyId = "company-1";
+        String userId = "user-1";
+        String warehouseId = "warehouse-1";
+        AssignWarehouseRequest request = new AssignWarehouseRequest(warehouseId);
+
+        User user = User.builder()
+                .id(userId)
+                .companyId(companyId)
+                .email("bob@acme.com")
+                .passwordHash("h")
+                .role(Role.WAREHOUSE_STAFF)
+                .isActive(true)
+                .build();
+
+        WarehouseAssignment existingAssignment = new WarehouseAssignment();
+        existingAssignment.setId("assignment-1");
+        existingAssignment.setUserId(userId);
+        existingAssignment.setCompanyId(companyId);
+        existingAssignment.setWarehouseId(warehouseId);
+
+        when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.of(user));
+        when(assignmentRepository.existsByUserIdAndWarehouseId(userId, warehouseId)).thenReturn(true);
+        when(assignmentRepository.findAllByUserId(userId)).thenReturn(List.of(existingAssignment));
+
+        AssignmentResponse response = userService.assignToWarehouse(companyId, userId, request);
+
+        assertThat(response.id()).isEqualTo("assignment-1");
+        assertThat(response.warehouseId()).isEqualTo(warehouseId);
+        verify(assignmentRepository, never()).save(any(WarehouseAssignment.class));
+    }
+
+    @Test
+    void GetAssignments_UserNotFound_CheckIfThrowsExceptionTest() {
+        String companyId = "company-1";
+        String userId = "non-existent-user";
+
+        when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getAssignments(companyId, userId))
+                .isInstanceOf(UserNotFoundException.class)
+                .hasMessageContaining(userId);
+
+        verify(assignmentRepository, never()).findAllByUserId(any());
+    }
 }
