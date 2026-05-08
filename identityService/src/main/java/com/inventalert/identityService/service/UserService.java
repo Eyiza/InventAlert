@@ -12,12 +12,13 @@ import com.inventalert.identityService.model.User;
 import com.inventalert.identityService.model.WarehouseAssignment;
 import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -27,9 +28,10 @@ public class UserService {
     private final WarehouseAssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Autowired
     public UserService(UserRepository userRepository,
                        WarehouseAssignmentRepository assignmentRepository,
-                       PasswordEncoder passwordEncoder) {
+                       @Lazy PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.passwordEncoder = passwordEncoder;
@@ -40,7 +42,6 @@ public class UserService {
             throw new EmailAlreadyExistsException(request.email());
         }
         User user = User.builder()
-                .id(UUID.randomUUID().toString())
                 .companyId(companyId)
                 .email(request.email())
                 .passwordHash(passwordEncoder.encode(request.password()))
@@ -84,7 +85,6 @@ public class UserService {
         }
 
         WarehouseAssignment assignment = new WarehouseAssignment();
-        assignment.setId(UUID.randomUUID().toString());
         assignment.setUserId(userId);
         assignment.setCompanyId(companyId);
         assignment.setWarehouseId(request.warehouseId());
