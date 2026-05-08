@@ -85,3 +85,4 @@ logs/
 docker-compose.override.yml
 
 env.properties
+SENIOR_DEV_HANDOFF.md
