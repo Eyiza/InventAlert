@@ -1,6 +1,8 @@
 package com.inventalert.identityService.security.exception;
 
-public class InvalidCredentialsException extends RuntimeException {
+import com.inventalert.identityService.exception.IdentityServiceException;
+
+public class InvalidCredentialsException extends IdentityServiceException {
     public InvalidCredentialsException() {
         super("Invalid email or password");
     }

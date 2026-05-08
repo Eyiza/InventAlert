@@ -8,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,20 +17,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Stateless JWT filter — runs on every request.
- * Validates token, checks company suspension, and populates SecurityContext.
- */
 @Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final CompanyRepository companyRepository;
-
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, CompanyRepository companyRepository) {
-        this.jwtUtil = jwtUtil;
-        this.companyRepository = companyRepository;
-    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -52,7 +45,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String role      = jwtUtil.extractRole(token);
         String companyId = jwtUtil.extractCompanyId(token);
 
-        // SuperAdmin tokens carry no companyId — skip suspension check
         if (companyId != null && !"SUPER_ADMIN".equals(role)) {
             boolean suspended = companyRepository.findById(companyId)
                     .map(c -> c.getStatus() == CompanyStatus.SUSPENDED)

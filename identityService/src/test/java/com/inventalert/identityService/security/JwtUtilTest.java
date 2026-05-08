@@ -18,7 +18,6 @@ class JwtUtilTest {
 
     private JwtUtil jwtUtil;
 
-    // Minimum 32-char secret to satisfy HS256 key-length requirement
     private static final String TEST_SECRET = "test-secret-key-minimum-32-chars!!";
 
     @BeforeEach
@@ -26,8 +25,6 @@ class JwtUtilTest {
         jwtUtil = new JwtUtil();
         ReflectionTestUtils.setField(jwtUtil, "secret", TEST_SECRET);
     }
-
-    // ── generateToken ──────────────────────────────────────────────────
 
     @Test
     void generateToken_containsCorrectClaims() {
@@ -57,7 +54,6 @@ class JwtUtilTest {
 
         String token = jwtUtil.generateToken(user);
 
-        // warehouseId is only embedded for WAREHOUSE_STAFF
         assertThat(jwtUtil.extractWarehouseId(token)).isNull();
     }
 
@@ -70,8 +66,6 @@ class JwtUtilTest {
         assertThat(jwtUtil.extractWarehouseId(token)).isNull();
     }
 
-    // ── generateSuperAdminToken ────────────────────────────────────────
-
     @Test
     void generateSuperAdminToken_hasNoCompanyId() {
         String token = jwtUtil.generateSuperAdminToken("super-admin-id");
@@ -81,8 +75,6 @@ class JwtUtilTest {
         assertThat(jwtUtil.extractCompanyId(token)).isNull();
         assertThat(jwtUtil.extractWarehouseId(token)).isNull();
     }
-
-    // ── isTokenValid ───────────────────────────────────────────────────
 
     @Test
     void isTokenValid_validToken_returnsTrue() {
@@ -101,7 +93,6 @@ class JwtUtilTest {
 
     @Test
     void isTokenValid_expiredToken_returnsFalse() {
-        // Build a token manually with a past expiry using the same signing key
         String expiredToken = Jwts.builder()
                 .setSubject("user-x")
                 .setIssuedAt(new Date(System.currentTimeMillis() - 10_000))
@@ -116,8 +107,6 @@ class JwtUtilTest {
     void isTokenValid_emptyString_returnsFalse() {
         assertThat(jwtUtil.isTokenValid("")).isFalse();
     }
-
-    // ── extractors ────────────────────────────────────────────────────
 
     @Test
     void extractUserId_returnsSubClaim() {
@@ -135,13 +124,11 @@ class JwtUtilTest {
         assertThat(jwtUtil.extractRole(token)).isEqualTo("MANAGER");
     }
 
-    // ── helpers ───────────────────────────────────────────────────────
-
     private User buildUser(String id, String companyId, Role role, String warehouseId) {
         return User.builder()
                 .id(id)
                 .companyId(companyId)
-                .email("test@example.com")
+                .email("tunde@test.ng")
                 .passwordHash("hash")
                 .role(role)
                 .warehouseId(warehouseId)

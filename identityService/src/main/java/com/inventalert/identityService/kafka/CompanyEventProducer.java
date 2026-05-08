@@ -1,5 +1,6 @@
 package com.inventalert.identityService.kafka;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
@@ -9,16 +10,13 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class CompanyEventProducer {
 
-    static final String TOPIC_COMPANY_CREATED    = "company.created";
-    static final String TOPIC_COMPANY_OFFBOARDED = "company.offboarded";
+    private static final String TOPIC_COMPANY_CREATED    = "company.created";
+    private static final String TOPIC_COMPANY_OFFBOARDED = "company.offboarded";
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
-
-    public CompanyEventProducer(KafkaTemplate<String, Object> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
-    }
 
     public void publishCompanyCreated(String companyId, String companyName, String adminEmail) {
         Map<String, Object> event = new HashMap<>();

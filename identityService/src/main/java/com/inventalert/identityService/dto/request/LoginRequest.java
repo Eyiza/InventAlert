@@ -1,8 +1,16 @@
 package com.inventalert.identityService.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
 
-public record LoginRequest(
-        @NotBlank String email,
-        @NotBlank String password
-) {}
+@Getter
+@Setter
+public class LoginRequest {
+
+    @NotBlank
+    private String email;
+
+    @NotBlank
+    private String password;
+}

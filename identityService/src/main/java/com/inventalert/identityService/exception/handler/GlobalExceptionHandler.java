@@ -1,5 +1,6 @@
 package com.inventalert.identityService.exception.handler;
 
+import com.inventalert.identityService.dto.response.ErrorResponse;
 import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
 import com.inventalert.identityService.exception.UserAlreadyDeactivatedException;
@@ -36,7 +37,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(409).body(new ErrorResponse(ex.getMessage()));
     }
 
-    // Dev B's auth exceptions
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
         return ResponseEntity.status(401).body(new ErrorResponse(ex.getMessage()));
@@ -55,5 +55,3 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(400).body(new ErrorResponse(message));
     }
 }
-
-record ErrorResponse(String message) {}

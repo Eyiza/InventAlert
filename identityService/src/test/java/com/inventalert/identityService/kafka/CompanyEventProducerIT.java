@@ -1,4 +1,4 @@
-package com.inventalert.identityService.controller.kafka;
+package com.inventalert.identityService.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inventalert.identityService.dto.request.SignupRequest;
@@ -8,7 +8,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
@@ -49,39 +49,48 @@ class CompanyEventProducerIT {
 
     @Test
     void signup_publishesCompanyCreatedEventWithCorrectPayload() throws Exception {
-        SignupRequest req = new SignupRequest("Kafka Corp", "kafka@corp.io", "password123");
+        SignupRequest req = new SignupRequest();
+        req.setCompanyName("Flutterwave Ltd");
+        req.setAdminEmail("ops@flutter.ng");
+        req.setPassword("password123");
 
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());
 
-        // Consume the event from the Kafka topic
         ConsumerRecord<String, String> record = pollOneRecord("company.created");
 
         assertThat(record).isNotNull();
         Map<?, ?> payload = objectMapper.readValue(record.value(), Map.class);
-        assertThat(payload.get("companyName")).isEqualTo("Kafka Corp");
-        assertThat(payload.get("adminEmail")).isEqualTo("kafka@corp.io");
+        assertThat(payload.get("companyName")).isEqualTo("Flutterwave Ltd");
+        assertThat(payload.get("adminEmail")).isEqualTo("ops@flutter.ng");
         assertThat(payload.get("companyId")).isNotNull();
         assertThat(payload.get("eventId")).isNotNull();
         assertThat(payload.get("timestamp")).isNotNull();
-        // Key is the companyId (used for Kafka partitioning)
         assertThat(record.key()).isEqualTo(payload.get("companyId").toString());
     }
 
     @Test
     void signup_eventIdIsUniquePerSignup() throws Exception {
+        SignupRequest reqA = new SignupRequest();
+        reqA.setCompanyName("Aso Rock Tech");
+        reqA.setAdminEmail("info@asorock.ng");
+        reqA.setPassword("password123");
+
+        SignupRequest reqB = new SignupRequest();
+        reqB.setCompanyName("Lekki Startups");
+        reqB.setAdminEmail("admin@lekki.ng");
+        reqB.setPassword("password123");
+
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new SignupRequest("Corp A", "a@corp.io", "password123"))))
+                        .content(objectMapper.writeValueAsString(reqA)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new SignupRequest("Corp B", "b@corp.io", "password123"))))
+                        .content(objectMapper.writeValueAsString(reqB)))
                 .andExpect(status().isCreated());
 
         ConsumerRecord<String, String> first  = pollOneRecord("company.created");
@@ -95,12 +104,6 @@ class CompanyEventProducerIT {
         assertThat(firstEventId).isNotEqualTo(secondEventId);
     }
 
-    // ── helpers ────────────────────────────────────────────────────────
-
-    /**
-     * Creates a short-lived consumer, subscribes to the topic, and polls once.
-     * Uses the Testcontainers Kafka bootstrap server directly.
-     */
     private ConsumerRecord<String, String> pollOneRecord(String topic) {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());

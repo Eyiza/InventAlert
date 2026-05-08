@@ -22,7 +22,7 @@ public class JwtUtil {
     @Value("${JWT_SECRET}")
     private String secret;
 
-    private static final long EXPIRY_MS = 24 * 60 * 60 * 1000L; // 24 hours
+    private static final long EXPIRY_MS = 24 * 60 * 60 * 1000L;
 
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
@@ -37,7 +37,6 @@ public class JwtUtil {
     public String generateSuperAdminToken(String superAdminId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", "SUPER_ADMIN");
-        // No companyId — SuperAdmin is platform-level, not scoped to any company
         return buildToken(claims, superAdminId);
     }
 
