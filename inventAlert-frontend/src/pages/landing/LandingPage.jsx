@@ -130,7 +130,7 @@ export default function LandingPage() {
         <div className="relative max-w-6xl mx-auto px-6 py-28 text-center">
           <div className="inline-flex items-center gap-2 bg-white/15 border border-white/20 rounded-full px-4 py-1.5 text-sm font-medium mb-8">
             <span className="w-2 h-2 rounded-full bg-teal-300 animate-pulse" />
-            Now in v1.0 — multi-warehouse support live
+            Multi-warehouse support live
           </div>
           <h1 className="text-5xl sm:text-6xl font-extrabold leading-tight tracking-tight mb-6">
             Warehouse intelligence,
@@ -243,7 +243,7 @@ export default function LandingPage() {
               <BoxIcon className="w-4 h-4 text-white" />
             </div>
             <span className="font-semibold text-gray-700">InventAlert</span>
-            <span className="text-gray-400 text-sm ml-1">v1.0</span>
+            {/* <span className="text-gray-400 text-sm ml-1">v1.0</span> */}
           </div>
           <div className="flex items-center gap-5 text-sm text-gray-500">
             <Link to="/login" className="hover:text-gray-900 transition-colors">Sign In</Link>

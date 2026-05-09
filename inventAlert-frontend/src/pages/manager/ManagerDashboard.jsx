@@ -405,7 +405,7 @@ function AnalyticsPanel() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-gray-900 truncate">{s.productName} <span className="text-gray-400 font-normal">· {s.warehouseName}</span></span>
-                    <span className="text-sm font-semibold text-gray-700 ml-2 flex-shrink-0">{s.velocityPerDay}/day</span>
+                    <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{s.velocityPerDay}/day</span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2">
                     <div className="bg-teal-600 h-2 rounded-full transition-all" style={{ width: `${(s.velocityPerDay / maxVelocity) * 100}%` }} />

@@ -76,7 +76,7 @@ export default function NotificationDrawer({ open, onClose, notifications, onMar
                     className={`flex gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-green-50/40' : ''}`}
                     onClick={() => !n.isRead && dispatch(markAsRead(n.id))}
                   >
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${meta.bg} ${meta.text}`}>
+                    <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${meta.bg} ${meta.text}`}>
                       {meta.icon}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -86,7 +86,7 @@ export default function NotificationDrawer({ open, onClose, notifications, onMar
                       <p className="text-xs text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
                     </div>
                     {!n.isRead && (
-                      <div className="flex-shrink-0 mt-1.5">
+                      <div className="shrink-0 mt-1.5">
                         <div className="w-2 h-2 rounded-full bg-green-500" />
                       </div>
                     )}

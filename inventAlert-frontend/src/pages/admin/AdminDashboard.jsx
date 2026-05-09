@@ -259,10 +259,10 @@ function WarehouseDetail({ warehouse, onBack }) {
                   <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">No movements yet</td></tr>
                 ) : whMovements.map(m => (
                   <tr key={m.id} className="hover:bg-gray-50/60">
-                    <td className="px-4 py-2.5 font-medium text-gray-900 max-w-[120px] truncate">{m.productName}</td>
+                    <td className="px-4 py-2.5 font-medium text-gray-900 max-w-30 truncate">{m.productName}</td>
                     <td className="px-4 py-2.5"><StatusBadge status={m.type} size="xs" /></td>
                     <td className="px-4 py-2.5 font-medium text-gray-900">{m.quantity}</td>
-                    <td className="px-4 py-2.5 text-gray-500 max-w-[80px] truncate">{m.createdByName}</td>
+                    <td className="px-4 py-2.5 text-gray-500 max-w-20 truncate">{m.createdByName}</td>
                     <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{fmtDT(m.createdAt)}</td>
                   </tr>
                 ))}
@@ -289,13 +289,13 @@ function WarehouseDetail({ warehouse, onBack }) {
                   <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">No transfers yet</td></tr>
                 ) : whTransfers.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50/60">
-                    <td className="px-4 py-2.5 font-medium text-gray-900 max-w-[120px] truncate">{t.productName}</td>
+                    <td className="px-4 py-2.5 font-medium text-gray-900 max-w-30 truncate">{t.productName}</td>
                     <td className="px-4 py-2.5">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.direction === 'OUT' ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700'}`}>
                         {t.direction}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-gray-600 max-w-[100px] truncate">{t.otherWarehouse}</td>
+                    <td className="px-4 py-2.5 text-gray-600 max-w-25 truncate">{t.otherWarehouse}</td>
                     <td className="px-4 py-2.5 font-medium text-gray-900">{t.quantity}</td>
                     <td className="px-4 py-2.5"><StatusBadge status={t.status} size="xs" /></td>
                   </tr>
@@ -632,7 +632,7 @@ function ProductsPanel() {
       {showAdd && !edit && (
         <Modal title="Add Products" wide onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]) }}>
           <form onSubmit={handleSubmit}>
-            <div className="space-y-3 mb-4 max-h-[420px] overflow-y-auto pr-1">
+            <div className="space-y-3 mb-4 max-h-105 overflow-y-auto pr-1">
               {rows.map((row, i) => (
                 <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
                   <div className="flex items-center justify-between mb-3">
