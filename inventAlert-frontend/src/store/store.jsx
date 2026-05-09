@@ -8,6 +8,7 @@ import reconciliationsReducer from './slices/reconciliationsSlice'
 import notificationsReducer from './slices/notificationsSlice'
 import analyticsReducer from './slices/analyticsSlice'
 import superadminReducer from './slices/superadminSlice'
+import purchaseOrdersReducer from './slices/purchaseOrdersSlice'
 
 const store = configureStore({
   reducer: {
@@ -20,6 +21,7 @@ const store = configureStore({
     notifications: notificationsReducer,
     analytics: analyticsReducer,
     superadmin: superadminReducer,
+    purchaseOrders: purchaseOrdersReducer,
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware(),
 })

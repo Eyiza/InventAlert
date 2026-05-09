@@ -71,12 +71,12 @@ export default function Sidebar({ navItems = [], activeTab, onTabChange }) {
         ))}
       </nav>
 
-      {/* Footer — always show InventAlert mark */}
+      {/* Footer */}
       <div className="px-4 py-3 border-t border-teal-100 flex items-center gap-2 shrink-0">
         <div className="w-5 h-5 rounded-md bg-teal-600 flex items-center justify-center shrink-0">
           <BoxIcon className="w-3 h-3 text-white" />
         </div>
-        <p className="text-xs text-teal-400 font-medium">InventAlert v1.0</p>
+        <p className="text-xs text-teal-400 font-medium">InventAlert</p>
       </div>
     </aside>
   )

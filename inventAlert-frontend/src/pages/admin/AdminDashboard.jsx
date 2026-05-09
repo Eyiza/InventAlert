@@ -91,6 +91,224 @@ function parseCSV(text) {
   }).filter(r => r.name && r.sku)
 }
 
+const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+const ROLE_PILL = {
+  MANAGER: 'bg-purple-100 text-purple-700',
+  WAREHOUSE_STAFF: 'bg-teal-100 text-teal-700',
+  PROCUREMENT_OFFICER: 'bg-blue-100 text-blue-700',
+  ADMIN: 'bg-gray-100 text-gray-700',
+}
+
+function WarehouseDetail({ warehouse, onBack }) {
+  const { warehouseAssignments, users } = useSelector(s => s.users)
+  const { stockLevels, products, movements, warehouses } = useSelector(s => s.stock)
+  const { transfers } = useSelector(s => s.transfers)
+
+  const assignedUserIds = warehouseAssignments.filter(a => a.warehouseId === warehouse.id).map(a => a.userId)
+  const assignedUsers = users.filter(u => assignedUserIds.includes(u.id))
+
+  const whStock = stockLevels
+    .filter(sl => sl.warehouseId === warehouse.id)
+    .map(sl => ({
+      ...sl,
+      productName: products.find(p => p.id === sl.productId)?.name || sl.productId,
+      sku: products.find(p => p.id === sl.productId)?.sku || '',
+      unit: products.find(p => p.id === sl.productId)?.unitOfMeasure || '',
+      status: sl.currentStock < sl.threshold ? 'CRITICAL' : sl.currentStock < sl.threshold * 1.25 ? 'WARNING' : 'OK',
+    }))
+
+  const whMovements = movements
+    .filter(m => m.warehouseId === warehouse.id)
+    .slice(0, 10)
+    .map(m => ({
+      ...m,
+      productName: products.find(p => p.id === m.productId)?.name || m.productId,
+      createdByName: users.find(u => u.id === m.createdBy)?.name || m.createdBy,
+    }))
+
+  const whTransfers = transfers
+    .filter(t => t.fromWarehouseId === warehouse.id || t.toWarehouseId === warehouse.id)
+    .slice(0, 10)
+    .map(t => ({
+      ...t,
+      productName: products.find(p => p.id === t.productId)?.name || t.productId,
+      direction: t.fromWarehouseId === warehouse.id ? 'OUT' : 'IN',
+      otherWarehouse: warehouses.find(w => w.id === (t.fromWarehouseId === warehouse.id ? t.toWarehouseId : t.fromWarehouseId))?.name || '?',
+    }))
+
+  const criticalCount = whStock.filter(s => s.status === 'CRITICAL').length
+  const activeTransfers = whTransfers.filter(t => ['SUGGESTED', 'APPROVED', 'IN_TRANSIT'].includes(t.status)).length
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start gap-4">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal-600 transition-colors mt-1 shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Warehouses
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-xl font-bold text-gray-900">{warehouse.name}</h2>
+            <StatusBadge status={warehouse.isActive ? 'ACTIVE' : 'SUSPENDED'} />
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">{warehouse.address}</p>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard title="Assigned Users" value={assignedUsers.length} color="blue" />
+        <StatCard title="Products in Stock" value={whStock.length} color="teal" />
+        <StatCard title="Critical Items" value={criticalCount} color={criticalCount > 0 ? 'red' : 'green'} />
+        <StatCard title="Active Transfers" value={activeTransfers} color={activeTransfers > 0 ? 'amber' : 'green'} />
+      </div>
+
+      {/* Assigned Team */}
+      <div className="bg-white rounded-xl border border-gray-200">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Assigned Team <span className="text-gray-400 font-normal text-sm">({assignedUsers.length})</span></h3>
+        </div>
+        {assignedUsers.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-gray-400 italic">No users assigned to this warehouse.</p>
+        ) : (
+          <div className="p-4 flex flex-wrap gap-3">
+            {assignedUsers.map(u => (
+              <div key={u.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
+                <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+                  {u.name[0]}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 leading-tight">{u.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${ROLE_PILL[u.role] || 'bg-gray-100 text-gray-600'}`}>
+                    {u.role.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Stock Levels */}
+      <div className="bg-white rounded-xl border border-gray-200">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Stock Levels</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['Product', 'SKU', 'Unit', 'Stock', 'Threshold', 'Status', 'Days Left'].map(h => (
+                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {whStock.length === 0 ? (
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-400 text-sm">No stock recorded for this warehouse</td></tr>
+              ) : whStock.map(s => (
+                <tr key={s.id} className="hover:bg-gray-50/60">
+                  <td className="px-5 py-3 font-medium text-gray-900">{s.productName}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-gray-500">{s.sku}</td>
+                  <td className="px-5 py-3 text-gray-600">{s.unit}</td>
+                  <td className="px-5 py-3">
+                    <span className={`px-2 py-0.5 rounded font-semibold ${s.status === 'CRITICAL' ? 'text-red-700 bg-red-50' : s.status === 'WARNING' ? 'text-amber-700 bg-amber-50' : 'text-green-700 bg-green-50'}`}>
+                      {s.currentStock}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-gray-600">{s.threshold}</td>
+                  <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
+                  <td className="px-5 py-3">
+                    {s.daysUntilEmpty != null ? (
+                      <span className={`font-medium ${s.daysUntilEmpty <= 7 ? 'text-red-600' : s.daysUntilEmpty <= 14 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {s.daysUntilEmpty}d
+                      </span>
+                    ) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Movements + Transfers side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Recent Movements <span className="text-gray-400 font-normal text-xs">(last 10)</span></h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'Type', 'Qty', 'By', 'Date'].map(h => (
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {whMovements.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">No movements yet</td></tr>
+                ) : whMovements.map(m => (
+                  <tr key={m.id} className="hover:bg-gray-50/60">
+                    <td className="px-4 py-2.5 font-medium text-gray-900 max-w-[120px] truncate">{m.productName}</td>
+                    <td className="px-4 py-2.5"><StatusBadge status={m.type} size="xs" /></td>
+                    <td className="px-4 py-2.5 font-medium text-gray-900">{m.quantity}</td>
+                    <td className="px-4 py-2.5 text-gray-500 max-w-[80px] truncate">{m.createdByName}</td>
+                    <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{fmtDT(m.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Recent Transfers <span className="text-gray-400 font-normal text-xs">(last 10)</span></h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'Dir', 'Other WH', 'Qty', 'Status'].map(h => (
+                    <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {whTransfers.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400 text-sm">No transfers yet</td></tr>
+                ) : whTransfers.map(t => (
+                  <tr key={t.id} className="hover:bg-gray-50/60">
+                    <td className="px-4 py-2.5 font-medium text-gray-900 max-w-[120px] truncate">{t.productName}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.direction === 'OUT' ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700'}`}>
+                        {t.direction}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-600 max-w-[100px] truncate">{t.otherWarehouse}</td>
+                    <td className="px-4 py-2.5 font-medium text-gray-900">{t.quantity}</td>
+                    <td className="px-4 py-2.5"><StatusBadge status={t.status} size="xs" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Company Profile Panel ──────────────────────────────────────────────────────
 
 function CompanyPanel() {
@@ -158,7 +376,13 @@ function WarehousesPanel() {
   const [edit, setEdit] = useState(null)
   const [form, setForm] = useState({ name: '', address: '' })
   const [search, setSearch] = useState('')
+  const [selectedWh, setSelectedWh] = useState(null)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+
+  if (selectedWh) {
+    const live = warehouses.find(w => w.id === selectedWh.id) || selectedWh
+    return <WarehouseDetail warehouse={live} onBack={() => setSelectedWh(null)} />
+  }
 
   const filtered = warehouses.filter(w =>
     w.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -216,6 +440,9 @@ function WarehousesPanel() {
                   <td className="px-5 py-3"><StatusBadge status={wh.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
+                      <button onClick={() => setSelectedWh(wh)} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-colors">
+                        View Details
+                      </button>
                       <button onClick={() => openEdit(wh)} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition-colors">
                         Edit
                       </button>
@@ -376,10 +603,10 @@ function ProductsPanel() {
                         Edit
                       </button>
                       <button
-                        onClick={() => { dispatch(toggleProductActive(p.id)); toast.success(p.isActive ? 'Deactivated' : 'Activated') }}
+                        onClick={() => { dispatch(toggleProductActive(p.id)); toast.success(p.isActive ? 'Product archived' : 'Product unarchived') }}
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${p.isActive ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100'}`}
                       >
-                        {p.isActive ? 'Deactivate' : 'Activate'}
+                        {p.isActive ? 'Archive' : 'Unarchive'}
                       </button>
                     </div>
                   </td>
@@ -592,44 +819,40 @@ function ManageUserModal({ user: u, onClose }) {
           </div>
         </div>
 
-        {/* Warehouse Assignments — show always but lock if not staff */}
+        {/* Warehouse Assignments */}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Warehouse Assignments</p>
-          {role !== 'WAREHOUSE_STAFF' ? (
-            <p className="text-sm text-gray-400 italic">Only Warehouse Staff can be assigned to warehouses.</p>
-          ) : (
-            <div className="space-y-2">
-              {assignments.length === 0 ? (
-                <p className="text-sm text-gray-400 italic">No warehouses assigned yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {assignments.map(a => (
-                    <span key={a.id} className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-full border border-teal-200 font-medium">
-                      {a.warehouseName}
-                      <button
-                        onClick={() => { dispatch(removeAssignment(a.id)); toast.info('Assignment removed') }}
-                        className="text-teal-400 hover:text-red-500 leading-none font-bold"
-                      >×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <form onSubmit={doAssign} className="flex gap-2 mt-2">
-                <select
-                  value={addWh} onChange={e => setAddWh(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
-                >
-                  <option value="">Add warehouse…</option>
-                  {warehouses.filter(w => w.isActive && !assignments.find(a => a.warehouseId === w.id)).map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-                <button type="submit" disabled={!addWh} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                  Assign
-                </button>
-              </form>
-            </div>
-          )}
+          <div className="space-y-2">
+            {assignments.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No warehouses assigned yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {assignments.map(a => (
+                  <span key={a.id} className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-full border border-teal-200 font-medium">
+                    {a.warehouseName}
+                    <button
+                      onClick={() => { dispatch(removeAssignment(a.id)); toast.info('Assignment removed') }}
+                      className="text-teal-400 hover:text-red-500 leading-none font-bold"
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <form onSubmit={doAssign} className="flex gap-2 mt-2">
+              <select
+                value={addWh} onChange={e => setAddWh(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+              >
+                <option value="">Add warehouse…</option>
+                {warehouses.filter(w => w.isActive && !assignments.find(a => a.warehouseId === w.id)).map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+              <button type="submit" disabled={!addWh} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                Assign
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Account status */}

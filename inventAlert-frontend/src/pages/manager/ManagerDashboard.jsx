@@ -104,10 +104,25 @@ function StockPanel() {
 
 // ── Movements Panel ───────────────────────────────────────────────────────────
 
+function SearchBar({ value, onChange, placeholder }) {
+  return (
+    <div className="relative">
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-52"
+      />
+    </div>
+  )
+}
+
 function MovementsPanel() {
   const { movements, products, warehouses } = useSelector(s => s.stock)
   const { users } = useSelector(s => s.users)
   const [typeFilter, setTypeFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
 
   const rows = movements
     .map(m => ({
@@ -117,6 +132,7 @@ function MovementsPanel() {
       createdByName: users.find(u => u.id === m.createdBy)?.name || m.createdBy,
     }))
     .filter(m => typeFilter === 'ALL' || m.type === typeFilter)
+    .filter(m => !search || m.productName.toLowerCase().includes(search.toLowerCase()) || m.warehouseName.toLowerCase().includes(search.toLowerCase()))
 
   const TYPES = ['ALL', 'INTAKE', 'OUTBOUND_SALE', 'TRANSFER_OUT', 'TRANSFER_IN', 'RECONCILIATION']
 
@@ -130,6 +146,9 @@ function MovementsPanel() {
               {t === 'ALL' ? 'All' : t.replace('_', ' ')}
             </button>
           ))}
+          <div className="ml-auto">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search product or warehouse…" />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -167,6 +186,7 @@ function TransfersPanel() {
   const { user } = useSelector(s => s.auth)
   const dispatch = useDispatch()
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
 
   const rows = transfers
     .map(t => ({
@@ -176,6 +196,7 @@ function TransfersPanel() {
       toName: warehouses.find(w => w.id === t.toWarehouseId)?.name || t.toWarehouseId,
     }))
     .filter(t => statusFilter === 'ALL' || t.status === statusFilter)
+    .filter(t => !search || t.productName.toLowerCase().includes(search.toLowerCase()) || t.fromName.toLowerCase().includes(search.toLowerCase()) || t.toName.toLowerCase().includes(search.toLowerCase()))
 
   const pending = transfers.filter(t => t.status === 'SUGGESTED').length
 
@@ -195,6 +216,9 @@ function TransfersPanel() {
               {s === 'ALL' ? 'All' : s.replace('_', ' ')}
             </button>
           ))}
+          <div className="ml-auto">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search product or warehouse…" />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -248,6 +272,7 @@ function ReconciliationsPanel() {
   const { user } = useSelector(s => s.auth)
   const dispatch = useDispatch()
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
 
   const rows = reconciliations
     .map(r => ({
@@ -257,6 +282,7 @@ function ReconciliationsPanel() {
       createdByName: users.find(u => u.id === r.createdBy)?.name || r.createdBy,
     }))
     .filter(r => statusFilter === 'ALL' || r.status === statusFilter)
+    .filter(r => !search || r.productName.toLowerCase().includes(search.toLowerCase()) || r.warehouseName.toLowerCase().includes(search.toLowerCase()) || r.reason?.toLowerCase().includes(search.toLowerCase()))
 
   const pending = reconciliations.filter(r => r.status === 'PENDING_APPROVAL').length
 
@@ -276,6 +302,9 @@ function ReconciliationsPanel() {
               {s === 'ALL' ? 'All' : s.replace(/_/g, ' ')}
             </button>
           ))}
+          <div className="ml-auto">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search product, warehouse…" />
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -546,12 +575,26 @@ function AnalyticsPanel() {
 // ── Team Panel ────────────────────────────────────────────────────────────────
 
 function TeamPanel() {
-  const { users } = useSelector(s => s.users)
-  const { companyId } = useSelector(s => s.auth)
+  const { users, warehouseAssignments } = useSelector(s => s.users)
+  const { user: me, companyId } = useSelector(s => s.auth)
   const dispatch = useDispatch()
   const [pendingRole, setPendingRole] = useState({})
+  const [search, setSearch] = useState('')
 
-  const companyUsers = users.filter(u => u.companyId === companyId)
+  const myWarehouseIds = warehouseAssignments
+    .filter(a => a.userId === me.id)
+    .map(a => a.warehouseId)
+
+  const myWarehouseUserIds = warehouseAssignments
+    .filter(a => myWarehouseIds.includes(a.warehouseId))
+    .map(a => a.userId)
+
+  const teamUsers = users.filter(u =>
+    u.companyId === companyId &&
+    myWarehouseUserIds.includes(u.id) &&
+    u.role !== 'ADMIN' &&
+    (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+  )
 
   const saveRole = (userId, role) => {
     dispatch(updateUserRole({ id: userId, role }))
@@ -562,14 +605,17 @@ function TeamPanel() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Members" value={companyUsers.length} color="blue" />
-        <StatCard title="Active" value={companyUsers.filter(u => u.isActive).length} color="teal" />
-        <StatCard title="Inactive" value={companyUsers.filter(u => !u.isActive).length} color="gray" />
+        <StatCard title="Your Warehouses" value={myWarehouseIds.length} color="blue" />
+        <StatCard title="Team Members" value={teamUsers.length} color="teal" />
+        <StatCard title="Active" value={teamUsers.filter(u => u.isActive).length} color="green" />
       </div>
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Team Members</h3>
-          <p className="text-xs text-gray-500 mt-0.5">You can update roles for non-admin members.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-semibold text-gray-900">Team Members</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Staff assigned to your warehouses. You can update their roles.</p>
+          </div>
+          <SearchBar value={search} onChange={setSearch} placeholder="Search members…" />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -581,7 +627,11 @@ function TeamPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {companyUsers.map(u => {
+              {teamUsers.length === 0 ? (
+                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">
+                  {myWarehouseIds.length === 0 ? 'You are not assigned to any warehouses.' : 'No team members found.'}
+                </td></tr>
+              ) : teamUsers.map(u => {
                 const isAdmin = u.role === 'ADMIN'
                 const pending = pendingRole[u.id]
                 return (

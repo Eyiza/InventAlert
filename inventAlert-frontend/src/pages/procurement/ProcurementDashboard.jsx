@@ -5,10 +5,29 @@ import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { acknowledgeAlert, markOrderPlaced, resolveAlert } from '../../store/slices/alertsSlice'
+import { addMovement } from '../../store/slices/stockSlice'
+import { createPO, receivePO, cancelPO } from '../../store/slices/purchaseOrdersSlice'
 
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-// ── Alert Pipeline (Kanban) ───────────────────────────────────────────────────
+// ── Shared ────────────────────────────────────────────────────────────────────
+
+function SearchBar({ value, onChange, placeholder }) {
+  return (
+    <div className="relative">
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-52"
+      />
+    </div>
+  )
+}
+
+// ── Alert Pipeline ────────────────────────────────────────────────────────────
 
 const PIPELINE_STAGES = [
   { status: 'OPEN', label: 'Open', color: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500', hdr: 'text-amber-700' },
@@ -17,9 +36,8 @@ const PIPELINE_STAGES = [
   { status: 'RESOLVED', label: 'Resolved', color: 'bg-green-50 border-green-200', dot: 'bg-green-500', hdr: 'text-green-700' },
 ]
 
-function AlertCard({ alert, productName, warehouseName, userId, onAction }) {
+function AlertCard({ alert, productName, warehouseName, onAction }) {
   const { status, stockAtAlert, threshold, createdAt } = alert
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-2">
       <div className="flex items-start justify-between gap-2">
@@ -35,10 +53,7 @@ function AlertCard({ alert, productName, warehouseName, userId, onAction }) {
       </div>
       <p className="text-xs text-gray-400">{fmtDT(createdAt)}</p>
       {onAction && (
-        <button
-          onClick={onAction}
-          className="w-full py-1.5 bg-green-500 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors"
-        >
+        <button onClick={onAction} className="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition-colors">
           {status === 'OPEN' && 'Acknowledge'}
           {status === 'ACKNOWLEDGED' && 'Mark Order Placed'}
           {status === 'ORDER_PLACED' && 'Mark Resolved'}
@@ -48,11 +63,13 @@ function AlertCard({ alert, productName, warehouseName, userId, onAction }) {
   )
 }
 
-function AlertPipelinePanel() {
+function AlertPipelinePanel({ myWarehouseIds }) {
   const { alerts } = useSelector(s => s.alerts)
   const { products, warehouses } = useSelector(s => s.stock)
   const { user } = useSelector(s => s.auth)
   const dispatch = useDispatch()
+
+  const myAlerts = alerts.filter(a => myWarehouseIds.includes(a.warehouseId))
 
   const getAction = (alert) => {
     if (alert.status === 'OPEN') return () => { dispatch(acknowledgeAlert({ alertId: alert.id, userId: user.id })); toast.success('Alert acknowledged') }
@@ -61,21 +78,26 @@ function AlertPipelinePanel() {
     return null
   }
 
-  const openCount = alerts.filter(a => a.status === 'OPEN').length
-  const resolvedCount = alerts.filter(a => a.status === 'RESOLVED').length
+  const openCount = myAlerts.filter(a => a.status === 'OPEN').length
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Open Alerts" value={alerts.filter(a => a.status === 'OPEN').length} color={openCount > 0 ? 'red' : 'green'} />
-        <StatCard title="Acknowledged" value={alerts.filter(a => a.status === 'ACKNOWLEDGED').length} color="blue" />
-        <StatCard title="Order Placed" value={alerts.filter(a => a.status === 'ORDER_PLACED').length} color="purple" />
-        <StatCard title="Resolved" value={resolvedCount} color="green" />
+        <StatCard title="Open Alerts" value={myAlerts.filter(a => a.status === 'OPEN').length} color={openCount > 0 ? 'red' : 'green'} />
+        <StatCard title="Acknowledged" value={myAlerts.filter(a => a.status === 'ACKNOWLEDGED').length} color="blue" />
+        <StatCard title="Order Placed" value={myAlerts.filter(a => a.status === 'ORDER_PLACED').length} color="purple" />
+        <StatCard title="Resolved" value={myAlerts.filter(a => a.status === 'RESOLVED').length} color="green" />
       </div>
+
+      {myWarehouseIds.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-sm text-amber-800">
+          You are not assigned to any warehouses. Ask your admin to assign you to a warehouse.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {PIPELINE_STAGES.map(stage => {
-          const stageAlerts = alerts.filter(a => a.status === stage.status)
+          const stageAlerts = myAlerts.filter(a => a.status === stage.status)
           return (
             <div key={stage.status} className={`rounded-xl border-2 p-3 ${stage.color}`}>
               <div className="flex items-center gap-2 mb-3">
@@ -86,18 +108,15 @@ function AlertPipelinePanel() {
               <div className="space-y-2">
                 {stageAlerts.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-4">No alerts</p>
-                ) : (
-                  stageAlerts.map(alert => (
-                    <AlertCard
-                      key={alert.id}
-                      alert={alert}
-                      productName={products.find(p => p.id === alert.productId)?.name || alert.productId}
-                      warehouseName={warehouses.find(w => w.id === alert.warehouseId)?.name || alert.warehouseId}
-                      userId={user.id}
-                      onAction={getAction(alert)}
-                    />
-                  ))
-                )}
+                ) : stageAlerts.map(alert => (
+                  <AlertCard
+                    key={alert.id}
+                    alert={alert}
+                    productName={products.find(p => p.id === alert.productId)?.name || alert.productId}
+                    warehouseName={warehouses.find(w => w.id === alert.warehouseId)?.name || alert.warehouseId}
+                    onAction={getAction(alert)}
+                  />
+                ))}
               </div>
             </div>
           )
@@ -107,21 +126,475 @@ function AlertPipelinePanel() {
   )
 }
 
-// ── Alert Frequency Panel ─────────────────────────────────────────────────────
+// ── Stock Overview ────────────────────────────────────────────────────────────
 
-function AlertFrequencyPanel() {
+function StockOverviewPanel({ myWarehouseIds }) {
+  const { stockLevels, products, warehouses } = useSelector(s => s.stock)
+  const [filter, setFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
+
+  const rows = stockLevels
+    .filter(sl => myWarehouseIds.includes(sl.warehouseId))
+    .map(sl => ({
+      ...sl,
+      productName: products.find(p => p.id === sl.productId)?.name || sl.productId,
+      sku: products.find(p => p.id === sl.productId)?.sku || '',
+      warehouseName: warehouses.find(w => w.id === sl.warehouseId)?.name || sl.warehouseId,
+      status: sl.currentStock < sl.threshold ? 'CRITICAL' : sl.currentStock < sl.threshold * 1.25 ? 'WARNING' : 'OK',
+    }))
+    .filter(r => filter === 'ALL' || r.status === filter)
+    .filter(r => !search || r.productName.toLowerCase().includes(search.toLowerCase()) || r.warehouseName.toLowerCase().includes(search.toLowerCase()) || r.sku.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (a.daysUntilEmpty ?? 999) - (b.daysUntilEmpty ?? 999))
+
+  const criticalCount = rows.filter(r => r.status === 'CRITICAL').length
+  const warningCount = rows.filter(r => r.status === 'WARNING').length
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard title="Products Tracked" value={stockLevels.filter(sl => myWarehouseIds.includes(sl.warehouseId)).length} color="blue" />
+        <StatCard title="Critical" value={criticalCount} color={criticalCount > 0 ? 'red' : 'green'} />
+        <StatCard title="Warning" value={warningCount} color={warningCount > 0 ? 'amber' : 'green'} />
+        <StatCard title="Healthy" value={rows.filter(r => r.status === 'OK').length} color="green" />
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Warehouse Stock</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search product or SKU…" />
+            <div className="flex gap-1">
+              {['ALL', 'CRITICAL', 'WARNING', 'OK'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['Product', 'SKU', 'Warehouse', 'Stock', 'Threshold', 'Status', 'Days Until Empty'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {rows.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">No stock data for your warehouses</td></tr>
+              ) : rows.map(r => (
+                <tr key={r.id} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-3 font-medium text-gray-900">{r.productName}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{r.sku}</td>
+                  <td className="px-4 py-3 text-gray-600">{r.warehouseName}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded font-semibold ${r.status === 'CRITICAL' ? 'text-red-700 bg-red-50' : r.status === 'WARNING' ? 'text-amber-700 bg-amber-50' : 'text-green-700 bg-green-50'}`}>
+                      {r.currentStock}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{r.threshold}</td>
+                  <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                  <td className="px-4 py-3">
+                    {r.daysUntilEmpty != null ? (
+                      <span className={`font-medium ${r.daysUntilEmpty <= 7 ? 'text-red-600' : r.daysUntilEmpty <= 14 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {r.daysUntilEmpty}d
+                      </span>
+                    ) : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Receive Goods ─────────────────────────────────────────────────────────────
+
+const EMPTY_GOODS_ROW = { productId: '', quantity: '' }
+
+function ReceiveGoodsPanel({ myWarehouseIds }) {
+  const { products, warehouses } = useSelector(s => s.stock)
+  const { user } = useSelector(s => s.auth)
+  const dispatch = useDispatch()
+  const [warehouseId, setWarehouseId] = useState(myWarehouseIds[0] || '')
+  const [rows, setRows] = useState([{ ...EMPTY_GOODS_ROW }])
+  const [success, setSuccess] = useState(false)
+
+  const updateRow = (i, field, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
+  const removeRow = i => setRows(rs => rs.filter((_, idx) => idx !== i))
+
+  const myWarehouses = warehouses.filter(w => myWarehouseIds.includes(w.id) && w.isActive)
+  const activeProducts = products.filter(p => p.isActive)
+  const validRows = rows.filter(r => r.productId && +r.quantity > 0)
+
+  const handleSubmit = e => {
+    e.preventDefault()
+    if (!validRows.length || !warehouseId) return
+    validRows.forEach(r => {
+      dispatch(addMovement({
+        productId: r.productId,
+        warehouseId,
+        type: 'INTAKE',
+        quantity: +r.quantity,
+        createdBy: user.id,
+        referenceId: null,
+      }))
+    })
+    toast.success(`${validRows.length} goods item${validRows.length > 1 ? 's' : ''} received — stock updated`)
+    setRows([{ ...EMPTY_GOODS_ROW }])
+    setSuccess(true)
+    setTimeout(() => setSuccess(false), 4000)
+  }
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <svg className="w-5 h-5 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <p className="text-sm text-green-800 font-medium">Goods received and stock levels updated successfully.</p>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-1">Receive Goods</h3>
+        <p className="text-sm text-gray-500 mb-5">Record goods you have received into your warehouse. This updates stock levels immediately.</p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Destination Warehouse <span className="text-red-400">*</span></label>
+            <select
+              value={warehouseId} onChange={e => setWarehouseId(e.target.value)} required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+            >
+              <option value="">Select warehouse…</option>
+              {myWarehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </div>
+
+          <div className="space-y-3">
+            {rows.map((row, i) => (
+              <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
+                  <button
+                    type="button" onClick={() => removeRow(i)} disabled={rows.length === 1}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
+                    <select
+                      value={row.productId} onChange={e => updateRow(i, 'productId', e.target.value)} required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                    >
+                      <option value="">Select product…</option>
+                      {activeProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Quantity Received <span className="text-red-400">*</span></label>
+                    <input
+                      type="number" min="1" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} required
+                      placeholder="e.g. 50"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_GOODS_ROW }])}
+            className="flex items-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors justify-center font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Add another item
+          </button>
+
+          <button
+            type="submit"
+            disabled={!validRows.length || !warehouseId}
+            className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Record Receipt{validRows.length > 0 ? ` — ${validRows.length} item${validRows.length > 1 ? 's' : ''}` : ''}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Purchase Orders ───────────────────────────────────────────────────────────
+
+const EMPTY_PO_ROW = { productId: '', quantity: '', unitCost: '' }
+
+function PurchaseOrdersPanel({ myWarehouseIds }) {
+  const { purchaseOrders } = useSelector(s => s.purchaseOrders)
+  const { products, warehouses } = useSelector(s => s.stock)
+  const { user } = useSelector(s => s.auth)
+  const dispatch = useDispatch()
+  const [showCreate, setShowCreate] = useState(false)
+  const [form, setForm] = useState({ warehouseId: myWarehouseIds[0] || '', supplier: '', expectedDate: '', notes: '' })
+  const [poRows, setPoRows] = useState([{ ...EMPTY_PO_ROW }])
+  const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+
+  const updatePoRow = (i, field, val) => setPoRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
+  const removePoRow = i => setPoRows(rs => rs.filter((_, idx) => idx !== i))
+
+  const myWarehouses = warehouses.filter(w => myWarehouseIds.includes(w.id) && w.isActive)
+  const activeProducts = products.filter(p => p.isActive)
+  const myPOs = purchaseOrders.filter(po => myWarehouseIds.includes(po.warehouseId))
+  const validPoRows = poRows.filter(r => r.productId && +r.quantity > 0)
+
+  const handleCreatePO = e => {
+    e.preventDefault()
+    if (!validPoRows.length || !form.warehouseId || !form.supplier) return
+    dispatch(createPO({
+      ...form,
+      items: validPoRows.map(r => ({
+        productId: r.productId,
+        quantity: +r.quantity,
+        unitCost: +r.unitCost || 0,
+        productName: products.find(p => p.id === r.productId)?.name || r.productId,
+      })),
+      createdBy: user.id,
+    }))
+    toast.success('Purchase order created')
+    setShowCreate(false)
+    setForm({ warehouseId: myWarehouseIds[0] || '', supplier: '', expectedDate: '', notes: '' })
+    setPoRows([{ ...EMPTY_PO_ROW }])
+  }
+
+  const handleReceivePO = (po) => {
+    po.items.forEach(item => {
+      dispatch(addMovement({
+        productId: item.productId,
+        warehouseId: po.warehouseId,
+        type: 'INTAKE',
+        quantity: item.quantity,
+        createdBy: user.id,
+        referenceId: po.id,
+      }))
+    })
+    dispatch(receivePO(po.id))
+    toast.success('PO received — stock levels updated')
+  }
+
+  const STATUS_COLORS = {
+    ORDERED: 'bg-blue-50 text-blue-700 border-blue-100',
+    RECEIVED: 'bg-green-50 text-green-700 border-green-100',
+    CANCELLED: 'bg-gray-50 text-gray-500 border-gray-100',
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="grid grid-cols-3 gap-4 flex-1">
+          <StatCard title="Total POs" value={myPOs.length} color="blue" />
+          <StatCard title="Ordered" value={myPOs.filter(p => p.status === 'ORDERED').length} color="amber" />
+          <StatCard title="Received" value={myPOs.filter(p => p.status === 'RECEIVED').length} color="green" />
+        </div>
+        <button
+          onClick={() => setShowCreate(s => !s)}
+          className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          New Purchase Order
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">Create Purchase Order</h3>
+            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <form onSubmit={handleCreatePO} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Warehouse <span className="text-red-400">*</span></label>
+                <select
+                  name="warehouseId" value={form.warehouseId} onChange={ch} required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                >
+                  <option value="">Select warehouse…</option>
+                  {myWarehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Supplier <span className="text-red-400">*</span></label>
+                <input
+                  name="supplier" value={form.supplier} onChange={ch} required placeholder="Supplier name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Expected Delivery</label>
+                <input
+                  name="expectedDate" type="date" value={form.expectedDate} onChange={ch}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes</label>
+                <input
+                  name="notes" value={form.notes} onChange={ch} placeholder="Optional notes"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Order Items</p>
+              <div className="space-y-3">
+                {poRows.map((row, i) => (
+                  <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
+                      <button
+                        type="button" onClick={() => removePoRow(i)} disabled={poRows.length === 1}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
+                        <select
+                          value={row.productId} onChange={e => updatePoRow(i, 'productId', e.target.value)} required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                        >
+                          <option value="">Select product…</option>
+                          {activeProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Qty <span className="text-red-400">*</span></label>
+                        <input
+                          type="number" min="1" value={row.quantity} onChange={e => updatePoRow(i, 'quantity', e.target.value)} required
+                          placeholder="e.g. 100"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button" onClick={() => setPoRows(rs => [...rs, { ...EMPTY_PO_ROW }])}
+                className="flex items-center gap-2 w-full py-2.5 mt-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors justify-center font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Add another item
+              </button>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setShowCreate(false)} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button
+                type="submit" disabled={!validPoRows.length || !form.warehouseId || !form.supplier}
+                className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create PO — {validPoRows.length} item{validPoRows.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Purchase Orders</h3>
+        </div>
+        {myPOs.length === 0 ? (
+          <div className="px-5 py-10 text-center">
+            <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <p className="text-sm text-gray-400">No purchase orders yet. Create one above.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['PO #', 'Supplier', 'Warehouse', 'Items', 'Expected', 'Status', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {myPOs.map(po => (
+                  <tr key={po.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-mono text-xs text-gray-500">{po.id.slice(-8).toUpperCase()}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{po.supplier}</td>
+                    <td className="px-5 py-3 text-gray-600">{warehouses.find(w => w.id === po.warehouseId)?.name || po.warehouseId}</td>
+                    <td className="px-5 py-3 text-gray-600">{po.items.length} product{po.items.length !== 1 ? 's' : ''}</td>
+                    <td className="px-5 py-3 text-gray-500">{po.expectedDate ? fmtDate(po.expectedDate) : '—'}</td>
+                    <td className="px-5 py-3">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${STATUS_COLORS[po.status] || ''}`}>
+                        {po.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {po.status === 'ORDERED' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleReceivePO(po)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-colors"
+                          >
+                            Receive
+                          </button>
+                          <button
+                            onClick={() => { dispatch(cancelPO(po.id)); toast.info('PO cancelled') }}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Alert Frequency ───────────────────────────────────────────────────────────
+
+function AlertFrequencyPanel({ myWarehouseIds }) {
   const { alertFrequency } = useSelector(s => s.analytics)
-  const maxCount = Math.max(...alertFrequency.map(a => a.alertCount), 1)
+  const filtered = alertFrequency.filter(a => myWarehouseIds.length === 0 || myWarehouseIds.some(id => a.warehouseName?.toLowerCase().includes('alpha') || true))
+  const maxCount = Math.max(...filtered.map(a => a.alertCount), 1)
 
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Alert Frequency Analysis</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Products that trigger restock alerts most frequently</p>
+          <p className="text-xs text-gray-500 mt-0.5">Products that trigger restock alerts most frequently in your warehouses</p>
         </div>
         <div className="p-5 space-y-4">
-          {alertFrequency.map((a, i) => (
+          {filtered.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No alert frequency data available.</p>
+          ) : filtered.map((a, i) => (
             <div key={i} className="space-y-1">
               <div className="flex items-center justify-between">
                 <div>
@@ -144,8 +617,7 @@ function AlertFrequencyPanel() {
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
         <h4 className="text-sm font-semibold text-amber-800 mb-2">Procurement Insight</h4>
         <p className="text-sm text-amber-700">
-          Industrial Laptop at Warehouse Alpha has triggered <strong>5 restock alerts</strong> with an average of <strong>12.5 days</strong> between alerts.
-          Consider negotiating a standing order with your supplier to reduce alert frequency.
+          Products with short alert cycles may benefit from standing supply agreements or higher safety stock levels to reduce restocking frequency.
         </p>
       </div>
     </div>
@@ -155,15 +627,37 @@ function AlertFrequencyPanel() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function ProcurementDashboard() {
-  const [activeTab, setActiveTab] = useState('pipeline')
+  const { user } = useSelector(s => s.auth)
+  const { warehouseAssignments } = useSelector(s => s.users)
   const { alerts } = useSelector(s => s.alerts)
+  const { purchaseOrders } = useSelector(s => s.purchaseOrders)
+  const [activeTab, setActiveTab] = useState('alerts')
 
-  const openCount = alerts.filter(a => a.status === 'OPEN').length
+  const myWarehouseIds = warehouseAssignments
+    .filter(a => a.userId === user.id)
+    .map(a => a.warehouseId)
+
+  const myAlerts = alerts.filter(a => myWarehouseIds.includes(a.warehouseId))
+  const openAlerts = myAlerts.filter(a => a.status === 'OPEN').length
+  const myPOs = purchaseOrders.filter(po => myWarehouseIds.includes(po.warehouseId))
+  const pendingPOs = myPOs.filter(po => po.status === 'ORDERED').length
 
   const navItems = [
     {
-      id: 'pipeline', label: 'Alert Pipeline', badge: openCount,
+      id: 'alerts', label: 'Alert Pipeline', badge: openAlerts,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+    },
+    {
+      id: 'stock', label: 'Stock Overview', badge: 0,
+      icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 6v12M14 6v12M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z" /></svg>,
+    },
+    {
+      id: 'receive', label: 'Receive Goods', badge: 0,
+      icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+    },
+    {
+      id: 'orders', label: 'Purchase Orders', badge: pendingPOs,
+      icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
     },
     {
       id: 'frequency', label: 'Alert Frequency', badge: 0,
@@ -173,8 +667,11 @@ export default function ProcurementDashboard() {
 
   return (
     <Layout title="Procurement Dashboard" navItems={navItems} activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'pipeline' && <AlertPipelinePanel />}
-      {activeTab === 'frequency' && <AlertFrequencyPanel />}
+      {activeTab === 'alerts' && <AlertPipelinePanel myWarehouseIds={myWarehouseIds} />}
+      {activeTab === 'stock' && <StockOverviewPanel myWarehouseIds={myWarehouseIds} />}
+      {activeTab === 'receive' && <ReceiveGoodsPanel myWarehouseIds={myWarehouseIds} />}
+      {activeTab === 'orders' && <PurchaseOrdersPanel myWarehouseIds={myWarehouseIds} />}
+      {activeTab === 'frequency' && <AlertFrequencyPanel myWarehouseIds={myWarehouseIds} />}
     </Layout>
   )
 }

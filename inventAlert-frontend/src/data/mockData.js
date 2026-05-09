@@ -17,6 +17,8 @@ export const users = [
 export const warehouseAssignments = [
   { id: 'assign-1', userId: 'user-3', companyId: 'comp-1', warehouseId: 'wh-1', assignedAt: '2026-01-23T10:00:00Z' },
   { id: 'assign-2', userId: 'user-4', companyId: 'comp-1', warehouseId: 'wh-2', assignedAt: '2026-01-23T10:30:00Z' },
+  { id: 'assign-3', userId: 'user-2', companyId: 'comp-1', warehouseId: 'wh-1', assignedAt: '2026-01-20T10:00:00Z' },
+  { id: 'assign-4', userId: 'user-5', companyId: 'comp-1', warehouseId: 'wh-1', assignedAt: '2026-01-20T10:00:00Z' },
 ]
 
 export const warehouses = [

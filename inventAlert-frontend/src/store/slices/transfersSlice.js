@@ -25,8 +25,25 @@ const transfersSlice = createSlice({
       const t = state.transfers.find(x => x.id === action.payload)
       if (t) { t.status = 'DELIVERY_REJECTED'; t.updatedAt = new Date().toISOString() }
     },
+    addTransfer: (state, action) => {
+      const items = Array.isArray(action.payload) ? action.payload : [action.payload]
+      const batchId = `batch-${Date.now()}`
+      items.forEach((item, i) => {
+        state.transfers.unshift({
+          ...item,
+          id: `trans-${Date.now()}-${i}`,
+          batchId,
+          status: 'SUGGESTED',
+          approvedBy: null,
+          distanceKm: null,
+          distanceSource: 'MANUAL',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+      })
+    },
   },
 })
 
-export const { approveTransfer, rejectTransfer, dispatchTransfer, acceptTransfer, rejectDelivery } = transfersSlice.actions
+export const { approveTransfer, rejectTransfer, dispatchTransfer, acceptTransfer, rejectDelivery, addTransfer } = transfersSlice.actions
 export default transfersSlice.reducer
