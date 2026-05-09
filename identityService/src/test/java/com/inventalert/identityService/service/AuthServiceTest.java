@@ -25,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,8 +56,16 @@ class AuthServiceTest {
 
         when(companyRepository.existsByAdminEmail("emeka@dangote.ng")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hashed");
-        when(companyRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(companyRepository.save(any())).thenAnswer(inv -> {
+            Company company = inv.getArgument(0);
+            company.setId(UUID.randomUUID().toString());
+            return company;
+        });
+        when(userRepository.save(any())).thenAnswer(inv -> {
+            User user = inv.getArgument(0);
+            user.setId(UUID.randomUUID().toString());
+            return user;
+        });
         when(jwtUtil.generateToken(any())).thenReturn("jwt-token");
 
         LoginResponse mapped = new LoginResponse();

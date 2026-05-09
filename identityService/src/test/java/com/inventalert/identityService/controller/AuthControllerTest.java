@@ -48,9 +48,14 @@ class AuthControllerTest {
     }
 
     @Autowired MockMvc           mockMvc;
-    @Autowired ObjectMapper      objectMapper;
+    private final ObjectMapper objectMapper;
     @Autowired JwtUtil           jwtUtil;
     @Autowired CompanyRepository companyRepository;
+
+    @Autowired
+    AuthControllerTest(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     // ── Signup ────────────────────────────────────────────────────────────────
 

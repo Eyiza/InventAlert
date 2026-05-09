@@ -16,6 +16,8 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.KafkaContainer;
@@ -38,15 +40,24 @@ class SuspendedCompanyFilterIT {
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8");
 
     @Container
-    @ServiceConnection
     static KafkaContainer kafka = new KafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
 
+    @DynamicPropertySource
+    static void kafkaProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+    }
+
     @Autowired MockMvc      mockMvc;
-    @Autowired ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
     @Autowired CompanyRepository             companyRepository;
     @Autowired UserRepository                userRepository;
     @Autowired WarehouseAssignmentRepository assignmentRepository;
+
+    @Autowired
+    SuspendedCompanyFilterIT(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @BeforeEach
     void clean() {

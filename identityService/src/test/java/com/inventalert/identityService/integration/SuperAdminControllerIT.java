@@ -14,6 +14,8 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.KafkaContainer;
@@ -36,15 +38,24 @@ class SuperAdminControllerIT {
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8");
 
     @Container
-    @ServiceConnection
     static KafkaContainer kafka = new KafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
 
+    @DynamicPropertySource
+    static void kafkaProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+    }
+
     @Autowired MockMvc      mockMvc;
-    @Autowired ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
     @Autowired UserRepository                userRepository;
     @Autowired CompanyRepository             companyRepository;
     @Autowired WarehouseAssignmentRepository assignmentRepository;
+
+    @Autowired
+    SuperAdminControllerIT(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     private String superAdminToken;
 

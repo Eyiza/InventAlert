@@ -22,8 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
-
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -51,29 +49,24 @@ public class AuthServiceImpl implements AuthService {
             throw new EmailAlreadyExistsException(request.getAdminEmail());
         }
 
-        String companyId = UUID.randomUUID().toString();
-        String adminId   = UUID.randomUUID().toString();
-
         Company company = Company.builder()
-                .id(companyId)
                 .companyName(request.getCompanyName())
                 .adminEmail(request.getAdminEmail())
                 .build();
-        companyRepository.save(company);
+        Company savedCompany = companyRepository.save(company);
 
         User admin = User.builder()
-                .id(adminId)
-                .companyId(companyId)
+                .companyId(savedCompany.getId())
                 .email(request.getAdminEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(Role.ADMIN)
                 .build();
-        userRepository.save(admin);
+        User savedAdmin = userRepository.save(admin);
 
-        eventProducer.publishCompanyCreated(companyId, request.getCompanyName(), request.getAdminEmail());
+        eventProducer.publishCompanyCreated(savedCompany.getId(), request.getCompanyName(), request.getAdminEmail());
 
-        LoginResponse response = modelMapper.map(admin, LoginResponse.class);
-        response.setToken(jwtUtil.generateToken(admin));
+        LoginResponse response = modelMapper.map(savedAdmin, LoginResponse.class);
+        response.setToken(jwtUtil.generateToken(savedAdmin));
         return response;
     }
 

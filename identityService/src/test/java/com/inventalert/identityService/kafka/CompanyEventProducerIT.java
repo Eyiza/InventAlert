@@ -13,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MySQLContainer;
@@ -22,6 +24,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
@@ -40,12 +43,22 @@ class CompanyEventProducerIT {
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8");
 
     @Container
-    @ServiceConnection
     static KafkaContainer kafka = new KafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
 
-    @Autowired MockMvc     mockMvc;
-    @Autowired ObjectMapper objectMapper;
+    @DynamicPropertySource
+    static void kafkaProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+    }
+
+    private final MockMvc mockMvc;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    CompanyEventProducerIT(MockMvc mockMvc, ObjectMapper objectMapper) {
+        this.mockMvc = mockMvc;
+        this.objectMapper = objectMapper;
+    }
 
     @Test
     void signup_publishesCompanyCreatedEventWithCorrectPayload() throws Exception {
@@ -59,7 +72,7 @@ class CompanyEventProducerIT {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated());
 
-        ConsumerRecord<String, String> record = pollOneRecord("company.created");
+        ConsumerRecord<String, String> record = pollRecordByAdminEmail("company.created", "ops@flutter.ng");
 
         assertThat(record).isNotNull();
         Map<?, ?> payload = objectMapper.readValue(record.value(), Map.class);
@@ -93,18 +106,40 @@ class CompanyEventProducerIT {
                         .content(objectMapper.writeValueAsString(reqB)))
                 .andExpect(status().isCreated());
 
-        ConsumerRecord<String, String> first  = pollOneRecord("company.created");
-        ConsumerRecord<String, String> second = pollOneRecord("company.created");
+        Map<String, ConsumerRecord<String, String>> recordsByEmail = pollRecordsByAdminEmails(
+                "company.created",
+                Duration.ofSeconds(15),
+                "info@asorock.ng",
+                "admin@lekki.ng"
+        );
 
-        assertThat(first).isNotNull();
-        assertThat(second).isNotNull();
+        assertThat(recordsByEmail).containsKeys("info@asorock.ng", "admin@lekki.ng");
 
-        String firstEventId  = (String) objectMapper.readValue(first.value(),  Map.class).get("eventId");
-        String secondEventId = (String) objectMapper.readValue(second.value(), Map.class).get("eventId");
+        String firstEventId = (String) objectMapper.readValue(
+                recordsByEmail.get("info@asorock.ng").value(),
+                Map.class
+        ).get("eventId");
+        String secondEventId = (String) objectMapper.readValue(
+                recordsByEmail.get("admin@lekki.ng").value(),
+                Map.class
+        ).get("eventId");
         assertThat(firstEventId).isNotEqualTo(secondEventId);
     }
 
-    private ConsumerRecord<String, String> pollOneRecord(String topic) {
+    private ConsumerRecord<String, String> pollRecordByAdminEmail(String topic, String adminEmail) throws Exception {
+        Map<String, ConsumerRecord<String, String>> result = pollRecordsByAdminEmails(
+                topic,
+                Duration.ofSeconds(10),
+                adminEmail
+        );
+        return result.get(adminEmail);
+    }
+
+    private Map<String, ConsumerRecord<String, String>> pollRecordsByAdminEmails(
+            String topic,
+            Duration timeout,
+            String... adminEmails
+    ) throws Exception {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + System.nanoTime());
@@ -112,10 +147,27 @@ class CompanyEventProducerIT {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
+        Map<String, ConsumerRecord<String, String>> matches = new HashMap<>();
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
-            var records = consumer.poll(Duration.ofSeconds(10));
-            return records.isEmpty() ? null : records.iterator().next();
+            long deadline = System.nanoTime() + timeout.toNanos();
+            while (System.nanoTime() < deadline && matches.size() < adminEmails.length) {
+                var records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<String, String> record : records) {
+                    Map<?, ?> payload = objectMapper.readValue(record.value(), Map.class);
+                    Object email = payload.get("adminEmail");
+                    if (email == null) {
+                        continue;
+                    }
+                    String emailValue = email.toString();
+                    for (String expected : adminEmails) {
+                        if (expected.equals(emailValue) && !matches.containsKey(expected)) {
+                            matches.put(expected, record);
+                        }
+                    }
+                }
+            }
         }
+        return matches;
     }
 }
