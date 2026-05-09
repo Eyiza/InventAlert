@@ -7,8 +7,8 @@ const usersSlice = createSlice({
   reducers: {
     addUser: (state, action) => {
       state.users.push({
+        id: action.payload.id || `user-${Date.now()}`,
         ...action.payload,
-        id: `user-${Date.now()}`,
         isActive: true,
         createdAt: new Date().toISOString(),
       })

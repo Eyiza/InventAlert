@@ -1,7 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router'
 import { ProtectedRoute, RoleRedirect } from './ProtectedRoute'
+import LandingPage from '../pages/landing/LandingPage'
 import Login from '../pages/auth/Login'
 import Signup from '../pages/auth/Signup'
+import ForgotPassword from '../pages/auth/ForgotPassword'
+import ResetPassword from '../pages/auth/ResetPassword'
+import ChangePassword from '../pages/auth/ChangePassword'
 import AdminDashboard from '../pages/admin/AdminDashboard'
 import ManagerDashboard from '../pages/manager/ManagerDashboard'
 import StaffDashboard from '../pages/staff/StaffDashboard'
@@ -9,9 +13,13 @@ import ProcurementDashboard from '../pages/procurement/ProcurementDashboard'
 import SuperAdminPortal from '../pages/superadmin/SuperAdminPortal'
 
 const router = createBrowserRouter([
+  { path: '/', element: <LandingPage /> },
   { path: '/login', element: <Login /> },
   { path: '/signup', element: <Signup /> },
-  { path: '/', element: <RoleRedirect /> },
+  { path: '/forgot-password', element: <ForgotPassword /> },
+  { path: '/reset-password', element: <ResetPassword /> },
+  { path: '/change-password', element: <ChangePassword /> },
+  { path: '/dashboard', element: <RoleRedirect /> },
   {
     path: '/admin',
     element: (
@@ -52,7 +60,7 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
-  { path: '*', element: <Navigate to="/login" replace /> },
+  { path: '*', element: <Navigate to="/" replace /> },
 ])
 
 export default router

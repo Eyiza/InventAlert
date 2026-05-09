@@ -4,13 +4,13 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { setCompanyLogo } from '../../store/slices/authSlice'
+import { setCompanyLogo, registerLocalUser } from '../../store/slices/authSlice'
 import {
   addWarehouse, updateWarehouse, toggleWarehouseActive,
   addProduct, updateProduct, toggleProductActive,
 } from '../../store/slices/stockSlice'
 import {
-  addUser, deactivateUser, reactivateUser,
+  addUser, updateUserRole, deactivateUser, reactivateUser,
   assignWarehouse, removeAssignment,
 } from '../../store/slices/usersSlice'
 
@@ -215,11 +215,13 @@ function WarehousesPanel() {
                   <td className="px-5 py-3 text-gray-600">{wh.address}</td>
                   <td className="px-5 py-3"><StatusBadge status={wh.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
                   <td className="px-5 py-3">
-                    <div className="flex gap-3">
-                      <button onClick={() => openEdit(wh)} className="text-xs font-medium text-blue-600 hover:underline">Edit</button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEdit(wh)} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition-colors">
+                        Edit
+                      </button>
                       <button
                         onClick={() => { dispatch(toggleWarehouseActive(wh.id)); toast.success(wh.isActive ? 'Deactivated' : 'Activated') }}
-                        className={`text-xs font-medium hover:underline ${wh.isActive ? 'text-red-500' : 'text-teal-600'}`}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${wh.isActive ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100'}`}
                       >
                         {wh.isActive ? 'Deactivate' : 'Activate'}
                       </button>
@@ -266,20 +268,27 @@ function ProductsPanel() {
     p.sku.toLowerCase().includes(search.toLowerCase())
   )
 
-  const openAdd = () => { setForm({ name: '', sku: '', unitOfMeasure: '', defaultThreshold: '' }); setEdit(null); setShowAdd(true) }
+  const EMPTY_ROW = { name: '', sku: '', unitOfMeasure: '', defaultThreshold: '' }
+  const [rows, setRows] = useState([{ ...EMPTY_ROW }])
+  const updateRow = (i, field, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
+  const removeRow = i => setRows(rs => rs.filter((_, idx) => idx !== i))
+
+  const openAdd = () => { setRows([{ ...EMPTY_ROW }]); setEdit(null); setShowAdd(true) }
   const openEdit = p => { setForm({ name: p.name, sku: p.sku, unitOfMeasure: p.unitOfMeasure, defaultThreshold: p.defaultThreshold }); setEdit(p); setShowAdd(true) }
 
   const handleSubmit = e => {
     e.preventDefault()
-    const payload = { ...form, defaultThreshold: +form.defaultThreshold }
     if (edit) {
-      dispatch(updateProduct({ id: edit.id, ...payload }))
+      dispatch(updateProduct({ id: edit.id, ...form, defaultThreshold: +form.defaultThreshold }))
       toast.success('Product updated')
+      setShowAdd(false)
     } else {
-      dispatch(addProduct({ ...payload, createdBy: user.id }))
-      toast.success('Product added')
+      const valid = rows.filter(r => r.name && r.sku)
+      valid.forEach(r => dispatch(addProduct({ ...r, defaultThreshold: +r.defaultThreshold || 0, createdBy: user.id })))
+      toast.success(`${valid.length} product${valid.length !== 1 ? 's' : ''} added`)
+      setShowAdd(false)
+      setRows([{ ...EMPTY_ROW }])
     }
-    setShowAdd(false)
   }
 
   const handleCSVFile = (e) => {
@@ -362,11 +371,13 @@ function ProductsPanel() {
                   <td className="px-5 py-3 font-medium text-gray-900">{p.defaultThreshold}</td>
                   <td className="px-5 py-3"><StatusBadge status={p.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
                   <td className="px-5 py-3">
-                    <div className="flex gap-3">
-                      <button onClick={() => openEdit(p)} className="text-xs font-medium text-blue-600 hover:underline">Edit</button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEdit(p)} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition-colors">
+                        Edit
+                      </button>
                       <button
                         onClick={() => { dispatch(toggleProductActive(p.id)); toast.success(p.isActive ? 'Deactivated' : 'Activated') }}
-                        className={`text-xs font-medium hover:underline ${p.isActive ? 'text-red-500' : 'text-teal-600'}`}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${p.isActive ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100'}`}
                       >
                         {p.isActive ? 'Deactivate' : 'Activate'}
                       </button>
@@ -379,14 +390,83 @@ function ProductsPanel() {
         </div>
       </div>
 
-      {showAdd && (
-        <Modal title={edit ? 'Edit Product' : 'Add Product'} onClose={() => setShowAdd(false)}>
+      {showAdd && edit && (
+        <Modal title="Edit Product" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleSubmit} className="space-y-3">
             <Field label="Product Name" name="name" value={form.name} onChange={ch} placeholder="Industrial Laptop" required />
             <Field label="SKU" name="sku" value={form.sku} onChange={ch} placeholder="LAP-001" required />
             <Field label="Unit of Measure" name="unitOfMeasure" value={form.unitOfMeasure} onChange={ch} placeholder="units / boxes / kg" required />
             <Field label="Default Threshold" name="defaultThreshold" type="number" min="0" value={form.defaultThreshold} onChange={ch} required />
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel={edit ? 'Update Product' : 'Add Product'} />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel="Update Product" />
+          </form>
+        </Modal>
+      )}
+
+      {showAdd && !edit && (
+        <Modal title="Add Products" wide onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]) }}>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-3 mb-4 max-h-[420px] overflow-y-auto pr-1">
+              {rows.map((row, i) => (
+                <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      Product {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <button
+                      type="button" onClick={() => removeRow(i)}
+                      disabled={rows.length === 1}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Name <span className="text-red-400">*</span></label>
+                      <input
+                        value={row.name} onChange={e => updateRow(i, 'name', e.target.value)}
+                        placeholder="e.g. Industrial Laptop" required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">SKU <span className="text-red-400">*</span></label>
+                      <input
+                        value={row.sku} onChange={e => updateRow(i, 'sku', e.target.value)}
+                        placeholder="e.g. LAP-001" required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white font-mono focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Unit of Measure</label>
+                      <input
+                        value={row.unitOfMeasure} onChange={e => updateRow(i, 'unitOfMeasure', e.target.value)}
+                        placeholder="units / kg / boxes"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Default Threshold</label>
+                      <input
+                        type="number" min="0"
+                        value={row.defaultThreshold} onChange={e => updateRow(i, 'defaultThreshold', e.target.value)}
+                        placeholder="e.g. 20"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRows(rs => [...rs, { ...EMPTY_ROW }])}
+              className="flex items-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors justify-center font-medium mb-4"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add another product
+            </button>
+            <BtnRow onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]) }} submitLabel={`Add ${rows.length > 1 ? `${rows.length} Products` : 'Product'}`} />
           </form>
         </Modal>
       )}
@@ -456,15 +536,128 @@ function ProductsPanel() {
 
 // ── Users Panel ───────────────────────────────────────────────────────────────
 
-function UsersPanel() {
-  const { users, warehouseAssignments } = useSelector(s => s.users)
+function ManageUserModal({ user: u, onClose }) {
   const { warehouses } = useSelector(s => s.stock)
+  const { warehouseAssignments } = useSelector(s => s.users)
+  const { companyId } = useSelector(s => s.auth)
+  const dispatch = useDispatch()
+  const [role, setRole] = useState(u.role)
+  const [addWh, setAddWh] = useState('')
+
+  const assignments = warehouseAssignments
+    .filter(a => a.userId === u.id)
+    .map(a => ({ ...a, warehouseName: warehouses.find(w => w.id === a.warehouseId)?.name || a.warehouseId }))
+
+  const saveRole = () => {
+    dispatch(updateUserRole({ id: u.id, role }))
+    toast.success('Role updated')
+  }
+
+  const doAssign = e => {
+    e.preventDefault()
+    if (!addWh) return
+    dispatch(assignWarehouse({ userId: u.id, warehouseId: addWh, companyId }))
+    toast.success('Warehouse assigned')
+    setAddWh('')
+  }
+
+  const toggleActive = () => {
+    u.isActive ? dispatch(deactivateUser(u.id)) : dispatch(reactivateUser(u.id))
+    toast.success(u.isActive ? 'User deactivated' : 'User reactivated')
+    onClose()
+  }
+
+  return (
+    <Modal title={`Manage — ${u.name}`} wide onClose={onClose}>
+      <div className="space-y-5">
+        {/* Role */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Role</p>
+          <div className="flex gap-2 items-center">
+            <select
+              value={role} onChange={e => setRole(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+            >
+              <option value="MANAGER">Manager</option>
+              <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
+              <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
+            </select>
+            <button
+              onClick={saveRole}
+              disabled={role === u.role}
+              className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Save Role
+            </button>
+          </div>
+        </div>
+
+        {/* Warehouse Assignments — show always but lock if not staff */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Warehouse Assignments</p>
+          {role !== 'WAREHOUSE_STAFF' ? (
+            <p className="text-sm text-gray-400 italic">Only Warehouse Staff can be assigned to warehouses.</p>
+          ) : (
+            <div className="space-y-2">
+              {assignments.length === 0 ? (
+                <p className="text-sm text-gray-400 italic">No warehouses assigned yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {assignments.map(a => (
+                    <span key={a.id} className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-full border border-teal-200 font-medium">
+                      {a.warehouseName}
+                      <button
+                        onClick={() => { dispatch(removeAssignment(a.id)); toast.info('Assignment removed') }}
+                        className="text-teal-400 hover:text-red-500 leading-none font-bold"
+                      >×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <form onSubmit={doAssign} className="flex gap-2 mt-2">
+                <select
+                  value={addWh} onChange={e => setAddWh(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                >
+                  <option value="">Add warehouse…</option>
+                  {warehouses.filter(w => w.isActive && !assignments.find(a => a.warehouseId === w.id)).map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+                <button type="submit" disabled={!addWh} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                  Assign
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {/* Account status */}
+        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">{u.name}</p>
+            <p className="text-xs text-gray-400">{u.email}</p>
+          </div>
+          <button
+            onClick={toggleActive}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${u.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
+          >
+            {u.isActive ? 'Deactivate Account' : 'Reactivate Account'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function UsersPanel() {
+  const { users } = useSelector(s => s.users)
   const { user: me, companyId } = useSelector(s => s.auth)
   const dispatch = useDispatch()
   const [showAdd, setShowAdd] = useState(false)
-  const [assignModal, setAssignModal] = useState(null)
+  const [showTempPass, setShowTempPass] = useState(false)
+  const [manageUser, setManageUser] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', role: 'MANAGER', password: '' })
-  const [assignWh, setAssignWh] = useState('')
   const [search, setSearch] = useState('')
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -474,25 +667,14 @@ function UsersPanel() {
 
   const handleAdd = e => {
     e.preventDefault()
-    dispatch(addUser({ ...form, companyId }))
-    toast.success(`${form.name} added to team`)
+    const newId = `user-${Date.now()}`
+    dispatch(addUser({ ...form, companyId, id: newId }))
+    dispatch(registerLocalUser({ id: newId, name: form.name, email: form.email, password: form.password, role: form.role, companyId, companyName: null, warehouseId: null }))
+    toast.success(`${form.name} added — they must set a new password on first login`)
     setShowAdd(false)
+    setShowTempPass(false)
     setForm({ name: '', email: '', role: 'MANAGER', password: '' })
   }
-
-  const handleAssign = e => {
-    e.preventDefault()
-    if (!assignWh) return
-    dispatch(assignWarehouse({ userId: assignModal, warehouseId: assignWh, companyId }))
-    toast.success('Warehouse assigned')
-    setAssignModal(null)
-    setAssignWh('')
-  }
-
-  const getAssignments = userId =>
-    warehouseAssignments
-      .filter(a => a.userId === userId)
-      .map(a => ({ ...a, warehouseName: warehouses.find(w => w.id === a.warehouseId)?.name || a.warehouseId }))
 
   const roleCount = r => users.filter(u => u.companyId === companyId && u.role === r).length
 
@@ -518,48 +700,39 @@ function UsersPanel() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['Name', 'Email', 'Role', 'Status', 'Warehouse Assignments', 'Actions'].map(h => (
+                {['Name', 'Email', 'Role', 'Status', 'Actions'].map(h => (
                   <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {companyUsers.map(u => {
-                const assignments = getAssignments(u.id)
-                return (
-                  <tr key={u.id} className="hover:bg-gray-50/60">
-                    <td className="px-5 py-3 font-medium text-gray-900">{u.name}</td>
-                    <td className="px-5 py-3 text-gray-600">{u.email}</td>
-                    <td className="px-5 py-3"><StatusBadge status={u.role} /></td>
-                    <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
-                    <td className="px-5 py-3">
-                      {u.role === 'WAREHOUSE_STAFF' ? (
-                        <div className="flex flex-wrap items-center gap-1">
-                          {assignments.map(a => (
-                            <span key={a.id} className="inline-flex items-center gap-1 bg-teal-50 text-teal-700 text-xs px-2 py-0.5 rounded-full border border-teal-200">
-                              {a.warehouseName}
-                              <button onClick={() => { dispatch(removeAssignment(a.id)); toast.info('Assignment removed') }} className="text-teal-400 hover:text-red-500 font-bold leading-none">×</button>
-                            </span>
-                          ))}
-                          <button onClick={() => setAssignModal(u.id)} className="text-xs text-teal-600 hover:underline">+ Assign</button>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 text-xs italic">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      {u.id !== me.id && (
-                        <button
-                          onClick={() => { u.isActive ? dispatch(deactivateUser(u.id)) : dispatch(reactivateUser(u.id)); toast.success(u.isActive ? 'User deactivated' : 'User reactivated') }}
-                          className={`text-xs font-medium hover:underline ${u.isActive ? 'text-red-500' : 'text-teal-600'}`}
-                        >
-                          {u.isActive ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {companyUsers.map(u => (
+                <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
+                        {u.name[0]}
+                      </div>
+                      <span className="font-medium text-gray-900">{u.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-gray-600">{u.email}</td>
+                  <td className="px-5 py-3"><StatusBadge status={u.role} /></td>
+                  <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
+                  <td className="px-5 py-3">
+                    {u.id !== me.id ? (
+                      <button
+                        onClick={() => setManageUser(u)}
+                        className="px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-semibold rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors"
+                      >
+                        Manage
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">You</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -577,25 +750,33 @@ function UsersPanel() {
                 <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
               </select>
             </Field>
-            <Field label="Temporary Password" name="password" type="password" value={form.password} onChange={ch} placeholder="Min 8 characters" required />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Temporary Password</label>
+              <div className="relative">
+                <input
+                  name="password"
+                  type={showTempPass ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={ch}
+                  placeholder="Min 8 characters"
+                  required
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+                />
+                <button type="button" onClick={() => setShowTempPass(s => !s)} tabIndex={-1} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showTempPass
+                    ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                    : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  }
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">The user will be prompted to change this on first login.</p>
+            </div>
             <BtnRow onClose={() => setShowAdd(false)} submitLabel="Add User" />
           </form>
         </Modal>
       )}
 
-      {assignModal && (
-        <Modal title="Assign to Warehouse" onClose={() => setAssignModal(null)}>
-          <form onSubmit={handleAssign} className="space-y-3">
-            <Field label="Warehouse">
-              <select value={assignWh} onChange={e => setAssignWh(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
-                <option value="">Select warehouse…</option>
-                {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
-            </Field>
-            <BtnRow onClose={() => setAssignModal(null)} submitLabel="Assign" />
-          </form>
-        </Modal>
-      )}
+      {manageUser && <ManageUserModal user={manageUser} onClose={() => setManageUser(null)} />}
     </div>
   )
 }
