@@ -78,7 +78,7 @@ class SuspendedCompanyFilterIT {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("staff@active.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("staff@active.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isCreated());
     }
 
@@ -101,7 +101,7 @@ class SuspendedCompanyFilterIT {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("staff@ice.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("staff@ice.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isForbidden());
     }
 
@@ -155,7 +155,7 @@ class SuspendedCompanyFilterIT {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest(email, "password123", role))))
+                                new CreateUserRequest(email, "password123", role, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
 

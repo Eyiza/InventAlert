@@ -11,12 +11,12 @@ import com.inventalert.identityService.model.Role;
 import com.inventalert.identityService.model.User;
 import com.inventalert.identityService.repository.CompanyRepository;
 import com.inventalert.identityService.repository.UserRepository;
+import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
 import com.inventalert.identityService.security.exception.SuspendedCompanyException;
 import com.inventalert.identityService.security.service.JwtUtil;
 import com.inventalert.identityService.service.AuthService;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,10 +29,10 @@ public class AuthServiceImpl implements AuthService {
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final WarehouseAssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final CompanyEventProducer eventProducer;
-    private final ModelMapper modelMapper;
 
     @Value("${SUPER_ADMIN_EMAIL:superadmin@inventalert.io}")
     private String superAdminEmail;
@@ -65,9 +65,7 @@ public class AuthServiceImpl implements AuthService {
 
         eventProducer.publishCompanyCreated(savedCompany.getId(), request.getCompanyName(), request.getAdminEmail());
 
-        LoginResponse response = modelMapper.map(savedAdmin, LoginResponse.class);
-        response.setToken(jwtUtil.generateToken(savedAdmin));
-        return response;
+        return buildLoginResponse(savedAdmin);
     }
 
     @Override
@@ -90,9 +88,7 @@ public class AuthServiceImpl implements AuthService {
             throw new SuspendedCompanyException();
         }
 
-        LoginResponse response = modelMapper.map(user, LoginResponse.class);
-        response.setToken(jwtUtil.generateToken(user));
-        return response;
+        return buildLoginResponse(user);
     }
 
     @Override
@@ -106,6 +102,26 @@ public class AuthServiceImpl implements AuthService {
         response.setToken(jwtUtil.generateSuperAdminToken(superAdminId));
         response.setUserId(superAdminId);
         response.setRole("SUPER_ADMIN");
+        return response;
+    }
+
+    private LoginResponse buildLoginResponse(User user) {
+        // ADMIN is company-scoped; warehouse roles carry their primary warehouse in the token
+        String warehouseId = null;
+        if (user.getRole() != Role.ADMIN) {
+            warehouseId = assignmentRepository.findAllByUserId(user.getId())
+                    .stream()
+                    .findFirst()
+                    .map(a -> a.getWarehouseId())
+                    .orElse(null);
+        }
+
+        LoginResponse response = new LoginResponse();
+        response.setToken(jwtUtil.generateToken(user, warehouseId));
+        response.setUserId(user.getId());
+        response.setCompanyId(user.getCompanyId());
+        response.setRole(user.getRole().name());
+        response.setWarehouseId(warehouseId);
         return response;
     }
 }

@@ -11,6 +11,7 @@ import com.inventalert.identityService.model.Role;
 import com.inventalert.identityService.model.User;
 import com.inventalert.identityService.repository.CompanyRepository;
 import com.inventalert.identityService.repository.UserRepository;
+import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
 import com.inventalert.identityService.security.exception.SuspendedCompanyException;
 import com.inventalert.identityService.security.service.JwtUtil;
@@ -20,10 +21,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.modelmapper.ModelMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,10 +40,10 @@ class AuthServiceTest {
 
     @Mock CompanyRepository companyRepository;
     @Mock UserRepository userRepository;
+    @Mock WarehouseAssignmentRepository assignmentRepository;
     @Mock PasswordEncoder passwordEncoder;
     @Mock JwtUtil jwtUtil;
     @Mock CompanyEventProducer eventProducer;
-    @Mock ModelMapper modelMapper;
 
     @InjectMocks AuthServiceImpl authService;
 
@@ -66,12 +67,7 @@ class AuthServiceTest {
             user.setId(UUID.randomUUID().toString());
             return user;
         });
-        when(jwtUtil.generateToken(any())).thenReturn("jwt-token");
-
-        LoginResponse mapped = new LoginResponse();
-        mapped.setRole("ADMIN");
-        mapped.setCompanyId("some-company-id");
-        when(modelMapper.map(any(User.class), eq(LoginResponse.class))).thenReturn(mapped);
+        when(jwtUtil.generateToken(any(User.class), any())).thenReturn("jwt-token");
 
         LoginResponse response = authService.signup(req);
 
@@ -113,13 +109,8 @@ class AuthServiceTest {
         when(userRepository.findByEmail("chukwudi@firstbank.ng")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("pass", "hashed")).thenReturn(true);
         when(companyRepository.findById("co-1")).thenReturn(Optional.of(company));
-        when(jwtUtil.generateToken(user)).thenReturn("manager-jwt");
-
-        LoginResponse mapped = new LoginResponse();
-        mapped.setUserId("u-1");
-        mapped.setCompanyId("co-1");
-        mapped.setRole("MANAGER");
-        when(modelMapper.map(eq(user), eq(LoginResponse.class))).thenReturn(mapped);
+        when(jwtUtil.generateToken(eq(user), any())).thenReturn("manager-jwt");
+        when(assignmentRepository.findAllByUserId("u-1")).thenReturn(Collections.emptyList());
 
         LoginResponse response = authService.login(req);
 
@@ -220,7 +211,6 @@ class AuthServiceTest {
                 .email("user@test.ng")
                 .passwordHash("hashed")
                 .role(role)
-                .warehouseId(warehouseId)
                 .build();
     }
 

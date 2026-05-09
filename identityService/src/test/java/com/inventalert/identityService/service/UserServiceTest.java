@@ -48,9 +48,10 @@ class UserServiceTest {
     @Test
     void CreateUserAccount_CheckIfSuccessfulTest() {
         String companyId = "company-1";
-        CreateUserRequest request = new CreateUserRequest("bob@acme.com", "password123", Role.MANAGER);
+        CreateUserRequest request = new CreateUserRequest("bob@acme.com", "password123", Role.MANAGER, "warehouse-1");
 
         when(userRepository.existsByCompanyIdAndEmail(companyId, request.email())).thenReturn(false);
+        when(assignmentRepository.findAllByWarehouseIdAndCompanyId("warehouse-1", companyId)).thenReturn(List.of());
         when(passwordEncoder.encode(request.password())).thenReturn("hashed-password");
 
         User savedUser = User.builder()
@@ -70,12 +71,13 @@ class UserServiceTest {
         assertThat(response.role()).isEqualTo(Role.MANAGER);
         assertThat(response.isActive()).isTrue();
         verify(userRepository).save(any(User.class));
+        verify(assignmentRepository).save(any(WarehouseAssignment.class));
     }
 
     @Test
     void CreateUserAccount_DuplicateEmail_CheckIfThrowsExceptionTest() {
         String companyId = "company-1";
-        CreateUserRequest request = new CreateUserRequest("bob@acme.com", "password123", Role.MANAGER);
+        CreateUserRequest request = new CreateUserRequest("bob@acme.com", "password123", Role.MANAGER, null);
 
         when(userRepository.existsByCompanyIdAndEmail(companyId, request.email())).thenReturn(true);
 

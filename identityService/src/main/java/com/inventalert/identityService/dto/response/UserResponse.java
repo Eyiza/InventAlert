@@ -11,7 +11,6 @@ public record UserResponse(
         String email,
         Role role,
         boolean isActive,
-        String warehouseId,
         LocalDateTime createdAt
 ) {
     public static UserResponse from(User user) {
@@ -21,7 +20,6 @@ public record UserResponse(
                 user.getEmail(),
                 user.getRole(),
                 user.isActive(),
-                user.getWarehouseId(),
                 user.getCreatedAt()
         );
     }

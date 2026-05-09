@@ -1,6 +1,5 @@
 package com.inventalert.identityService.security.service;
 
-import com.inventalert.identityService.model.Role;
 import com.inventalert.identityService.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -23,12 +22,12 @@ public class JwtUtil {
 
     private static final long EXPIRY_MS = 24 * 60 * 60 * 1000L;
 
-    public String generateToken(User user) {
+    public String generateToken(User user, String warehouseId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("companyId", user.getCompanyId());
         claims.put("role", user.getRole().name());
-        if (user.getRole() == Role.WAREHOUSE_STAFF && user.getWarehouseId() != null) {
-            claims.put("warehouseId", user.getWarehouseId());
+        if (warehouseId != null) {
+            claims.put("warehouseId", warehouseId);
         }
         return buildToken(claims, user.getId());
     }

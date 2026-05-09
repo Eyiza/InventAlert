@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "InventAlert — Identity Service",
-    "description": "All 13 endpoints for the IdentityService running on http://localhost:8081.\n\nWorkflow:\n1. Run 'Company Signup' → token and companyId are auto-saved.\n2. Run 'Login' to refresh the token.\n3. Use 'Create User' to add staff, then copy the returned userId into {{userId}}.\n4. For SuperAdmin flows, run 'SuperAdmin Login' first.",
+    "description": "All endpoints for the IdentityService running on http://localhost:8081.\n\nWorkflow:\n1. Run 'Company Signup' → token and companyId are auto-saved.\n2. Run 'Login' to refresh the token.\n3. Use 'Create User' to add staff — warehouseId is now required for non-ADMIN roles and a warehouse assignment is auto-created.\n4. For SuperAdmin flows, run 'SuperAdmin Login' first.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,7 +10,8 @@
     { "key": "superAdminToken","value": "" },
     { "key": "companyId",      "value": "" },
     { "key": "userId",         "value": "" },
-    { "key": "userId2",        "value": "" }
+    { "key": "userId2",        "value": "" },
+    { "key": "warehouseId",    "value": "warehouse-uuid-001" }
   ],
   "item": [
     {
@@ -30,6 +31,7 @@
                   "  pm.test('Returns 201 with token', () => pm.expect(body.token).to.not.be.empty);",
                   "  pm.test('Role is ADMIN', () => pm.expect(body.role).to.eql('ADMIN'));",
                   "  pm.test('companyId is set', () => pm.expect(body.companyId).to.not.be.empty);",
+                  "  pm.test('No warehouseId for ADMIN', () => pm.expect(body.warehouseId).to.be.undefined);",
                   "}"
                 ]
               }
@@ -55,6 +57,7 @@
                   "if (pm.response.code === 200) {",
                   "  const body = pm.response.json();",
                   "  pm.collectionVariables.set('adminToken', body.token);",
+                  "  if (body.warehouseId) pm.collectionVariables.set('warehouseId', body.warehouseId);",
                   "  pm.test('Returns 200 with token', () => pm.expect(body.token).to.not.be.empty);",
                   "}"
                 ]
@@ -127,7 +130,7 @@
       "name": "Users (ADMIN)",
       "item": [
         {
-          "name": "Create User",
+          "name": "Create User — Manager",
           "event": [
             {
               "listen": "test",
@@ -138,7 +141,9 @@
                   "  pm.collectionVariables.set('userId', body.id);",
                   "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
                   "  pm.test('Email matches', () => pm.expect(body.email).to.eql('manager@acme.com'));",
+                  "  pm.test('Role is MANAGER', () => pm.expect(body.role).to.eql('MANAGER'));",
                   "  pm.test('isActive is true', () => pm.expect(body.isActive).to.be.true);",
+                  "  pm.test('No warehouseId in UserResponse (use GET assignments)', () => pm.expect(body.warehouseId).to.be.undefined);",
                   "}"
                 ]
               }
@@ -150,7 +155,35 @@
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"manager@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\"\n}"
+              "raw": "{\n  \"email\": \"manager@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\",\n  \"warehouseId\": \"{{warehouseId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "Create User — Procurement Officer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('userId2', body.id);",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "  pm.test('Role is PROCUREMENT_OFFICER', () => pm.expect(body.role).to.eql('PROCUREMENT_OFFICER'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"po@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"PROCUREMENT_OFFICER\",\n  \"warehouseId\": \"{{warehouseId}}\"\n}"
             },
             "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
           }
@@ -173,7 +206,55 @@
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"manager@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\"\n}"
+              "raw": "{\n  \"email\": \"manager@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"PROCUREMENT_OFFICER\",\n  \"warehouseId\": \"{{warehouseId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "Create User — Missing warehouseId for non-ADMIN (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.expect(pm.response.code).to.eql(400));",
+                  "pm.test('Error mentions warehouseId', () => pm.expect(pm.response.json().message).to.include('warehouseId'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nowarehouse@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "Create User — Duplicate Manager for Warehouse (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', () => pm.expect(pm.response.code).to.eql(409));",
+                  "pm.test('Error mentions manager', () => pm.expect(pm.response.json().message).to.include('manager'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager2@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\",\n  \"warehouseId\": \"{{warehouseId}}\"\n}"
             },
             "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
           }
@@ -209,7 +290,10 @@
               "script": {
                 "exec": [
                   "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
-                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('Users have no warehouseId field', () => {",
+                  "  pm.response.json().forEach(u => pm.expect(u.warehouseId).to.be.undefined);",
+                  "});"
                 ]
               }
             }
@@ -282,14 +366,14 @@
           }
         },
         {
-          "name": "Assign User to Warehouse",
+          "name": "Assign User to Additional Warehouse",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
-                  "pm.test('warehouseId matches', () => pm.expect(pm.response.json().warehouseId).to.eql('warehouse-uuid-001'));"
+                  "pm.test('warehouseId matches', () => pm.expect(pm.response.json().warehouseId).to.eql('warehouse-uuid-002'));"
                 ]
               }
             }
@@ -300,9 +384,33 @@
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"warehouseId\": \"warehouse-uuid-001\"\n}"
+              "raw": "{\n  \"warehouseId\": \"warehouse-uuid-002\"\n}"
             },
-            "url": { "raw": "{{baseUrl}}/api/users/{{userId}}/assign", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId}}","assign"] }
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId2}}/assign", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId2}}","assign"] }
+          }
+        },
+        {
+          "name": "Assign Manager to Already-Managed Warehouse (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', () => pm.expect(pm.response.code).to.eql(409));",
+                  "pm.test('Error mentions manager', () => pm.expect(pm.response.json().message).to.include('manager'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": \"{{warehouseId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId2}}/assign", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId2}}","assign"] }
           }
         },
         {
@@ -313,7 +421,8 @@
               "script": {
                 "exec": [
                   "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
-                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At least one assignment', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
                 ]
               }
             }

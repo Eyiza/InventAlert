@@ -79,7 +79,7 @@ class UserControllerIT {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("staff@acme.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("staff@acme.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value("staff@acme.com"))
                 .andExpect(jsonPath("$.role").value("MANAGER"))
@@ -89,7 +89,7 @@ class UserControllerIT {
     @Test
     void createUser_duplicateEmail_returns409() throws Exception {
         String token = signupAndGetToken("Beta Corp", "admin@beta.com");
-        CreateUserRequest req = new CreateUserRequest("dup@beta.com", "password123", Role.MANAGER);
+        CreateUserRequest req = new CreateUserRequest("dup@beta.com", "password123", Role.MANAGER, null);
 
         mockMvc.perform(post("/api/users")
                         .header("Authorization", "Bearer " + token)
@@ -120,7 +120,7 @@ class UserControllerIT {
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("x@test.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("x@test.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -133,7 +133,7 @@ class UserControllerIT {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("mgr@delta.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("mgr@delta.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isCreated());
 
         // Log in as manager
@@ -144,7 +144,7 @@ class UserControllerIT {
                         .header("Authorization", "Bearer " + managerToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("new@delta.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("new@delta.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isForbidden());
     }
 
@@ -158,14 +158,14 @@ class UserControllerIT {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("u1@epsilon.com", "password123", Role.MANAGER))))
+                                new CreateUserRequest("u1@epsilon.com", "password123", Role.MANAGER, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/users")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest("u2@epsilon.com", "password123", Role.PROCUREMENT_OFFICER))))
+                                new CreateUserRequest("u2@epsilon.com", "password123", Role.PROCUREMENT_OFFICER, null))))
                 .andExpect(status().isCreated());
 
         // 3 total: the admin from signup + 2 created here
@@ -321,7 +321,7 @@ class UserControllerIT {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                new CreateUserRequest(email, "password123", role))))
+                                new CreateUserRequest(email, "password123", role, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
 

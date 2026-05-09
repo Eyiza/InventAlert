@@ -5,6 +5,8 @@ import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
 import com.inventalert.identityService.exception.UserAlreadyDeactivatedException;
 import com.inventalert.identityService.exception.UserNotFoundException;
+import com.inventalert.identityService.exception.WarehouseManagerConflictException;
+import com.inventalert.identityService.exception.WarehouseRequiredException;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
 import com.inventalert.identityService.security.exception.SuspendedCompanyException;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +36,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserAlreadyDeactivatedException.class)
     public ResponseEntity<ErrorResponse> handleAlreadyDeactivated(UserAlreadyDeactivatedException ex) {
+        return ResponseEntity.status(409).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(WarehouseRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleWarehouseRequired(WarehouseRequiredException ex) {
+        return ResponseEntity.status(400).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(WarehouseManagerConflictException.class)
+    public ResponseEntity<ErrorResponse> handleManagerConflict(WarehouseManagerConflictException ex) {
         return ResponseEntity.status(409).body(new ErrorResponse(ex.getMessage()));
     }
 

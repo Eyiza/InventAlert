@@ -30,7 +30,7 @@ class JwtUtilTest {
     void generateToken_containsCorrectClaims() {
         User user = buildUser("user-1", "company-1", Role.ADMIN, null);
 
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user, null);
 
         assertThat(jwtUtil.extractUserId(token)).isEqualTo("user-1");
         assertThat(jwtUtil.extractCompanyId(token)).isEqualTo("company-1");
@@ -42,7 +42,7 @@ class JwtUtilTest {
     void generateToken_warehouseStaff_containsWarehouseId() {
         User user = buildUser("user-2", "company-1", Role.WAREHOUSE_STAFF, "wh-abc");
 
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user, "wh-abc");
 
         assertThat(jwtUtil.extractWarehouseId(token)).isEqualTo("wh-abc");
         assertThat(jwtUtil.extractRole(token)).isEqualTo("WAREHOUSE_STAFF");
@@ -52,7 +52,7 @@ class JwtUtilTest {
     void generateToken_nonStaff_noWarehouseId() {
         User user = buildUser("user-3", "company-1", Role.MANAGER, "wh-should-be-ignored");
 
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user, null);
 
         assertThat(jwtUtil.extractWarehouseId(token)).isNull();
     }
@@ -61,7 +61,7 @@ class JwtUtilTest {
     void generateToken_warehouseStaff_nullWarehouseId_noWarehouseIdClaim() {
         User user = buildUser("user-4", "company-1", Role.WAREHOUSE_STAFF, null);
 
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user, null);
 
         assertThat(jwtUtil.extractWarehouseId(token)).isNull();
     }
@@ -111,7 +111,7 @@ class JwtUtilTest {
     @Test
     void extractUserId_returnsSubClaim() {
         User user = buildUser("user-abc", "co-1", Role.PROCUREMENT_OFFICER, null);
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user, null);
 
         assertThat(jwtUtil.extractUserId(token)).isEqualTo("user-abc");
     }
@@ -119,7 +119,7 @@ class JwtUtilTest {
     @Test
     void extractRole_returnsRoleString() {
         User user = buildUser("u", "c", Role.MANAGER, null);
-        String token = jwtUtil.generateToken(user);
+        String token = jwtUtil.generateToken(user, null);
 
         assertThat(jwtUtil.extractRole(token)).isEqualTo("MANAGER");
     }
@@ -131,7 +131,6 @@ class JwtUtilTest {
                 .email("tunde@test.ng")
                 .passwordHash("hash")
                 .role(role)
-                .warehouseId(warehouseId)
                 .build();
     }
 }

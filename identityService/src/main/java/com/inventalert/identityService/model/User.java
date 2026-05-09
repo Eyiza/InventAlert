@@ -31,8 +31,6 @@ public class User {
     @Builder.Default
     private boolean isActive = true;
 
-    private String warehouseId;
-
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

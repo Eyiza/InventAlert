@@ -15,7 +15,7 @@ info:
     | `sub` | string | userId |
     | `role` | string | `ADMIN`, `MANAGER`, `WAREHOUSE_STAFF`, `PROCUREMENT_OFFICER`, or `SUPER_ADMIN` |
     | `companyId` | string | Omitted for SuperAdmin tokens |
-    | `warehouseId` | string | Only present when role is `WAREHOUSE_STAFF` |
+    | `warehouseId` | string | Present for all non-ADMIN roles; first warehouse assignment at login time |
 
     Token lifetime: **24 hours**. Algorithm: **HS256**.
   version: "1.0.0"
@@ -160,6 +160,7 @@ paths:
               email: manager@acme.com
               password: password123
               role: MANAGER
+              warehouseId: warehouse-uuid-001
       responses:
         '201':
           description: User created
@@ -200,6 +201,10 @@ paths:
     patch:
       tags: [Users]
       summary: Change a user's role
+      description: |
+        When promoting to `MANAGER`, all warehouses the user is currently assigned to
+        are checked for an existing active manager. Returns 409 if any warehouse already
+        has one.
       operationId: updateRole
       security:
         - bearerAuth: []
@@ -228,6 +233,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Promoting to MANAGER conflicts with an existing manager on one of the user's warehouses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Warehouse warehouse-uuid-001 already has an active manager assigned
 
   /api/users/{id}/deactivate:
     patch:
@@ -259,6 +272,10 @@ paths:
     post:
       tags: [Users]
       summary: Assign a user to a warehouse
+      description: |
+        If the assignment already exists it is returned idempotently (200).
+        If the user's role is `MANAGER`, returns 409 when the target warehouse already
+        has an active manager from the same company.
       operationId: assignToWarehouse
       security:
         - bearerAuth: []
@@ -287,6 +304,14 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: User is a MANAGER and this warehouse already has an active manager
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Warehouse warehouse-uuid-001 already has an active manager assigned
 
   /api/users/{id}/assignments:
     get:
@@ -461,6 +486,10 @@ components:
     CreateUserRequest:
       type: object
       required: [email, password, role]
+      description: |
+        `warehouseId` is required for all roles except `ADMIN`. Omitting it for a
+        non-ADMIN role returns 400. For `MANAGER`, the warehouse must not already
+        have an active manager (409 otherwise).
       properties:
         email:
           type: string
@@ -472,6 +501,10 @@ components:
           example: password123
         role:
           $ref: '#/components/schemas/Role'
+        warehouseId:
+          type: string
+          description: Required for MANAGER, PROCUREMENT_OFFICER, and WAREHOUSE_STAFF. Omit for ADMIN.
+          example: warehouse-uuid-001
 
     UpdateRoleRequest:
       type: object
@@ -507,11 +540,12 @@ components:
           example: ADMIN
         warehouseId:
           type: string
-          description: Only present when role is WAREHOUSE_STAFF
+          description: Present for all non-ADMIN roles; reflects the first warehouse assignment at login time. Null if no assignment exists yet.
           example: warehouse-uuid-001
 
     UserResponse:
       type: object
+      description: Warehouse assignments are not included. Use GET /api/users/{id}/assignments.
       properties:
         id:
           type: string
@@ -527,10 +561,6 @@ components:
         isActive:
           type: boolean
           example: true
-        warehouseId:
-          type: string
-          nullable: true
-          example: warehouse-uuid-001
         createdAt:
           type: string
           format: date-time

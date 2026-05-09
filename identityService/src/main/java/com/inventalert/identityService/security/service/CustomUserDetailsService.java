@@ -22,7 +22,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 user.getId(),
                 user.getCompanyId(),
                 user.getRole().name(),
-                user.getWarehouseId()
+                null
         );
     }
 }
