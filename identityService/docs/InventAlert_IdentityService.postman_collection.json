@@ -1,0 +1,451 @@
+{
+  "info": {
+    "name": "InventAlert — Identity Service",
+    "description": "All 13 endpoints for the IdentityService running on http://localhost:8081.\n\nWorkflow:\n1. Run 'Company Signup' → token and companyId are auto-saved.\n2. Run 'Login' to refresh the token.\n3. Use 'Create User' to add staff, then copy the returned userId into {{userId}}.\n4. For SuperAdmin flows, run 'SuperAdmin Login' first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",        "value": "http://localhost:8081" },
+    { "key": "adminToken",     "value": "" },
+    { "key": "superAdminToken","value": "" },
+    { "key": "companyId",      "value": "" },
+    { "key": "userId",         "value": "" },
+    { "key": "userId2",        "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Company Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('adminToken', body.token);",
+                  "  pm.collectionVariables.set('companyId', body.companyId);",
+                  "  pm.test('Returns 201 with token', () => pm.expect(body.token).to.not.be.empty);",
+                  "  pm.test('Role is ADMIN', () => pm.expect(body.role).to.eql('ADMIN'));",
+                  "  pm.test('companyId is set', () => pm.expect(body.companyId).to.not.be.empty);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Acme Corp\",\n  \"adminEmail\": \"admin@acme.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/signup", "host": ["{{baseUrl}}"], "path": ["api","auth","signup"] }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('adminToken', body.token);",
+                  "  pm.test('Returns 200 with token', () => pm.expect(body.token).to.not.be.empty);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@acme.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] }
+          }
+        },
+        {
+          "name": "Login — Wrong Password (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@acme.com\",\n  \"password\": \"wrongpassword\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] }
+          }
+        },
+        {
+          "name": "SuperAdmin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('superAdminToken', body.token);",
+                  "  pm.test('Returns 200 with token', () => pm.expect(body.token).to.not.be.empty);",
+                  "  pm.test('Role is SUPER_ADMIN', () => pm.expect(body.role).to.eql('SUPER_ADMIN'));",
+                  "  pm.test('No companyId in response', () => pm.expect(body.companyId).to.be.undefined);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@inventalert.io\",\n  \"password\": \"SuperSecure123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/superadmin/login", "host": ["{{baseUrl}}"], "path": ["api","auth","superadmin","login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users (ADMIN)",
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('userId', body.id);",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "  pm.test('Email matches', () => pm.expect(body.email).to.eql('manager@acme.com'));",
+                  "  pm.test('isActive is true', () => pm.expect(body.isActive).to.be.true);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "Create User — Duplicate Email (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', () => pm.expect(pm.response.code).to.eql(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"manager@acme.com\",\n  \"password\": \"password123\",\n  \"role\": \"MANAGER\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "Create User — Missing Role (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"bad@acme.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "List Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] }
+          }
+        },
+        {
+          "name": "Update User Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Role updated', () => pm.expect(pm.response.json().role).to.eql('PROCUREMENT_OFFICER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"PROCUREMENT_OFFICER\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId}}/role", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId}}","role"] }
+          }
+        },
+        {
+          "name": "Deactivate User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('isActive is false', () => pm.expect(pm.response.json().isActive).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId}}","deactivate"] }
+          }
+        },
+        {
+          "name": "Deactivate User — Already Inactive (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', () => pm.expect(pm.response.code).to.eql(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId}}","deactivate"] }
+          }
+        },
+        {
+          "name": "Assign User to Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "pm.test('warehouseId matches', () => pm.expect(pm.response.json().warehouseId).to.eql('warehouse-uuid-001'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"warehouseId\": \"warehouse-uuid-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId}}/assign", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId}}","assign"] }
+          }
+        },
+        {
+          "name": "Get User Assignments",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/users/{{userId}}/assignments", "host": ["{{baseUrl}}"], "path": ["api","users","{{userId}}","assignments"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SuperAdmin",
+      "item": [
+        {
+          "name": "List All Companies",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/superadmin/companies", "host": ["{{baseUrl}}"], "path": ["api","superadmin","companies"] }
+          }
+        },
+        {
+          "name": "List All Companies — Admin Token (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 403', () => pm.expect(pm.response.code).to.eql(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/superadmin/companies", "host": ["{{baseUrl}}"], "path": ["api","superadmin","companies"] }
+          }
+        },
+        {
+          "name": "Suspend Company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Status is SUSPENDED', () => pm.expect(pm.response.json().status).to.eql('SUSPENDED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/superadmin/companies/{{companyId}}/suspend", "host": ["{{baseUrl}}"], "path": ["api","superadmin","companies","{{companyId}}","suspend"] }
+          }
+        },
+        {
+          "name": "Suspend Company — Not Found (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 404', () => pm.expect(pm.response.code).to.eql(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/superadmin/companies/nonexistent-id/suspend", "host": ["{{baseUrl}}"], "path": ["api","superadmin","companies","nonexistent-id","suspend"] }
+          }
+        },
+        {
+          "name": "Reactivate Company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Status is ACTIVE', () => pm.expect(pm.response.json().status).to.eql('ACTIVE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{superAdminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/superadmin/companies/{{companyId}}/reactivate", "host": ["{{baseUrl}}"], "path": ["api","superadmin","companies","{{companyId}}","reactivate"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Company",
+      "item": [
+        {
+          "name": "Offboard Company (Self-Delete)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/companies/me", "host": ["{{baseUrl}}"], "path": ["api","companies","me"] }
+          }
+        }
+      ]
+    }
+  ]
+}

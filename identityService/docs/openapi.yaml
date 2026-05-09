@@ -1,0 +1,639 @@
+openapi: 3.0.3
+info:
+  title: InventAlert — Identity Service
+  description: |
+    Authentication, user management, and company administration for InventAlert.
+
+    **Auth flow:**
+    1. `POST /api/auth/signup` — registers a company and returns a JWT for the ADMIN user.
+    2. `POST /api/auth/login` — returns a JWT for any existing user.
+    3. Attach the JWT as `Authorization: Bearer <token>` on all protected endpoints.
+
+    **JWT claims:**
+    | Claim | Type | Notes |
+    |---|---|---|
+    | `sub` | string | userId |
+    | `role` | string | `ADMIN`, `MANAGER`, `WAREHOUSE_STAFF`, `PROCUREMENT_OFFICER`, or `SUPER_ADMIN` |
+    | `companyId` | string | Omitted for SuperAdmin tokens |
+    | `warehouseId` | string | Only present when role is `WAREHOUSE_STAFF` |
+
+    Token lifetime: **24 hours**. Algorithm: **HS256**.
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8081
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Public — signup, login, superadmin login
+  - name: Users
+    description: Protected — ADMIN role required
+  - name: SuperAdmin
+    description: Protected — SUPER_ADMIN role required
+  - name: Company
+    description: Protected — ADMIN role required
+
+paths:
+
+  /api/auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register a new company
+      description: |
+        Creates a company and its first ADMIN user. Returns a signed JWT immediately —
+        no separate login step needed. Also publishes a `company.created` Kafka event.
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+            example:
+              companyName: Acme Corp
+              adminEmail: admin@acme.com
+              password: password123
+      responses:
+        '201':
+          description: Company created, JWT returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9...
+                userId: 550e8400-e29b-41d4-a716-446655440000
+                companyId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                role: ADMIN
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login as any user
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: admin@acme.com
+              password: password123
+      responses:
+        '200':
+          description: Authenticated, JWT returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9...
+                userId: 550e8400-e29b-41d4-a716-446655440000
+                companyId: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                role: MANAGER
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Company is suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Company is suspended
+
+  /api/auth/superadmin/login:
+    post:
+      tags: [Auth]
+      summary: Login as SuperAdmin
+      description: |
+        Credentials are set via `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`
+        environment variables. The returned token has no `companyId`.
+      operationId: superAdminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: superadmin@inventalert.io
+              password: SuperSecure123!
+      responses:
+        '200':
+          description: Authenticated, SuperAdmin JWT returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9...
+                userId: superadmin-fixed-uuid-0001
+                role: SUPER_ADMIN
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users:
+    post:
+      tags: [Users]
+      summary: Create a user under the authenticated company
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            example:
+              email: manager@acme.com
+              password: password123
+              role: MANAGER
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    get:
+      tags: [Users]
+      summary: List all users in the authenticated company
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/{id}/role:
+    patch:
+      tags: [Users]
+      summary: Change a user's role
+      operationId: updateRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoleRequest'
+            example:
+              role: PROCUREMENT_OFFICER
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{id}/deactivate:
+    patch:
+      tags: [Users]
+      summary: Deactivate a user
+      description: Sets `isActive` to false. Returns 409 if already deactivated.
+      operationId: deactivateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/users/{id}/assign:
+    post:
+      tags: [Users]
+      summary: Assign a user to a warehouse
+      operationId: assignToWarehouse
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignWarehouseRequest'
+            example:
+              warehouseId: warehouse-uuid-001
+      responses:
+        '201':
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{id}/assignments:
+    get:
+      tags: [Users]
+      summary: Get all warehouse assignments for a user
+      operationId: getAssignments
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: List of assignments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssignmentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/superadmin/companies:
+    get:
+      tags: [SuperAdmin]
+      summary: List all companies
+      operationId: listAllCompanies
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of all companies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompanyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/superadmin/companies/{id}/suspend:
+    patch:
+      tags: [SuperAdmin]
+      summary: Suspend a company
+      description: |
+        Sets the company status to `SUSPENDED`. Users of that company will receive
+        403 on any protected endpoint until reactivated.
+      operationId: suspendCompany
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      responses:
+        '200':
+          description: Company suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/superadmin/companies/{id}/reactivate:
+    patch:
+      tags: [SuperAdmin]
+      summary: Reactivate a suspended company
+      operationId: reactivateCompany
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CompanyId'
+      responses:
+        '200':
+          description: Company reactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/companies/me:
+    delete:
+      tags: [Company]
+      summary: Offboard own company
+      description: |
+        Permanently removes the authenticated admin's company and publishes a
+        `company.offboarded` Kafka event. Irreversible.
+      operationId: initiateOffboarding
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Company offboarded successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      description: UUID of the user
+      schema:
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+    CompanyId:
+      name: id
+      in: path
+      required: true
+      description: UUID of the company
+      schema:
+        type: string
+        example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+  schemas:
+
+    SignupRequest:
+      type: object
+      required: [companyName, adminEmail, password]
+      properties:
+        companyName:
+          type: string
+          example: Acme Corp
+        adminEmail:
+          type: string
+          format: email
+          example: admin@acme.com
+        password:
+          type: string
+          minLength: 8
+          example: password123
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@acme.com
+        password:
+          type: string
+          example: password123
+
+    CreateUserRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email:
+          type: string
+          format: email
+          example: manager@acme.com
+        password:
+          type: string
+          minLength: 8
+          example: password123
+        role:
+          $ref: '#/components/schemas/Role'
+
+    UpdateRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/Role'
+
+    AssignWarehouseRequest:
+      type: object
+      required: [warehouseId]
+      properties:
+        warehouseId:
+          type: string
+          example: warehouse-uuid-001
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Signed JWT — attach as Authorization Bearer on all protected requests
+          example: eyJhbGciOiJIUzI1NiJ9...
+        userId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        companyId:
+          type: string
+          description: Absent for SuperAdmin tokens
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        role:
+          type: string
+          example: ADMIN
+        warehouseId:
+          type: string
+          description: Only present when role is WAREHOUSE_STAFF
+          example: warehouse-uuid-001
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        companyId:
+          type: string
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        email:
+          type: string
+          example: manager@acme.com
+        role:
+          $ref: '#/components/schemas/Role'
+        isActive:
+          type: boolean
+          example: true
+        warehouseId:
+          type: string
+          nullable: true
+          example: warehouse-uuid-001
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-05-09T10:30:00Z"
+
+    CompanyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        companyName:
+          type: string
+          example: Acme Corp
+        adminEmail:
+          type: string
+          example: admin@acme.com
+        status:
+          $ref: '#/components/schemas/CompanyStatus'
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-05-09T10:30:00Z"
+
+    AssignmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        userId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        companyId:
+          type: string
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        warehouseId:
+          type: string
+          example: warehouse-uuid-001
+        assignedAt:
+          type: string
+          format: date-time
+          example: "2026-05-09T10:30:00Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: User not found
+
+    Role:
+      type: string
+      enum: [ADMIN, MANAGER, WAREHOUSE_STAFF, PROCUREMENT_OFFICER]
+      example: MANAGER
+
+    CompanyStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED]
+      example: ACTIVE
+
+  responses:
+    BadRequest:
+      description: Validation failed — check request body fields
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "password: size must be between 8 and 2147483647"
+
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Invalid credentials
+
+    Forbidden:
+      description: Authenticated but insufficient role, or company is suspended
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Access denied
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: User not found
+
+    Conflict:
+      description: Duplicate resource or invalid state transition
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Email already exists
