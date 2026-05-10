@@ -28,8 +28,8 @@ const authSlice = createSlice({
     login: (state, action) => {
       const { email, password } = action.payload
       const found =
-        MOCK_CREDENTIALS.find(u => u.email === email && u.password === password) ||
-        state.localUsers.find(u => u.email === email && u.password === password)
+        state.localUsers.find(u => u.email === email && u.password === password) ||
+        MOCK_CREDENTIALS.find(u => u.email === email && u.password === password)
       if (found) {
         state.user = { id: found.id, name: found.name, email: found.email }
         state.token = `mock-jwt-${found.role}-${found.id}`
@@ -72,6 +72,11 @@ const authSlice = createSlice({
       if (localUser) {
         localUser.password = newPassword
         localUser.mustChangePassword = false
+      } else {
+        const mockUser = MOCK_CREDENTIALS.find(u => u.id === state.user?.id)
+        if (mockUser) {
+          state.localUsers.push({ ...mockUser, password: newPassword, mustChangePassword: false })
+        }
       }
       state.mustChangePassword = false
     },

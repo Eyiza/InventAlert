@@ -35,8 +35,16 @@ const superadminSlice = createSlice({
       const t = state.complaints.find(x => x.id === action.payload)
       if (t) t.status = 'IN_REVIEW'
     },
+    submitComplaint: (state, action) => {
+      state.complaints.unshift({
+        ...action.payload,
+        id: `complaint-${Date.now()}`,
+        status: 'OPEN',
+        createdAt: new Date().toISOString(),
+      })
+    },
   },
 })
 
-export const { suspendCompany, reactivateCompany, addCompany, updateCompanyLogo, resolveComplaint, reviewComplaint } = superadminSlice.actions
+export const { suspendCompany, reactivateCompany, addCompany, updateCompanyLogo, resolveComplaint, reviewComplaint, submitComplaint } = superadminSlice.actions
 export default superadminSlice.reducer

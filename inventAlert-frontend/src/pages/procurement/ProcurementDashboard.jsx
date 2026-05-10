@@ -2,16 +2,59 @@ import { useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
+import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { acknowledgeAlert, markOrderPlaced, resolveAlert } from '../../store/slices/alertsSlice'
 import { addMovement } from '../../store/slices/stockSlice'
 import { createPO, receivePO, cancelPO } from '../../store/slices/purchaseOrdersSlice'
+import { submitComplaint } from '../../store/slices/superadminSlice'
 
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 // ── Shared ────────────────────────────────────────────────────────────────────
+
+function FilterableSelect({ value, onChange, options, placeholder = 'Select…', required }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const selected = options.find(o => o.value === value)
+  const filtered = !query ? options : options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
+  return (
+    <div
+      className="relative"
+      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) { setOpen(false); setQuery('') } }}
+    >
+      <input
+        type="text"
+        value={open ? query : (selected?.label || '')}
+        placeholder={placeholder}
+        onChange={e => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => { setOpen(true); setQuery('') }}
+        required={required && !value}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+      />
+      {open && (
+        <div className="absolute z-50 top-full mt-0.5 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2.5 text-sm text-gray-400 italic">No matches found</p>
+          ) : filtered.map(o => (
+            <button key={o.value} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(o.value); setQuery(''); setOpen(false) }}
+              className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${value === o.value ? 'bg-teal-50 text-teal-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <select value={value} onChange={e => onChange(e.target.value)} required={required} tabIndex={-1} aria-hidden className="sr-only">
+        <option value="">{placeholder}</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  )
+}
 
 function SearchBar({ value, onChange, placeholder }) {
   return (
@@ -21,7 +64,7 @@ function SearchBar({ value, onChange, placeholder }) {
       </svg>
       <input
         type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-52"
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-72"
       />
     </div>
   )
@@ -83,7 +126,7 @@ function AlertPipelinePanel({ myWarehouseIds }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Open Alerts" value={myAlerts.filter(a => a.status === 'OPEN').length} color={openCount > 0 ? 'red' : 'green'} />
+        <StatCard title="Open Alerts" value={myAlerts.filter(a => a.status === 'OPEN').length} color={openCount > 0 ? 'amber' : 'green'} />
         <StatCard title="Acknowledged" value={myAlerts.filter(a => a.status === 'ACKNOWLEDGED').length} color="blue" />
         <StatCard title="Order Placed" value={myAlerts.filter(a => a.status === 'ORDER_PLACED').length} color="purple" />
         <StatCard title="Resolved" value={myAlerts.filter(a => a.status === 'RESOLVED').length} color="green" />
@@ -222,6 +265,7 @@ function ReceiveGoodsPanel({ myWarehouseIds }) {
   const [warehouseId, setWarehouseId] = useState(myWarehouseIds[0] || '')
   const [rows, setRows] = useState([{ ...EMPTY_GOODS_ROW }])
   const [success, setSuccess] = useState(false)
+  const [summary, setSummary] = useState(null)
 
   const updateRow = (i, field, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
   const removeRow = i => setRows(rs => rs.filter((_, idx) => idx !== i))
@@ -233,24 +277,91 @@ function ReceiveGoodsPanel({ myWarehouseIds }) {
   const handleSubmit = e => {
     e.preventDefault()
     if (!validRows.length || !warehouseId) return
-    validRows.forEach(r => {
+    const warehouseName = myWarehouses.find(w => w.id === warehouseId)?.name || warehouseId
+    const items = validRows.map(r => {
+      const product = activeProducts.find(p => p.id === r.productId)
+      return { productId: r.productId, productName: product?.name || r.productId, sku: product?.sku || '—', quantity: +r.quantity }
+    })
+    setSummary({ warehouseName, items })
+  }
+
+  const handleConfirm = () => {
+    summary.items.forEach(item => {
       dispatch(addMovement({
-        productId: r.productId,
+        productId: item.productId,
         warehouseId,
         type: 'INTAKE',
-        quantity: +r.quantity,
+        quantity: item.quantity,
         createdBy: user.id,
         referenceId: null,
       }))
     })
-    toast.success(`${validRows.length} goods item${validRows.length > 1 ? 's' : ''} received — stock updated`)
+    toast.success(`${summary.items.length} goods item${summary.items.length > 1 ? 's' : ''} received — stock updated`)
     setRows([{ ...EMPTY_GOODS_ROW }])
+    setSummary(null)
     setSuccess(true)
     setTimeout(() => setSuccess(false), 4000)
   }
 
+  if (summary) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 className="font-semibold text-gray-900 mb-1">Review Receipt</h3>
+          <p className="text-sm text-gray-500 mb-5">Check the items below before recording. Stock will be updated immediately after confirmation.</p>
+
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-start gap-3 mb-5">
+            <svg className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm text-teal-800">
+              Receiving <span className="font-semibold">{summary.items.length} item{summary.items.length > 1 ? 's' : ''}</span> into <span className="font-semibold">{summary.warehouseName}</span>. Stock levels will be increased immediately.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 overflow-hidden mb-5">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['#', 'Product', 'SKU', 'Qty to Receive'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {summary.items.map((item, i) => (
+                  <tr key={i} className="hover:bg-gray-50/60">
+                    <td className="px-4 py-3 text-gray-400 text-xs font-mono">{String(i + 1).padStart(2, '0')}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{item.productName}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{item.sku}</td>
+                    <td className="px-4 py-3 font-semibold text-teal-700">+{item.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button" onClick={() => setSummary(null)}
+              className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              Edit Items
+            </button>
+            <button
+              type="button" onClick={handleConfirm}
+              className="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl text-sm transition-colors"
+            >
+              Confirm & Record {summary.items.length} Receipt{summary.items.length > 1 ? 's' : ''}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="space-y-4">
       {success && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
           <svg className="w-5 h-5 text-green-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -291,13 +402,13 @@ function ReceiveGoodsPanel({ myWarehouseIds }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
-                    <select
-                      value={row.productId} onChange={e => updateRow(i, 'productId', e.target.value)} required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
-                    >
-                      <option value="">Select product…</option>
-                      {activeProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
-                    </select>
+                    <FilterableSelect
+                      value={row.productId}
+                      onChange={val => updateRow(i, 'productId', val)}
+                      options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                      placeholder="Select product…"
+                      required
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Quantity Received <span className="text-red-400">*</span></label>
@@ -325,7 +436,7 @@ function ReceiveGoodsPanel({ myWarehouseIds }) {
             disabled={!validRows.length || !warehouseId}
             className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Record Receipt{validRows.length > 0 ? ` — ${validRows.length} item${validRows.length > 1 ? 's' : ''}` : ''}
+            Review {validRows.length > 0 ? `${validRows.length} ` : ''}Receipt{validRows.length !== 1 ? 's' : ''}
           </button>
         </form>
       </div>
@@ -345,6 +456,7 @@ function PurchaseOrdersPanel({ myWarehouseIds }) {
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ warehouseId: myWarehouseIds[0] || '', supplier: '', expectedDate: '', notes: '' })
   const [poRows, setPoRows] = useState([{ ...EMPTY_PO_ROW }])
+  const [confirm, setConfirm] = useState(null)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const updatePoRow = (i, field, val) => setPoRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
@@ -472,13 +584,13 @@ function PurchaseOrdersPanel({ myWarehouseIds }) {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
-                        <select
-                          value={row.productId} onChange={e => updatePoRow(i, 'productId', e.target.value)} required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
-                        >
-                          <option value="">Select product…</option>
-                          {activeProducts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
-                        </select>
+                        <FilterableSelect
+                          value={row.productId}
+                          onChange={val => updatePoRow(i, 'productId', val)}
+                          options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                          placeholder="Select product…"
+                          required
+                        />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1">Qty <span className="text-red-400">*</span></label>
@@ -552,13 +664,25 @@ function PurchaseOrdersPanel({ myWarehouseIds }) {
                       {po.status === 'ORDERED' && (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handleReceivePO(po)}
+                            onClick={() => setConfirm({
+                              action: () => handleReceivePO(po),
+                              title: 'Receive Purchase Order',
+                              message: `Mark PO from "${po.supplier}" as received? Stock levels for ${po.items.length} product${po.items.length !== 1 ? 's' : ''} will be updated immediately.`,
+                              label: 'Receive PO',
+                              danger: false,
+                            })}
                             className="px-2.5 py-1 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-colors"
                           >
                             Receive
                           </button>
                           <button
-                            onClick={() => { dispatch(cancelPO(po.id)); toast.info('PO cancelled') }}
+                            onClick={() => setConfirm({
+                              action: () => { dispatch(cancelPO(po.id)); toast.info('PO cancelled') },
+                              title: 'Cancel Purchase Order',
+                              message: `Cancel the PO from "${po.supplier}"? This cannot be undone.`,
+                              label: 'Cancel PO',
+                              danger: true,
+                            })}
                             className="px-2.5 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 transition-colors"
                           >
                             Cancel
@@ -573,6 +697,16 @@ function PurchaseOrdersPanel({ myWarehouseIds }) {
           </div>
         )}
       </div>
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          message={confirm.message}
+          danger={confirm.danger}
+          confirmLabel={confirm.label}
+          onConfirm={() => { confirm.action(); setConfirm(null) }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </div>
   )
 }
@@ -624,11 +758,69 @@ function AlertFrequencyPanel({ myWarehouseIds }) {
   )
 }
 
+// ── Complaints ────────────────────────────────────────────────────────────────
+
+function ComplaintsPanel() {
+  const { user: me, companyId, companyName } = useSelector(s => s.auth)
+  const dispatch = useDispatch()
+  const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
+  const [submitted, setSubmitted] = useState(false)
+  const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+
+  const handleSubmit = e => {
+    e.preventDefault()
+    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.name || 'Unknown', email: me?.email || '', companyName: companyName || '', companyId }))
+    setSubmitted(true)
+    setForm({ subject: '', priority: 'MEDIUM', message: '' })
+    setTimeout(() => setSubmitted(false), 5000)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-1">Feedback & Support</h3>
+        <p className="text-sm text-gray-500 mb-5">Submit a complaint, inquiry, or suggestion to the platform support team.</p>
+        {submitted && (
+          <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-xl p-4 mb-4">
+            <svg className="w-5 h-5 text-teal-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+            <p className="text-sm text-teal-800 font-medium">Feedback submitted successfully. Our team will review it shortly.</p>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Subject <span className="text-red-400">*</span></label>
+            <input name="subject" value={form.subject} onChange={ch} required placeholder="Brief description of your feedback…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Priority</label>
+            <select name="priority" value={form.priority} onChange={ch}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Message <span className="text-red-400">*</span></label>
+            <textarea name="message" value={form.message} onChange={ch} rows={4} required placeholder="Describe your feedback in detail…"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 resize-none" />
+          </div>
+          <button type="submit" className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg text-sm transition-colors">
+            Submit Feedback
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function ProcurementDashboard() {
   const { user } = useSelector(s => s.auth)
   const { warehouseAssignments } = useSelector(s => s.users)
+  const { warehouses } = useSelector(s => s.stock)
   const { alerts } = useSelector(s => s.alerts)
   const { purchaseOrders } = useSelector(s => s.purchaseOrders)
   const [activeTab, setActiveTab] = useState('alerts')
@@ -636,6 +828,9 @@ export default function ProcurementDashboard() {
   const myWarehouseIds = warehouseAssignments
     .filter(a => a.userId === user.id)
     .map(a => a.warehouseId)
+
+  const myWarehouseId = myWarehouseIds[0] || null
+  const myWarehouse = warehouses.find(w => w.id === myWarehouseId) || null
 
   const myAlerts = alerts.filter(a => myWarehouseIds.includes(a.warehouseId))
   const openAlerts = myAlerts.filter(a => a.status === 'OPEN').length
@@ -663,15 +858,37 @@ export default function ProcurementDashboard() {
       id: 'frequency', label: 'Alert Frequency', badge: 0,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
     },
+    {
+      id: 'complaints', label: 'Feedback & Support', badge: 0,
+      icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
+    },
   ]
 
   return (
     <Layout title="Procurement Dashboard" navItems={navItems} activeTab={activeTab} onTabChange={setActiveTab}>
+      {myWarehouse && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-teal-50 border border-teal-200 rounded-xl">
+          <svg className="w-4 h-4 text-teal-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span className="text-sm text-teal-800 font-medium">{myWarehouse.name}</span>
+          <span className="text-xs text-teal-600">{myWarehouse.address}</span>
+        </div>
+      )}
+      {!myWarehouse && (
+        <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+          <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span className="text-sm text-amber-800">You are not assigned to a warehouse. Contact your admin.</span>
+        </div>
+      )}
       {activeTab === 'alerts' && <AlertPipelinePanel myWarehouseIds={myWarehouseIds} />}
       {activeTab === 'stock' && <StockOverviewPanel myWarehouseIds={myWarehouseIds} />}
       {activeTab === 'receive' && <ReceiveGoodsPanel myWarehouseIds={myWarehouseIds} />}
       {activeTab === 'orders' && <PurchaseOrdersPanel myWarehouseIds={myWarehouseIds} />}
       {activeTab === 'frequency' && <AlertFrequencyPanel myWarehouseIds={myWarehouseIds} />}
+      {activeTab === 'complaints' && <ComplaintsPanel />}
     </Layout>
   )
 }

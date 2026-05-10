@@ -9,6 +9,20 @@ import { suspendCompany, reactivateCompany, updateCompanyLogo, resolveComplaint,
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
+function SearchBar({ value, onChange, placeholder }) {
+  return (
+    <div className="relative">
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-52"
+      />
+    </div>
+  )
+}
+
 const PRIORITY_COLOR = {
   HIGH: 'bg-red-100 text-red-700 border-red-200',
   MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
@@ -27,9 +41,12 @@ function CompaniesPanel() {
   const { companies } = useSelector(s => s.superadmin)
   const dispatch = useDispatch()
   const [filter, setFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
 
-  const filtered = companies.filter(c => filter === 'ALL' || c.status === filter)
+  const filtered = companies
+    .filter(c => filter === 'ALL' || c.status === filter)
+    .filter(c => !search || c.companyName.toLowerCase().includes(search.toLowerCase()) || c.adminEmail.toLowerCase().includes(search.toLowerCase()))
 
   const handleAction = (company) => {
     if (company.status === 'ACTIVE') setConfirm({ company, action: 'suspend' })
@@ -62,12 +79,15 @@ function CompaniesPanel() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Registered Companies</h3>
-          <div className="flex gap-1">
-            {['ALL', 'ACTIVE', 'SUSPENDED'].map(f => (
-              <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search name or email…" />
+            <div className="flex gap-1">
+              {['ALL', 'ACTIVE', 'SUSPENDED'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -149,9 +169,15 @@ function ComplaintsPanel() {
   const { complaints } = useSelector(s => s.superadmin)
   const dispatch = useDispatch()
   const [filter, setFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
+  const [companyFilter, setCompanyFilter] = useState('')
   const [expanded, setExpanded] = useState(null)
 
-  const filtered = complaints.filter(c => filter === 'ALL' || c.status === filter)
+  const companies = [...new Set(complaints.map(c => c.companyName))].sort()
+  const filtered = complaints
+    .filter(c => filter === 'ALL' || c.status === filter)
+    .filter(c => !companyFilter || c.companyName === companyFilter)
+    .filter(c => !search || c.subject.toLowerCase().includes(search.toLowerCase()) || c.submittedBy.toLowerCase().includes(search.toLowerCase()) || c.companyName.toLowerCase().includes(search.toLowerCase()))
   const openCount = complaints.filter(c => c.status === 'OPEN').length
 
   return (
@@ -164,17 +190,29 @@ function ComplaintsPanel() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div>
-            <h3 className="font-semibold text-gray-900">Support & Complaints</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Feedback and issues submitted by company users</p>
+        <div className="px-5 py-4 border-b border-gray-100 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-gray-900">Support & Complaints</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Feedback and issues submitted by company users</p>
+            </div>
+            <div className="flex gap-1">
+              {['ALL', 'OPEN', 'IN_REVIEW', 'RESOLVED'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                  {f === 'IN_REVIEW' ? 'In Review' : f}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1">
-            {['ALL', 'OPEN', 'IN_REVIEW', 'RESOLVED'].map(f => (
-              <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                {f === 'IN_REVIEW' ? 'In Review' : f}
-              </button>
-            ))}
+          <div className="flex gap-2 flex-wrap">
+            <SearchBar value={search} onChange={setSearch} placeholder="Search subject or company…" />
+            <select
+              value={companyFilter} onChange={e => setCompanyFilter(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+            >
+              <option value="">All Companies</option>
+              {companies.map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
           </div>
         </div>
         <div className="divide-y divide-gray-100">
