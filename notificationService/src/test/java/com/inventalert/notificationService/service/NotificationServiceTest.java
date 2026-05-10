@@ -1,5 +1,8 @@
 package com.inventalert.notificationService.service;
 
+import com.inventalert.notificationService.dto.response.NotificationResponse;
+import com.inventalert.notificationService.dto.response.UnreadCountResponse;
+import com.inventalert.notificationService.exception.NotificationNotFoundException;
 import com.inventalert.notificationService.model.Notification;
 import com.inventalert.notificationService.model.NotificationType;
 import com.inventalert.notificationService.repository.RedisNotificationRepository;
@@ -11,7 +14,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -95,5 +106,103 @@ class NotificationServiceTest {
 
         Notification saved = notifCaptor.getValue();
         assertThat(scoreCaptor.getValue()).isEqualTo((double) saved.getCreatedAt().toEpochMilli());
+    }
+
+    @Test
+    void GetNotifications_CheckIfReturnsMappedListTest() {
+        Instant now = Instant.now();
+        Set<String> ids = new LinkedHashSet<>(List.of("notif-1", "notif-2"));
+
+        Map<String, String> hash1 = buildHash("notif-1", "company-1", "user-1",
+                "RESTOCK_ALERT", "Low stock on Indomie noodles", "alert-001", "0", now);
+        Map<String, String> hash2 = buildHash("notif-2", "company-1", "user-1",
+                "TRANSFER_SUGGESTION", "Transfer suggested for Dangote cement", "ts-001", "1", now);
+
+        when(repository.getNotificationIds("company-1", "user-1", 0L, 19L)).thenReturn(ids);
+        when(repository.getHash("company-1", "notif-1")).thenReturn(hash1);
+        when(repository.getHash("company-1", "notif-2")).thenReturn(hash2);
+
+        List<NotificationResponse> result = notificationService.getNotifications("company-1", "user-1", 0, 20);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).notificationId()).isEqualTo("notif-1");
+        assertThat(result.get(0).read()).isFalse();
+        assertThat(result.get(1).notificationId()).isEqualTo("notif-2");
+        assertThat(result.get(1).read()).isTrue();
+    }
+
+    @Test
+    void GetNotifications_EmptySet_CheckIfReturnsEmptyListTest() {
+        when(repository.getNotificationIds("company-1", "user-1", 0L, 19L)).thenReturn(Set.of());
+
+        List<NotificationResponse> result = notificationService.getNotifications("company-1", "user-1", 0, 20);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void MarkAsRead_UnreadNotification_CheckIfSuccessfulTest() {
+        Instant now = Instant.now();
+        Map<String, String> hash = buildHash("notif-1", "company-1", "user-1",
+                "RESTOCK_ALERT", "Low stock on Indomie noodles", "alert-001", "0", now);
+
+        when(repository.getHash("company-1", "notif-1")).thenReturn(hash);
+
+        NotificationResponse result = notificationService.markAsRead("company-1", "notif-1");
+
+        assertThat(result.read()).isTrue();
+        assertThat(result.notificationId()).isEqualTo("notif-1");
+        verify(repository).markHashAsRead("company-1", "notif-1");
+        verify(repository).decrementUnreadCount("company-1", "user-1");
+    }
+
+    @Test
+    void MarkAsRead_AlreadyRead_CheckIfSkipsUpdateTest() {
+        Instant now = Instant.now();
+        Map<String, String> hash = buildHash("notif-1", "company-1", "user-1",
+                "RESTOCK_ALERT", "Low stock on Indomie noodles", "alert-001", "1", now);
+
+        when(repository.getHash("company-1", "notif-1")).thenReturn(hash);
+
+        NotificationResponse result = notificationService.markAsRead("company-1", "notif-1");
+
+        assertThat(result.read()).isTrue();
+        verify(repository, never()).markHashAsRead(any(), any());
+        verify(repository, never()).decrementUnreadCount(any(), any());
+    }
+
+    @Test
+    void MarkAsRead_NotFound_CheckIfThrowsExceptionTest() {
+        when(repository.getHash("company-1", "ghost-id")).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> notificationService.markAsRead("company-1", "ghost-id"))
+                .isInstanceOf(NotificationNotFoundException.class)
+                .hasMessageContaining("ghost-id");
+
+        verify(repository, never()).markHashAsRead(any(), any());
+    }
+
+    @Test
+    void GetUnreadCount_CheckIfReturnsCountTest() {
+        when(repository.getUnreadCount("company-1", "user-1")).thenReturn(7L);
+
+        UnreadCountResponse result = notificationService.getUnreadCount("company-1", "user-1");
+
+        assertThat(result.count()).isEqualTo(7L);
+    }
+
+    private Map<String, String> buildHash(String notificationId, String companyId, String userId,
+                                          String type, String message, String referenceId,
+                                          String isRead, Instant createdAt) {
+        Map<String, String> hash = new HashMap<>();
+        hash.put("notificationId", notificationId);
+        hash.put("companyId",      companyId);
+        hash.put("userId",         userId);
+        hash.put("type",           type);
+        hash.put("message",        message);
+        hash.put("referenceId",    referenceId);
+        hash.put("isRead",         isRead);
+        hash.put("createdAt",      createdAt.toString());
+        return hash;
     }
 }

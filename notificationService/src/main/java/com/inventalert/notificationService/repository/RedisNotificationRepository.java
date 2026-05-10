@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @Repository
 @RequiredArgsConstructor
@@ -58,5 +59,31 @@ public class RedisNotificationRepository {
     public void incrementUnreadCount(String companyId, String userId) {
         redisTemplate.opsForValue()
                 .increment(UNREAD_COUNT_KEY.formatted(companyId, userId));
+    }
+
+    public Set<String> getNotificationIds(String companyId, String userId, long start, long stop) {
+        String key = USER_SORTED_SET_KEY.formatted(companyId, userId);
+        return redisTemplate.opsForZSet().reverseRange(key, start, stop);
+    }
+
+    public Map<String, String> getHash(String companyId, String notificationId) {
+        String key = NOTIFICATION_KEY.formatted(companyId, notificationId);
+        return redisTemplate.<String, String>opsForHash().entries(key);
+    }
+
+    public void markHashAsRead(String companyId, String notificationId) {
+        String key = NOTIFICATION_KEY.formatted(companyId, notificationId);
+        redisTemplate.opsForHash().put(key, "isRead", "1");
+    }
+
+    public void decrementUnreadCount(String companyId, String userId) {
+        redisTemplate.opsForValue()
+                .increment(UNREAD_COUNT_KEY.formatted(companyId, userId), -1);
+    }
+
+    public long getUnreadCount(String companyId, String userId) {
+        String val = redisTemplate.opsForValue()
+                .get(UNREAD_COUNT_KEY.formatted(companyId, userId));
+        return val != null ? Long.parseLong(val) : 0L;
     }
 }
