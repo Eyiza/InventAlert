@@ -4,7 +4,10 @@ import com.inventalert.identityService.dto.response.CompanyResponse;
 import com.inventalert.identityService.model.Company;
 import com.inventalert.identityService.model.CompanyStatus;
 import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.repository.UserRepository;
+import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
 import com.inventalert.identityService.kafka.CompanyEventProducer;
+import com.inventalert.identityService.service.impl.CompanyServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,13 +24,15 @@ import static org.mockito.Mockito.when;
 class CompanyServiceTest {
 
     @Mock private CompanyRepository companyRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private WarehouseAssignmentRepository assignmentRepository;
     @Mock private CompanyEventProducer eventProducer;
 
-    private CompanyService companyService;
+    private CompanyServiceImpl companyService;
 
     @BeforeEach
     void setUp() {
-        companyService = new CompanyService(companyRepository, eventProducer);
+        companyService = new CompanyServiceImpl(companyRepository, userRepository, assignmentRepository, eventProducer);
     }
 
     @Test
