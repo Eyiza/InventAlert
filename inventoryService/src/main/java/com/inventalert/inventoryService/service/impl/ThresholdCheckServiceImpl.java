@@ -12,7 +12,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,7 +39,7 @@ public class ThresholdCheckServiceImpl implements ThresholdCheckService {
                 .findByProductIdAndWarehouseIdNot(productId, warehouseId)
                 .stream()
                 .filter(c -> (c.getCurrentStock() - c.getThreshold()) >= shortage)
-                .collect(Collectors.toList());
+                .toList();
 
         if (candidates.isEmpty()) {
             restockAlertService.createAlert(
