@@ -1,6 +1,5 @@
 package com.inventalert.notificationService.consumer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.inventalert.notificationService.model.NotificationType;
 import com.inventalert.notificationService.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +20,7 @@ class NotificationEventConsumerTest {
 
     @BeforeEach
     void setUp() {
-        consumer = new NotificationEventConsumer(notificationService, new ObjectMapper());
+        consumer = new NotificationEventConsumer(notificationService);
     }
 
     @Test
