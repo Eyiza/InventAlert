@@ -1,0 +1,232 @@
+{
+  "info": {
+    "name": "InventAlert — Notification Service",
+    "description": "All endpoints for the NotificationService running on http://localhost:8083.\n\nWorkflow:\n1. Log in via the Identity Service (port 8081) and paste the returned token into the 'token' collection variable.\n2. Run 'Get Notifications' — the first notification's ID is auto-saved to 'notificationId'.\n3. Run 'Get Unread Count' to confirm the badge count.\n4. Run 'Mark As Read' to mark that notification read, then re-run 'Get Unread Count' to verify the count decrements.\n\nWebSocket (real-time push):\n  Connect : ws://localhost:8083/ws  (SockJS endpoint)\n  Auth    : STOMP CONNECT frame header  Authorization: Bearer <token>\n  Subscribe: /topic/notifications/{companyId}/{userId}\n  Payload  : NotificationResponse JSON (same shape as the REST responses below)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",        "value": "http://localhost:8083" },
+    { "key": "token",          "value": "" },
+    { "key": "notificationId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "const body = pm.response.json();",
+                  "if (body.length > 0) {",
+                  "  pm.collectionVariables.set('notificationId', body[0].notificationId);",
+                  "  pm.test('Notification has expected fields', () => {",
+                  "    pm.expect(body[0].notificationId).to.be.a('string').and.not.empty;",
+                  "    pm.expect(body[0].type).to.be.a('string');",
+                  "    pm.expect(body[0].message).to.be.a('string');",
+                  "    pm.expect(body[0]).to.have.property('read');",
+                  "    pm.expect(body[0].createdAt).to.not.be.undefined;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Notifications — Paginated (page 1, size 5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At most 5 results', () => pm.expect(pm.response.json().length).to.be.at.most(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?page=1&size=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "size", "value": "5" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response has count field', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('count');",
+                  "  pm.expect(body.count).to.be.a('number').and.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "unread-count"]
+            }
+          }
+        },
+        {
+          "name": "Mark As Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Notification is now read', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.read).to.be.true;",
+                  "  pm.expect(body.notificationId).to.eql(pm.collectionVariables.get('notificationId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "{{notificationId}}", "read"]
+            }
+          }
+        },
+        {
+          "name": "Mark As Read — Not Found (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 404', () => pm.expect(pm.response.code).to.eql(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/nonexistent-id/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "nonexistent-id", "read"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth Guard",
+      "item": [
+        {
+          "name": "Get Notifications — No Token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"]
+            }
+          }
+        },
+        {
+          "name": "Get Unread Count — No Token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/unread-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "unread-count"]
+            }
+          }
+        },
+        {
+          "name": "Mark As Read — No Token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "noauth" },
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "{{notificationId}}", "read"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
