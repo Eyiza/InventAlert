@@ -34,3 +34,6 @@ build/
 
 ### Local env — never commit ###
 env.properties
+
+### Planning docs — local only ###
+INVENTORY_BUILD_PLAN.md
