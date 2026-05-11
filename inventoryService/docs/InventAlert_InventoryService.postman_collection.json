@@ -1,0 +1,918 @@
+{
+  "info": {
+    "name": "InventAlert — Inventory Service",
+    "description": "All endpoints for the InventoryService running on http://localhost:8082.\n\nWorkflow:\n1. Login via the Identity Service (http://localhost:8081) to get a JWT — paste it into the 'adminToken' variable.\n2. Run 'Create Warehouse' → warehouseId is auto-saved.\n3. Run 'Create Product' → productId is auto-saved.\n4. Record movements (use a WAREHOUSE_STAFF token for 'staffToken').\n5. Check stock, trigger alerts, test transfers and reconciliations.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",          "value": "http://localhost:8082" },
+    { "key": "adminToken",       "value": "" },
+    { "key": "managerToken",     "value": "" },
+    { "key": "staffToken",       "value": "" },
+    { "key": "procurementToken", "value": "" },
+    { "key": "warehouseId",      "value": "" },
+    { "key": "warehouseId2",     "value": "" },
+    { "key": "productId",        "value": "" },
+    { "key": "transferId",       "value": "" },
+    { "key": "reconciliationId", "value": "" },
+    { "key": "alertId",          "value": "" }
+  ],
+  "item": [
+
+    {
+      "name": "Warehouses",
+      "item": [
+        {
+          "name": "Create Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('warehouseId', body.id);",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "  pm.test('id is set', () => pm.expect(body.id).to.not.be.empty);",
+                  "  pm.test('isActive is true', () => pm.expect(body.isActive).to.be.true);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos Central\",\n  \"address\": \"14 Broad Street, Lagos Island\",\n  \"latitude\": 6.4550,\n  \"longitude\": 3.3841\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/warehouses", "host": ["{{baseUrl}}"], "path": ["api","warehouses"] }
+          }
+        },
+        {
+          "name": "Create Warehouse 2 (for transfer tests)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('warehouseId2', body.id);",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Abuja North\",\n  \"address\": \"Plot 5 Wuse Zone 2, Abuja\",\n  \"latitude\": 9.0765,\n  \"longitude\": 7.3986\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/warehouses", "host": ["{{baseUrl}}"], "path": ["api","warehouses"] }
+          }
+        },
+        {
+          "name": "Create Warehouse — Missing Latitude (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bad Warehouse\",\n  \"address\": \"Somewhere\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/warehouses", "host": ["{{baseUrl}}"], "path": ["api","warehouses"] }
+          }
+        },
+        {
+          "name": "List Warehouses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At least one warehouse', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/warehouses", "host": ["{{baseUrl}}"], "path": ["api","warehouses"] }
+          }
+        },
+        {
+          "name": "Update Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Name updated', () => pm.expect(pm.response.json().name).to.eql('Lagos Central (Updated)'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lagos Central (Updated)\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/warehouses/{{warehouseId}}", "host": ["{{baseUrl}}"], "path": ["api","warehouses","{{warehouseId}}"] }
+          }
+        },
+        {
+          "name": "Deactivate Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/warehouses/{{warehouseId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["api","warehouses","{{warehouseId}}","deactivate"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('productId', body.id);",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "  pm.test('id is set', () => pm.expect(body.id).to.not.be.empty);",
+                  "  pm.test('SKU matches', () => pm.expect(body.sku).to.eql('PARA-500'));",
+                  "  pm.test('isActive is true', () => pm.expect(body.isActive).to.be.true);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Paracetamol 500mg\",\n  \"sku\": \"PARA-500\",\n  \"unitOfMeasure\": \"boxes\",\n  \"defaultThreshold\": 50\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api","products"] }
+          }
+        },
+        {
+          "name": "Create Product — Duplicate SKU (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', () => pm.expect(pm.response.code).to.eql(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Paracetamol Duplicate\",\n  \"sku\": \"PARA-500\",\n  \"unitOfMeasure\": \"boxes\",\n  \"defaultThreshold\": 10\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api","products"] }
+          }
+        },
+        {
+          "name": "List Products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At least one product', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/products", "host": ["{{baseUrl}}"], "path": ["api","products"] }
+          }
+        },
+        {
+          "name": "Update Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('defaultThreshold updated', () => pm.expect(pm.response.json().defaultThreshold).to.eql(75));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"defaultThreshold\": 75\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["api","products","{{productId}}"] }
+          }
+        },
+        {
+          "name": "Set Product Threshold",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": 100\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}/threshold", "host": ["{{baseUrl}}"], "path": ["api","products","{{productId}}","threshold"] }
+          }
+        },
+        {
+          "name": "Set Product Threshold — Negative (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": -5\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/products/{{productId}}/threshold", "host": ["{{baseUrl}}"], "path": ["api","products","{{productId}}","threshold"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Stock",
+      "item": [
+        {
+          "name": "Get All Stock",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/stock", "host": ["{{baseUrl}}"], "path": ["api","stock"] }
+          }
+        },
+        {
+          "name": "Get Stock for Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/stock/{{warehouseId}}", "host": ["{{baseUrl}}"], "path": ["api","stock","{{warehouseId}}"] }
+          }
+        },
+        {
+          "name": "Set Per-Warehouse Threshold",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/stock-levels/{{productId}}/{{warehouseId}}/threshold",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","stock-levels","{{productId}}","{{warehouseId}}","threshold"]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Movements",
+      "item": [
+        {
+          "name": "Record Intake",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "  pm.test('type is INTAKE', () => pm.expect(body.type).to.eql('INTAKE'));",
+                  "  pm.test('quantity matches', () => pm.expect(body.quantity).to.eql(200));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"type\": \"INTAKE\",\n  \"quantity\": 200,\n  \"referenceNumber\": \"PO-2026-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/movements", "host": ["{{baseUrl}}"], "path": ["api","movements"] }
+          }
+        },
+        {
+          "name": "Record Outbound Sale",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "pm.test('type is OUTBOUND_SALE', () => pm.expect(pm.response.json().type).to.eql('OUTBOUND_SALE'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"type\": \"OUTBOUND_SALE\",\n  \"quantity\": 160,\n  \"referenceNumber\": \"SO-2026-001\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/movements", "host": ["{{baseUrl}}"], "path": ["api","movements"] }
+          }
+        },
+        {
+          "name": "Record Movement — Zero Quantity (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"type\": \"INTAKE\",\n  \"quantity\": 0\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/movements", "host": ["{{baseUrl}}"], "path": ["api","movements"] }
+          }
+        },
+        {
+          "name": "List Movements (all)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/movements", "host": ["{{baseUrl}}"], "path": ["api","movements"] }
+          }
+        },
+        {
+          "name": "List Movements — Filter by Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('All movements match productId', () => {",
+                  "  pm.response.json().forEach(m => pm.expect(m.productId).to.eql(pm.collectionVariables.get('productId')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/movements?productId={{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","movements"],
+              "query": [{ "key": "productId", "value": "{{productId}}" }]
+            }
+          }
+        },
+        {
+          "name": "List Movements — Filter by Type (INTAKE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('All movements are INTAKE', () => {",
+                  "  pm.response.json().forEach(m => pm.expect(m.type).to.eql('INTAKE'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/movements?type=INTAKE",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","movements"],
+              "query": [{ "key": "type", "value": "INTAKE" }]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Transfers",
+      "item": [
+        {
+          "name": "List Transfers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "  pm.test('Response is array', () => pm.expect(body).to.be.an('array'));",
+                  "  if (body.length > 0) {",
+                  "    pm.collectionVariables.set('transferId', body[0].id);",
+                  "    pm.test('transferId saved', () => pm.expect(body[0].id).to.not.be.empty);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers", "host": ["{{baseUrl}}"], "path": ["api","transfers"] }
+          }
+        },
+        {
+          "name": "Approve Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers/{{transferId}}/approve", "host": ["{{baseUrl}}"], "path": ["api","transfers","{{transferId}}","approve"] }
+          }
+        },
+        {
+          "name": "Dispatch Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers/{{transferId}}/dispatch", "host": ["{{baseUrl}}"], "path": ["api","transfers","{{transferId}}","dispatch"] }
+          }
+        },
+        {
+          "name": "Accept Transfer (Complete)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers/{{transferId}}/accept", "host": ["{{baseUrl}}"], "path": ["api","transfers","{{transferId}}","accept"] }
+          }
+        },
+        {
+          "name": "Reject Delivery (alternative to Accept)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers/{{transferId}}/reject-delivery", "host": ["{{baseUrl}}"], "path": ["api","transfers","{{transferId}}","reject-delivery"] }
+          }
+        },
+        {
+          "name": "Reject Transfer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers/{{transferId}}/reject", "host": ["{{baseUrl}}"], "path": ["api","transfers","{{transferId}}","reject"] }
+          }
+        },
+        {
+          "name": "Approve Transfer — Wrong Role (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 403', () => pm.expect(pm.response.code).to.eql(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/transfers/{{transferId}}/approve", "host": ["{{baseUrl}}"], "path": ["api","transfers","{{transferId}}","approve"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Reconciliations",
+      "item": [
+        {
+          "name": "Submit Reconciliation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('reconciliationId', body.id);",
+                  "  pm.test('Returns 201', () => pm.expect(pm.response.code).to.eql(201));",
+                  "  pm.test('status is PENDING', () => pm.expect(body.status).to.eql('PENDING'));",
+                  "  pm.test('discrepancy is calculated', () => pm.expect(body.discrepancy).to.be.a('number'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"physicalCount\": 35,\n  \"reason\": \"Monthly cycle count\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/reconciliations", "host": ["{{baseUrl}}"], "path": ["api","reconciliations"] }
+          }
+        },
+        {
+          "name": "Submit Reconciliation — Missing Reason (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"warehouseId\": \"{{warehouseId}}\",\n  \"physicalCount\": 35\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/reconciliations", "host": ["{{baseUrl}}"], "path": ["api","reconciliations"] }
+          }
+        },
+        {
+          "name": "List Reconciliations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At least one reconciliation', () => pm.expect(pm.response.json().length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/reconciliations", "host": ["{{baseUrl}}"], "path": ["api","reconciliations"] }
+          }
+        },
+        {
+          "name": "Approve Reconciliation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/reconciliations/{{reconciliationId}}/approve", "host": ["{{baseUrl}}"], "path": ["api","reconciliations","{{reconciliationId}}","approve"] }
+          }
+        },
+        {
+          "name": "Approve Reconciliation — Already Approved (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 409', () => pm.expect(pm.response.code).to.eql(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/reconciliations/{{reconciliationId}}/approve", "host": ["{{baseUrl}}"], "path": ["api","reconciliations","{{reconciliationId}}","approve"] }
+          }
+        },
+        {
+          "name": "Reject Reconciliation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{managerToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/reconciliations/{{reconciliationId}}/reject", "host": ["{{baseUrl}}"], "path": ["api","reconciliations","{{reconciliationId}}","reject"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "List Alerts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "  pm.test('Response is array', () => pm.expect(body).to.be.an('array'));",
+                  "  if (body.length > 0) {",
+                  "    pm.collectionVariables.set('alertId', body[0].id);",
+                  "    pm.test('alertId saved', () => pm.expect(body[0].id).to.not.be.empty);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{procurementToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/alerts", "host": ["{{baseUrl}}"], "path": ["api","alerts"] }
+          }
+        },
+        {
+          "name": "Acknowledge Alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{procurementToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/alerts/{{alertId}}/acknowledge", "host": ["{{baseUrl}}"], "path": ["api","alerts","{{alertId}}","acknowledge"] }
+          }
+        },
+        {
+          "name": "Mark Order Placed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{procurementToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/alerts/{{alertId}}/order-placed", "host": ["{{baseUrl}}"], "path": ["api","alerts","{{alertId}}","order-placed"] }
+          }
+        },
+        {
+          "name": "Resolve Alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 204', () => pm.expect(pm.response.code).to.eql(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{procurementToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/alerts/{{alertId}}/resolve", "host": ["{{baseUrl}}"], "path": ["api","alerts","{{alertId}}","resolve"] }
+          }
+        },
+        {
+          "name": "List Alerts — Wrong Role (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 403', () => pm.expect(pm.response.code).to.eql(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{staffToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/api/alerts", "host": ["{{baseUrl}}"], "path": ["api","alerts"] }
+          }
+        }
+      ]
+    }
+
+  ]
+}
