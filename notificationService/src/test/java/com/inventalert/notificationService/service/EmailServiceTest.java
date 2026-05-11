@@ -7,11 +7,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class EmailServiceTest {
@@ -30,7 +33,7 @@ class EmailServiceTest {
         emailService.sendNotificationEmail(
                 "adebayo@konga.ng", "RESTOCK_ALERT", "Low stock on Indomie noodles");
 
-        verify(mailSender).send(org.mockito.ArgumentMatchers.any(SimpleMailMessage.class));
+        verify(mailSender).send(any(SimpleMailMessage.class));
     }
 
     @Test
@@ -49,5 +52,28 @@ class EmailServiceTest {
         assertThat(sent.getTo()).containsExactly("chukwuemeka@fidelity.ng");
         assertThat(sent.getSubject()).isEqualTo("TRANSFER_SUGGESTION");
         assertThat(sent.getText()).isEqualTo("Transfer 50 units of garri from Apapa to Ikeja warehouse");
+    }
+
+    @Test
+    void SendEmail_FirstAttemptFails_CheckIfRetriedSuccessfullyTest() {
+        doThrow(new MailSendException("Connection timeout"))
+                .doNothing()
+                .when(mailSender).send(any(SimpleMailMessage.class));
+
+        assertDoesNotThrow(() -> emailService.sendNotificationEmail(
+                "ngozi@stanbic.ng", "RESTOCK_ALERT", "Low stock on garri"));
+
+        verify(mailSender, times(2)).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    void SendEmail_AllAttemptsExhausted_CheckIfNoExceptionPropagatedTest() {
+        doThrow(new MailSendException("SMTP server unavailable"))
+                .when(mailSender).send(any(SimpleMailMessage.class));
+
+        assertDoesNotThrow(() -> emailService.sendNotificationEmail(
+                "emeka@heritage.ng", "TRANSFER_APPROVED", "Transfer approved for Apapa warehouse"));
+
+        verify(mailSender, times(3)).send(any(SimpleMailMessage.class));
     }
 }
