@@ -13,6 +13,8 @@ public interface UserService {
     List<UserResponse> listUsers(String companyId);
     UserResponse updateRole(String companyId, String userId, UpdateRoleRequest request);
     UserResponse deactivateUser(String companyId, String userId);
+    UserResponse reactivateUser(String companyId, String userId);
     AssignmentResponse assignToWarehouse(String companyId, String userId, AssignWarehouseRequest request);
     List<AssignmentResponse> getAssignments(String companyId, String userId);
+    void removeAssignment(String companyId, String userId, String assignmentId);
 }

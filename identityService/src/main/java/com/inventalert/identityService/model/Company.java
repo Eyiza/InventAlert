@@ -25,6 +25,9 @@ public class Company {
     @Builder.Default
     private CompanyStatus status = CompanyStatus.ACTIVE;
 
+    @Column
+    private String logoUrl;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;
