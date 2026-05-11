@@ -1,0 +1,67 @@
+package com.inventalert.inventoryService.controller;
+
+import com.inventalert.inventoryService.dto.response.TransferSuggestionResponse;
+import com.inventalert.inventoryService.security.model.JwtUser;
+import com.inventalert.inventoryService.service.TransferService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/transfers")
+@RequiredArgsConstructor
+public class TransferController {
+
+    private final TransferService transferService;
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('MANAGER','WAREHOUSE_STAFF')")
+    public ResponseEntity<List<TransferSuggestionResponse>> list() {
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return ResponseEntity.ok(transferService.list(principal.getRole(), principal.getWarehouseId()));
+    }
+
+    @PatchMapping("/{id}/approve")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<Void> approve(@PathVariable String id) {
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        transferService.approve(id, principal.getUserId(), principal.getCompanyId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/reject")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<Void> reject(@PathVariable String id) {
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        transferService.reject(id, principal.getUserId(), principal.getCompanyId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/dispatch")
+    @PreAuthorize("hasRole('WAREHOUSE_STAFF')")
+    public ResponseEntity<Void> dispatch(@PathVariable String id) {
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        transferService.dispatch(id, principal.getUserId(), principal.getWarehouseId(), principal.getCompanyId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/accept")
+    @PreAuthorize("hasRole('WAREHOUSE_STAFF')")
+    public ResponseEntity<Void> accept(@PathVariable String id) {
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        transferService.accept(id, principal.getUserId(), principal.getWarehouseId(), principal.getCompanyId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/reject-delivery")
+    @PreAuthorize("hasRole('WAREHOUSE_STAFF')")
+    public ResponseEntity<Void> rejectDelivery(@PathVariable String id) {
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        transferService.rejectDelivery(id, principal.getUserId(), principal.getWarehouseId(), principal.getCompanyId());
+        return ResponseEntity.noContent().build();
+    }
+}
