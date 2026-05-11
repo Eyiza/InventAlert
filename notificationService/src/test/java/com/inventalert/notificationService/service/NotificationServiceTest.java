@@ -5,6 +5,7 @@ import com.inventalert.notificationService.dto.response.UnreadCountResponse;
 import com.inventalert.notificationService.exception.NotificationNotFoundException;
 import com.inventalert.notificationService.model.Notification;
 import com.inventalert.notificationService.model.NotificationType;
+import com.inventalert.notificationService.model.Notification;
 import com.inventalert.notificationService.repository.RedisNotificationRepository;
 import com.inventalert.notificationService.service.impl.NotificationServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,12 +32,13 @@ class NotificationServiceTest {
 
     @Mock private RedisNotificationRepository repository;
     @Mock private EmailService emailService;
+    @Mock private NotificationBroadcaster broadcaster;
 
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationServiceImpl(repository, emailService);
+        notificationService = new NotificationServiceImpl(repository, emailService, broadcaster);
     }
 
     @Test
@@ -76,6 +78,17 @@ class NotificationServiceTest {
     }
 
     @Test
+    void CreateNotification_CheckIfBroadcastedTest() {
+        when(repository.setEventProcessedIfAbsent("evt-ws-001")).thenReturn(true);
+
+        notificationService.create(
+                "evt-ws-001", "company-1", "user-1", "adebayo@konga.ng",
+                NotificationType.RESTOCK_ALERT, "Low stock on Indomie noodles", "alert-001");
+
+        verify(broadcaster).broadcast(any(Notification.class));
+    }
+
+    @Test
     void CreateNotification_NullEmail_CheckIfEmailNotSentTest() {
         when(repository.setEventProcessedIfAbsent("evt-no-email")).thenReturn(true);
 
@@ -99,6 +112,7 @@ class NotificationServiceTest {
         verify(repository, never()).addToUserSortedSet(any(), any(), any(), anyDouble());
         verify(repository, never()).incrementUnreadCount(any(), any());
         verifyNoInteractions(emailService);
+        verifyNoInteractions(broadcaster);
     }
 
     @Test
