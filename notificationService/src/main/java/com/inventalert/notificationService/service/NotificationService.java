@@ -8,7 +8,7 @@ import com.inventalert.notificationService.model.NotificationType;
 import java.util.List;
 
 public interface NotificationService {
-    Notification create(String eventId, String companyId, String userId,
+    Notification create(String eventId, String companyId, String userId, String userEmail,
                         NotificationType type, String message, String referenceId);
 
     List<NotificationResponse> getNotifications(String companyId, String userId, int page, int size);
