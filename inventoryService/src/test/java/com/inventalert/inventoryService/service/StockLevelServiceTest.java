@@ -20,6 +20,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -127,5 +129,29 @@ class StockLevelServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getWarehouseId()).isEqualTo("w1");
+    }
+
+    @Test
+    void getOrCreate_fallsBackToFindWhenConcurrentInsertCausesConstraintViolation() {
+        when(stockLevelRepository.findByProductIdAndWarehouseId("p1", "w1"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(stockLevel));
+        when(productRepository.findByIdAndIsActiveTrue("p1")).thenReturn(Optional.of(product));
+        when(warehouseRepository.findByIdAndIsActiveTrue("w1")).thenReturn(Optional.of(warehouse));
+        when(stockLevelRepository.save(any())).thenThrow(DataIntegrityViolationException.class);
+
+        StockLevel result = stockLevelService.getOrCreate("p1", "w1");
+
+        assertThat(result.getId()).isEqualTo("sl1");
+    }
+
+    @Test
+    void getStockForWarehouse_daysUntilEmptyIsNullWhenVelocityIsZero() {
+        // stockLevel built with velocityPerDay=ZERO; daysUntilEmpty is not set, so null
+        when(stockLevelRepository.findByWarehouseId("w1")).thenReturn(List.of(stockLevel));
+
+        List<StockLevelResponse> result = stockLevelService.getStockForWarehouse("w1");
+
+        assertThat(result.get(0).getDaysUntilEmpty()).isNull();
     }
 }
