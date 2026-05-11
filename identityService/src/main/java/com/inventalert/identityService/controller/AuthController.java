@@ -1,6 +1,8 @@
 package com.inventalert.identityService.controller;
 
+import com.inventalert.identityService.dto.request.ForgotPasswordRequest;
 import com.inventalert.identityService.dto.request.LoginRequest;
+import com.inventalert.identityService.dto.request.ResetPasswordRequest;
 import com.inventalert.identityService.dto.request.SignupRequest;
 import com.inventalert.identityService.dto.response.LoginResponse;
 import com.inventalert.identityService.service.AuthService;
@@ -67,5 +69,36 @@ public class AuthController {
     @PostMapping("/superadmin/login")
     public ResponseEntity<?> superAdminLogin(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.superAdminLogin(request));
+    }
+
+    @Operation(
+        summary = "Request a password reset",
+        description = "Generates a single-use reset token (valid 1 hour) and publishes a password.reset.requested " +
+                      "Kafka event carrying the token for the Notification Service to email. Always returns 200 " +
+                      "regardless of whether the email is registered.",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "Request accepted", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content)
+        }
+    )
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(
+        summary = "Reset password using a token",
+        description = "Consumes the single-use token issued by forgot-password, updates the user's password, " +
+                      "and marks the token as used. Returns 400 if the token is invalid, expired, or already used.",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "Password updated", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Invalid, expired, or already-used token", content = @Content)
+        }
+    )
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok().build();
     }
 }

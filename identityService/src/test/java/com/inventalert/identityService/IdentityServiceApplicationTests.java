@@ -2,7 +2,6 @@ package com.inventalert.identityService;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.KafkaContainer;
@@ -16,7 +15,6 @@ import org.testcontainers.utility.DockerImageName;
 class IdentityServiceApplicationTests {
 
     @Container
-    @ServiceConnection
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8");
 
     @Container
@@ -25,6 +23,9 @@ class IdentityServiceApplicationTests {
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
     }
 

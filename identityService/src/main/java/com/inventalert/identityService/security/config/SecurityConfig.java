@@ -53,6 +53,8 @@ public class SecurityConfig {
                                 "/api/auth/signup",
                                 "/api/auth/login",
                                 "/api/auth/superadmin/login",
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password",
                                 "/actuator/health",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",

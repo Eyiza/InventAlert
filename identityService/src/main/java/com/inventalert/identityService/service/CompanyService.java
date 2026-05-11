@@ -6,6 +6,8 @@ import com.inventalert.identityService.model.Company;
 import com.inventalert.identityService.model.CompanyStatus;
 import com.inventalert.identityService.kafka.CompanyEventProducer;
 import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.repository.UserRepository;
+import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +18,17 @@ import java.util.List;
 public class CompanyService {
 
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
+    private final WarehouseAssignmentRepository assignmentRepository;
     private final CompanyEventProducer eventProducer;
 
-    public CompanyService(CompanyRepository companyRepository, CompanyEventProducer eventProducer) {
+    public CompanyService(CompanyRepository companyRepository,
+                          UserRepository userRepository,
+                          WarehouseAssignmentRepository assignmentRepository,
+                          CompanyEventProducer eventProducer) {
         this.companyRepository = companyRepository;
+        this.userRepository = userRepository;
+        this.assignmentRepository = assignmentRepository;
         this.eventProducer = eventProducer;
     }
 
@@ -44,8 +53,11 @@ public class CompanyService {
     }
 
     public void initiateOffboarding(String companyId) {
-        companyRepository.findById(companyId)
+        Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new CompanyNotFoundException(companyId));
+        assignmentRepository.deleteAllByCompanyId(companyId);
+        userRepository.deleteAllByCompanyId(companyId);
+        companyRepository.delete(company);
         eventProducer.publishCompanyOffboarded(companyId);
     }
 }

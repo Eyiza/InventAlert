@@ -15,4 +15,5 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByCompanyIdAndEmail(String companyId, String email);
     List<User> findAllByCompanyIdAndRole(String companyId, Role role);
     Optional<User> findByIdAndCompanyId(String id, String companyId);
+    void deleteAllByCompanyId(String companyId);
 }

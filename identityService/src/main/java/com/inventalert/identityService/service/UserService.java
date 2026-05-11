@@ -59,7 +59,7 @@ public class UserService {
                 .role(request.role())
                 .isActive(true)
                 .build();
-        user = userRepository.save(user);
+        user = userRepository.saveAndFlush(user);
 
         if (request.role() != Role.ADMIN) {
             WarehouseAssignment assignment = new WarehouseAssignment();

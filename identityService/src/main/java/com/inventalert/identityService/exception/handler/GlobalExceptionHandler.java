@@ -5,6 +5,7 @@ import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
 import com.inventalert.identityService.exception.UserAlreadyDeactivatedException;
 import com.inventalert.identityService.exception.UserNotFoundException;
+import com.inventalert.identityService.exception.InvalidResetTokenException;
 import com.inventalert.identityService.exception.WarehouseManagerConflictException;
 import com.inventalert.identityService.exception.WarehouseRequiredException;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
@@ -41,6 +42,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(WarehouseRequiredException.class)
     public ResponseEntity<ErrorResponse> handleWarehouseRequired(WarehouseRequiredException ex) {
+        return ResponseEntity.status(400).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidResetTokenException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidResetToken(InvalidResetTokenException ex) {
         return ResponseEntity.status(400).body(new ErrorResponse(ex.getMessage()));
     }
 

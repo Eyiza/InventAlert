@@ -1,15 +1,21 @@
 package com.inventalert.identityService.service.impl;
 
+import com.inventalert.identityService.dto.request.ForgotPasswordRequest;
 import com.inventalert.identityService.dto.request.LoginRequest;
+import com.inventalert.identityService.dto.request.ResetPasswordRequest;
 import com.inventalert.identityService.dto.request.SignupRequest;
 import com.inventalert.identityService.dto.response.LoginResponse;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
+import com.inventalert.identityService.exception.InvalidResetTokenException;
 import com.inventalert.identityService.kafka.CompanyEventProducer;
+import com.inventalert.identityService.kafka.PasswordResetEventProducer;
 import com.inventalert.identityService.model.Company;
 import com.inventalert.identityService.model.CompanyStatus;
+import com.inventalert.identityService.model.PasswordResetToken;
 import com.inventalert.identityService.model.Role;
 import com.inventalert.identityService.model.User;
 import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.repository.PasswordResetTokenRepository;
 import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
@@ -22,6 +28,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -30,9 +39,11 @@ public class AuthServiceImpl implements AuthService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final WarehouseAssignmentRepository assignmentRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final CompanyEventProducer eventProducer;
+    private final PasswordResetEventProducer passwordResetEventProducer;
 
     @Value("${SUPER_ADMIN_EMAIL:superadmin@inventalert.io}")
     private String superAdminEmail;
@@ -103,6 +114,50 @@ public class AuthServiceImpl implements AuthService {
         response.setUserId(superAdminId);
         response.setRole("SUPER_ADMIN");
         return response;
+    }
+
+    @Override
+    public void forgotPassword(ForgotPasswordRequest request) {
+        userRepository.findByEmail(request.email()).ifPresent(user -> {
+            // Invalidate any existing pending token for this user before issuing a new one
+            passwordResetTokenRepository.findByUserIdAndUsedFalse(user.getId())
+                    .ifPresent(existing -> {
+                        existing.setUsed(true);
+                        passwordResetTokenRepository.save(existing);
+                    });
+
+            String token = UUID.randomUUID().toString();
+            LocalDateTime expiresAt = LocalDateTime.now().plusHours(1);
+
+            PasswordResetToken resetToken = PasswordResetToken.builder()
+                    .userId(user.getId())
+                    .token(token)
+                    .expiresAt(expiresAt)
+                    .build();
+            passwordResetTokenRepository.save(resetToken);
+
+            passwordResetEventProducer.publishPasswordResetRequested(
+                    user.getId(), user.getEmail(), token, expiresAt);
+        });
+        // Always returns normally — never reveal whether the email is registered
+    }
+
+    @Override
+    public void resetPassword(ResetPasswordRequest request) {
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(request.token())
+                .orElseThrow(InvalidResetTokenException::new);
+
+        if (resetToken.isUsed()) throw new InvalidResetTokenException();
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) throw new InvalidResetTokenException();
+
+        User user = userRepository.findById(resetToken.getUserId())
+                .orElseThrow(InvalidResetTokenException::new);
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        resetToken.setUsed(true);
+        passwordResetTokenRepository.save(resetToken);
     }
 
     private LoginResponse buildLoginResponse(User user) {
