@@ -5,6 +5,7 @@ import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { setCompanyLogo, registerLocalUser } from '../../store/slices/authSlice'
+import { uploadToCloudinary } from '../../services/cloudinary'
 import {
   addWarehouse, updateWarehouse, toggleWarehouseActive,
   addProduct, updateProduct, toggleProductActive,
@@ -396,16 +397,26 @@ function CompanyPanel() {
   const { companyName, companyLogo } = useSelector(s => s.auth)
   const dispatch = useDispatch()
   const fileRef = useRef()
+  const [uploading, setUploading] = useState(false)
 
-  const handleLogoChange = (e) => {
+  const handleLogoChange = async (e) => {
     const file = e.target.files[0]
+    e.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      dispatch(setCompanyLogo(reader.result))
-      toast.success('Company logo updated')
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('File must be under 2 MB')
+      return
     }
-    reader.readAsDataURL(file)
+    setUploading(true)
+    try {
+      const url = await uploadToCloudinary(file)
+      dispatch(setCompanyLogo(url))
+      toast.success('Company logo updated')
+    } catch {
+      toast.error('Upload failed — please try again')
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -414,7 +425,14 @@ function CompanyPanel() {
         <h3 className="font-semibold text-gray-900 mb-4">Company Branding</h3>
         <div className="flex items-center gap-6">
           <div className="shrink-0">
-            {companyLogo ? (
+            {uploading ? (
+              <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center border border-gray-200">
+                <svg className="w-6 h-6 text-teal-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </div>
+            ) : companyLogo ? (
               <img src={companyLogo} alt="Company logo" className="w-20 h-20 rounded-2xl object-contain border border-gray-200 bg-gray-50" />
             ) : (
               <div className="w-20 h-20 rounded-2xl bg-teal-100 flex items-center justify-center border-2 border-dashed border-teal-300">
@@ -428,11 +446,12 @@ function CompanyPanel() {
             <div className="flex gap-2">
               <button
                 onClick={() => fileRef.current?.click()}
-                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium"
+                disabled={uploading}
+                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {companyLogo ? 'Change Logo' : 'Upload Logo'}
+                {uploading ? 'Uploading…' : companyLogo ? 'Change Logo' : 'Upload Logo'}
               </button>
-              {companyLogo && (
+              {companyLogo && !uploading && (
                 <button onClick={() => { dispatch(setCompanyLogo(null)); toast.info('Logo removed') }} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
                   Remove
                 </button>
