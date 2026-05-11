@@ -27,7 +27,7 @@ public class MovementController {
     private final MovementService movementService;
 
     @PostMapping
-    @PreAuthorize("hasRole('WAREHOUSE_STAFF')")
+    @PreAuthorize("hasRole('WAREHOUSE_STAFF') or (hasRole('PROCUREMENT_OFFICER') and #request.type.name() == 'INTAKE')")
     public ResponseEntity<StockMovementResponse> recordMovement(
             @Valid @RequestBody RecordMovementRequest request) {
         JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

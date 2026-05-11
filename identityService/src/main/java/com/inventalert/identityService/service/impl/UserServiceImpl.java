@@ -5,7 +5,9 @@ import com.inventalert.identityService.dto.request.CreateUserRequest;
 import com.inventalert.identityService.dto.request.UpdateRoleRequest;
 import com.inventalert.identityService.dto.response.AssignmentResponse;
 import com.inventalert.identityService.dto.response.UserResponse;
+import com.inventalert.identityService.exception.AssignmentNotFoundException;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
+import com.inventalert.identityService.exception.UserAlreadyActiveException;
 import com.inventalert.identityService.exception.UserAlreadyDeactivatedException;
 import com.inventalert.identityService.exception.UserNotFoundException;
 import com.inventalert.identityService.exception.WarehouseManagerConflictException;
@@ -105,6 +107,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserResponse reactivateUser(String companyId, String userId) {
+        User user = userRepository.findByIdAndCompanyId(userId, companyId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        if (user.isActive()) throw new UserAlreadyActiveException(userId);
+        user.setActive(true);
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    @Override
     public AssignmentResponse assignToWarehouse(String companyId, String userId, AssignWarehouseRequest request) {
         User user = userRepository.findByIdAndCompanyId(userId, companyId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
@@ -135,6 +146,18 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new UserNotFoundException(userId));
         return assignmentRepository.findAllByUserId(userId)
                 .stream().map(AssignmentResponse::from).toList();
+    }
+
+    @Override
+    public void removeAssignment(String companyId, String userId, String assignmentId) {
+        userRepository.findByIdAndCompanyId(userId, companyId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+        WarehouseAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new AssignmentNotFoundException(assignmentId));
+        if (!assignment.getUserId().equals(userId)) {
+            throw new AssignmentNotFoundException(assignmentId);
+        }
+        assignmentRepository.delete(assignment);
     }
 
     // Checks that no active manager OTHER than excludeUserId is assigned to this warehouse.

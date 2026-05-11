@@ -44,7 +44,7 @@ public class UserController {
         }
     )
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<UserResponse> createUser(
             @AuthenticationPrincipal JwtUser principal,
             @Valid @RequestBody CreateUserRequest request) {
@@ -60,7 +60,7 @@ public class UserController {
         }
     )
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<List<UserResponse>> listUsers(
             @AuthenticationPrincipal JwtUser principal) {
         return ResponseEntity.ok(userService.listUsers(principal.getCompanyId()));
@@ -78,7 +78,7 @@ public class UserController {
         }
     )
     @PatchMapping("/{id}/role")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<UserResponse> updateRole(
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id,
@@ -99,7 +99,7 @@ public class UserController {
         }
     )
     @PatchMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<UserResponse> deactivateUser(
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id) {
@@ -118,7 +118,7 @@ public class UserController {
         }
     )
     @PostMapping("/{id}/assign")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<AssignmentResponse> assignToWarehouse(
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id,
@@ -136,10 +136,48 @@ public class UserController {
         }
     )
     @GetMapping("/{id}/assignments")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<List<AssignmentResponse>> getAssignments(
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id) {
         return ResponseEntity.ok(userService.getAssignments(principal.getCompanyId(), id));
+    }
+
+    @Operation(
+        summary = "Reactivate a deactivated user",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "User reactivated",
+                content = @Content(schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid token", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Insufficient role", content = @Content),
+            @ApiResponse(responseCode = "404", description = "User not found", content = @Content),
+            @ApiResponse(responseCode = "409", description = "User already active", content = @Content)
+        }
+    )
+    @PatchMapping("/{id}/reactivate")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public ResponseEntity<UserResponse> reactivateUser(
+            @AuthenticationPrincipal JwtUser principal,
+            @Parameter(description = "UUID of the user") @PathVariable String id) {
+        return ResponseEntity.ok(userService.reactivateUser(principal.getCompanyId(), id));
+    }
+
+    @Operation(
+        summary = "Remove a warehouse assignment from a user",
+        responses = {
+            @ApiResponse(responseCode = "204", description = "Assignment removed"),
+            @ApiResponse(responseCode = "401", description = "Missing or invalid token", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Insufficient role", content = @Content),
+            @ApiResponse(responseCode = "404", description = "User or assignment not found", content = @Content)
+        }
+    )
+    @DeleteMapping("/{id}/assignments/{assignmentId}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public ResponseEntity<Void> removeAssignment(
+            @AuthenticationPrincipal JwtUser principal,
+            @Parameter(description = "UUID of the user") @PathVariable String id,
+            @Parameter(description = "UUID of the assignment") @PathVariable String assignmentId) {
+        userService.removeAssignment(principal.getCompanyId(), id, assignmentId);
+        return ResponseEntity.noContent().build();
     }
 }
