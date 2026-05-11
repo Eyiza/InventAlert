@@ -6,6 +6,7 @@ public record NotificationEvent(
         String eventId,
         String companyId,
         String userId,
+        String userEmail,
         NotificationType type,
         String message,
         String referenceId
