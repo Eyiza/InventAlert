@@ -6,6 +6,7 @@ import com.inventalert.identityService.model.Role;
 import com.inventalert.identityService.model.User;
 import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
+import com.inventalert.identityService.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,11 +39,11 @@ class UserServiceTest {
     @Mock private WarehouseAssignmentRepository assignmentRepository;
     @Mock private PasswordEncoder passwordEncoder;
 
-    private UserService userService;
+    private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, assignmentRepository, passwordEncoder);
+        userService = new UserServiceImpl(userRepository, assignmentRepository, passwordEncoder);
     }
 
     @Test
