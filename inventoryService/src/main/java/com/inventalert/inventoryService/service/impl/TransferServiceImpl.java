@@ -10,6 +10,8 @@ import com.inventalert.inventoryService.service.GoogleMapsService;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import com.inventalert.inventoryService.service.TransferService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -78,12 +80,12 @@ public class TransferServiceImpl implements TransferService {
     }
 
     @Override
-    public List<TransferSuggestionResponse> list(String role, String warehouseId) {
+    public Page<TransferSuggestionResponse> list(String role, String warehouseId, Pageable pageable) {
         if ("WAREHOUSE_STAFF".equals(role)) {
-            return transferRepository.findByFromWarehouseIdOrToWarehouseId(warehouseId, warehouseId)
-                    .stream().map(this::toResponse).toList();
+            return transferRepository.findByFromWarehouseIdOrToWarehouseId(warehouseId, warehouseId, pageable)
+                    .map(this::toResponse);
         }
-        return transferRepository.findAll().stream().map(this::toResponse).toList();
+        return transferRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override
