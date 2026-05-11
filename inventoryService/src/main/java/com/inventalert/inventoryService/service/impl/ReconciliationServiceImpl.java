@@ -15,6 +15,8 @@ import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.repository.StockMovementRepository;
 import com.inventalert.inventoryService.service.ReconciliationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
@@ -22,7 +24,6 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -60,8 +61,8 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     }
 
     @Override
-    public List<ReconciliationResponse> list() {
-        return reconciliationRepository.findAll().stream().map(this::toResponse).toList();
+    public Page<ReconciliationResponse> list(Pageable pageable) {
+        return reconciliationRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override

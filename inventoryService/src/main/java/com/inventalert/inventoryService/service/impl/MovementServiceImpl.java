@@ -160,7 +160,7 @@ public class MovementServiceImpl implements MovementService {
                     .withIgnoreLeadingWhiteSpace(true)
                     .build().parse();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse CSV", e);
+            throw new CsvParseException("Failed to parse CSV file. Please check the file format and try again.", e);
         }
 
         List<CsvImportErrorResponse.RowError> errors = new ArrayList<>();
