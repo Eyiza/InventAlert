@@ -7,6 +7,7 @@ import com.inventalert.notificationService.model.Notification;
 import com.inventalert.notificationService.model.NotificationType;
 import com.inventalert.notificationService.repository.RedisNotificationRepository;
 import com.inventalert.notificationService.service.EmailService;
+import com.inventalert.notificationService.service.NotificationBroadcaster;
 import com.inventalert.notificationService.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final RedisNotificationRepository repository;
     private final EmailService emailService;
+    private final NotificationBroadcaster broadcaster;
 
     @Override
     public Notification create(String eventId, String companyId, String userId, String userEmail,
@@ -53,6 +55,8 @@ public class NotificationServiceImpl implements NotificationService {
         if (userEmail != null && !userEmail.isBlank()) {
             emailService.sendNotificationEmail(userEmail, type.name(), message);
         }
+
+        broadcaster.broadcast(notification);
 
         return notification;
     }
