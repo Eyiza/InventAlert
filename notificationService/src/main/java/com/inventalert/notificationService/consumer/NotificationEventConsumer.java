@@ -22,7 +22,7 @@ public class NotificationEventConsumer {
         try {
             NotificationEvent event = objectMapper.readValue(message, NotificationEvent.class);
             notificationService.create(
-                    event.eventId(), event.companyId(), event.userId(),
+                    event.eventId(), event.companyId(), event.userId(), event.userEmail(),
                     event.type(), event.message(), event.referenceId()
             );
         } catch (JsonProcessingException e) {

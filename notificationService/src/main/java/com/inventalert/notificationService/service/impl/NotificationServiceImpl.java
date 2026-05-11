@@ -6,6 +6,7 @@ import com.inventalert.notificationService.exception.NotificationNotFoundExcepti
 import com.inventalert.notificationService.model.Notification;
 import com.inventalert.notificationService.model.NotificationType;
 import com.inventalert.notificationService.repository.RedisNotificationRepository;
+import com.inventalert.notificationService.service.EmailService;
 import com.inventalert.notificationService.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,14 +22,11 @@ import java.util.UUID;
 public class NotificationServiceImpl implements NotificationService {
 
     private final RedisNotificationRepository repository;
+    private final EmailService emailService;
 
     @Override
-    public Notification create(String eventId,
-                               String companyId,
-                               String userId,
-                               NotificationType type,
-                               String message,
-                               String referenceId) {
+    public Notification create(String eventId, String companyId, String userId, String userEmail,
+                               NotificationType type, String message, String referenceId) {
 
         if (!repository.setEventProcessedIfAbsent(eventId)) {
             return null;
@@ -51,6 +49,10 @@ public class NotificationServiceImpl implements NotificationService {
                 notification.getNotificationId(),
                 notification.getCreatedAt().toEpochMilli());
         repository.incrementUnreadCount(companyId, userId);
+
+        if (userEmail != null && !userEmail.isBlank()) {
+            emailService.sendNotificationEmail(userEmail, type.name(), message);
+        }
 
         return notification;
     }

@@ -30,12 +30,13 @@ import static org.mockito.Mockito.*;
 class NotificationServiceTest {
 
     @Mock private RedisNotificationRepository repository;
+    @Mock private EmailService emailService;
 
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationServiceImpl(repository);
+        notificationService = new NotificationServiceImpl(repository, emailService);
     }
 
     @Test
@@ -43,7 +44,7 @@ class NotificationServiceTest {
         when(repository.setEventProcessedIfAbsent("evt-001")).thenReturn(true);
 
         Notification result = notificationService.create(
-                "evt-001", "company-1", "user-1",
+                "evt-001", "company-1", "user-1", "adebayo@konga.ng",
                 NotificationType.RESTOCK_ALERT, "Low stock on Indomie noodles", "alert-001");
 
         assertThat(result).isNotNull();
@@ -63,17 +64,41 @@ class NotificationServiceTest {
     }
 
     @Test
+    void CreateNotification_CheckIfEmailSentTest() {
+        when(repository.setEventProcessedIfAbsent("evt-mail-001")).thenReturn(true);
+
+        notificationService.create(
+                "evt-mail-001", "company-1", "user-1", "adebayo@konga.ng",
+                NotificationType.RESTOCK_ALERT, "Low stock on Indomie noodles", "alert-001");
+
+        verify(emailService).sendNotificationEmail(
+                "adebayo@konga.ng", "RESTOCK_ALERT", "Low stock on Indomie noodles");
+    }
+
+    @Test
+    void CreateNotification_NullEmail_CheckIfEmailNotSentTest() {
+        when(repository.setEventProcessedIfAbsent("evt-no-email")).thenReturn(true);
+
+        notificationService.create(
+                "evt-no-email", "company-1", "user-1", null,
+                NotificationType.TRANSFER_SUGGESTION, "Transfer suggested for Dangote cement", "ts-001");
+
+        verifyNoInteractions(emailService);
+    }
+
+    @Test
     void CreateNotification_DuplicateEvent_CheckIfReturnsNullTest() {
         when(repository.setEventProcessedIfAbsent("evt-dup")).thenReturn(false);
 
         Notification result = notificationService.create(
-                "evt-dup", "company-1", "user-1",
+                "evt-dup", "company-1", "user-1", "adebayo@konga.ng",
                 NotificationType.RESTOCK_ALERT, "Low stock on Indomie noodles", "alert-001");
 
         assertThat(result).isNull();
         verify(repository, never()).saveHash(any());
         verify(repository, never()).addToUserSortedSet(any(), any(), any(), anyDouble());
         verify(repository, never()).incrementUnreadCount(any(), any());
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -81,10 +106,10 @@ class NotificationServiceTest {
         when(repository.setEventProcessedIfAbsent(any())).thenReturn(true);
 
         Notification first = notificationService.create(
-                "evt-001", "company-1", "user-1",
+                "evt-001", "company-1", "user-1", "adebayo@konga.ng",
                 NotificationType.TRANSFER_SUGGESTION, "Transfer suggested for Dangote cement", "ts-001");
         Notification second = notificationService.create(
-                "evt-002", "company-1", "user-1",
+                "evt-002", "company-1", "user-1", "adebayo@konga.ng",
                 NotificationType.TRANSFER_SUGGESTION, "Transfer suggested for Dangote cement", "ts-002");
 
         assertThat(first.getNotificationId()).isNotEqualTo(second.getNotificationId());
@@ -98,7 +123,7 @@ class NotificationServiceTest {
         ArgumentCaptor<Notification> notifCaptor = ArgumentCaptor.forClass(Notification.class);
 
         notificationService.create(
-                "evt-003", "company-1", "user-1",
+                "evt-003", "company-1", "user-1", "ngozi@stanbic.ng",
                 NotificationType.RECONCILIATION_REQUESTED, "Reconciliation pending for Lagos warehouse", "rec-001");
 
         verify(repository).saveHash(notifCaptor.capture());
