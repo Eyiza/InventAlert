@@ -11,4 +11,5 @@ public interface WarehouseService {
     List<WarehouseResponse> list();
     WarehouseResponse update(String id, UpdateWarehouseRequest request);
     void deactivate(String id);
+    void activate(String id);
 }

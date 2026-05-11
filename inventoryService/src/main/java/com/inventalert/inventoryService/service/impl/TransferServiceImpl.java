@@ -1,5 +1,6 @@
 package com.inventalert.inventoryService.service.impl;
 
+import com.inventalert.inventoryService.dto.request.StaffInitiateTransferRequest;
 import com.inventalert.inventoryService.dto.response.TransferSuggestionResponse;
 import com.inventalert.inventoryService.exception.*;
 import com.inventalert.inventoryService.kafka.TransferEventProducer;
@@ -77,6 +78,37 @@ public class TransferServiceImpl implements TransferService {
         eventProducer.publishTransferSuggestionCreated(
                 companyId, saved.getId(), bestCandidate.getWarehouseId(),
                 deficitWarehouseId, productId, shortage, minDistance);
+    }
+
+    @Override
+    @Transactional
+    public TransferSuggestionResponse initiateByStaff(StaffInitiateTransferRequest request,
+                                                      String staffId, String companyId) {
+        Warehouse fromWarehouse = warehouseRepository.findByIdAndIsActiveTrue(request.getFromWarehouseId())
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getFromWarehouseId()));
+        Warehouse toWarehouse = warehouseRepository.findByIdAndIsActiveTrue(request.getToWarehouseId())
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getToWarehouseId()));
+
+        DistanceResult distanceResult = googleMapsService.getDrivingDistanceKm(
+                fromWarehouse.getId(), fromWarehouse.getLatitude(), fromWarehouse.getLongitude(),
+                toWarehouse.getId(), toWarehouse.getLatitude(), toWarehouse.getLongitude());
+
+        TransferSuggestion suggestion = TransferSuggestion.builder()
+                .productId(request.getProductId())
+                .fromWarehouseId(request.getFromWarehouseId())
+                .toWarehouseId(request.getToWarehouseId())
+                .quantity(request.getQuantity())
+                .distanceKm(BigDecimal.valueOf(distanceResult.km()))
+                .distanceSource(distanceResult.source())
+                .status(TransferStatus.SUGGESTED)
+                .build();
+
+        TransferSuggestion saved = transferRepository.save(suggestion);
+        eventProducer.publishTransferSuggestionCreated(
+                companyId, saved.getId(), request.getFromWarehouseId(),
+                request.getToWarehouseId(), request.getProductId(),
+                request.getQuantity(), distanceResult.km());
+        return toResponse(saved);
     }
 
     @Override
