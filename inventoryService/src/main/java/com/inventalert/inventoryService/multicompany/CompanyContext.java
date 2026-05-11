@@ -15,4 +15,8 @@ public class CompanyContext {
     public static void clear() {
         CURRENT.remove();
     }
+
+    public static void setRaw(String schemaName) {
+        CURRENT.set(schemaName);
+    }
 }

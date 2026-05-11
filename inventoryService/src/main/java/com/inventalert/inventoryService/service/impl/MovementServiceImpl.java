@@ -13,6 +13,10 @@ import com.opencsv.bean.CsvBindByName;
 import com.opencsv.bean.CsvToBeanBuilder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -35,6 +39,11 @@ public class MovementServiceImpl implements MovementService {
     private final ProductRepository productRepository;
 
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public StockMovementResponse recordIntake(RecordMovementRequest request, String userId,
                                                String staffWarehouseId, String companyId) {
@@ -66,7 +75,19 @@ public class MovementServiceImpl implements MovementService {
         return toResponse(saved);
     }
 
+    @Recover
+    StockMovementResponse recoverRecordIntake(ObjectOptimisticLockingFailureException ex,
+                                               RecordMovementRequest request, String userId,
+                                               String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
+    }
+
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public StockMovementResponse recordOutboundSale(RecordMovementRequest request, String userId,
                                                      String staffWarehouseId, String companyId) {
@@ -105,6 +126,13 @@ public class MovementServiceImpl implements MovementService {
         return toResponse(saved);
     }
 
+    @Recover
+    StockMovementResponse recoverRecordOutboundSale(ObjectOptimisticLockingFailureException ex,
+                                                     RecordMovementRequest request, String userId,
+                                                     String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
+    }
+
     @Override
     public List<StockMovementResponse> listMovements(String productId, String warehouseId,
                                                       MovementType type, LocalDateTime from, LocalDateTime to) {
@@ -113,6 +141,11 @@ public class MovementServiceImpl implements MovementService {
     }
 
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public List<StockMovementResponse> importIntakeFromCsv(String warehouseId, MultipartFile file,
                                                             String userId, String staffWarehouseId, String companyId) {
@@ -164,6 +197,13 @@ public class MovementServiceImpl implements MovementService {
             results.add(toResponse(saved));
         }
         return results;
+    }
+
+    @Recover
+    List<StockMovementResponse> recoverImportIntakeFromCsv(ObjectOptimisticLockingFailureException ex,
+                                                            String warehouseId, MultipartFile file,
+                                                            String userId, String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
     }
 
     private StockMovementResponse toResponse(StockMovement m) {

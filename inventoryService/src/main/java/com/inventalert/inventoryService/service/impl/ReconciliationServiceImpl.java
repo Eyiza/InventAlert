@@ -2,9 +2,11 @@ package com.inventalert.inventoryService.service.impl;
 
 import com.inventalert.inventoryService.dto.request.SubmitReconciliationRequest;
 import com.inventalert.inventoryService.dto.response.ReconciliationResponse;
+import com.inventalert.inventoryService.exception.InsufficientStockException;
 import com.inventalert.inventoryService.exception.InvalidStateTransitionException;
 import com.inventalert.inventoryService.exception.ReconciliationNotFoundException;
 import com.inventalert.inventoryService.exception.SelfApprovalException;
+import com.inventalert.inventoryService.exception.StockConflictException;
 import com.inventalert.inventoryService.exception.StockLevelNotFoundException;
 import com.inventalert.inventoryService.kafka.ReconciliationEventProducer;
 import com.inventalert.inventoryService.model.*;
@@ -13,6 +15,10 @@ import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.repository.StockMovementRepository;
 import com.inventalert.inventoryService.service.ReconciliationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +65,11 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     }
 
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public void approve(String id, String managerId) {
         Reconciliation recon = findOrThrow(id);
@@ -76,7 +87,7 @@ public class ReconciliationServiceImpl implements ReconciliationService {
 
         int newStock = level.getCurrentStock() + recon.getDiscrepancy();
         if (newStock < 0) {
-            throw new IllegalStateException("Stock adjustment would result in negative stock");
+            throw new InsufficientStockException(level.getCurrentStock(), Math.abs(recon.getDiscrepancy()));
         }
         level.setCurrentStock(newStock);
         stockLevelRepository.save(level);
@@ -93,6 +104,11 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         recon.setStatus(ReconciliationStatus.APPROVED);
         recon.setApprovedBy(managerId);
         reconciliationRepository.save(recon);
+    }
+
+    @Recover
+    void recoverApprove(ObjectOptimisticLockingFailureException ex, String id, String managerId) {
+        throw new StockConflictException();
     }
 
     @Override
