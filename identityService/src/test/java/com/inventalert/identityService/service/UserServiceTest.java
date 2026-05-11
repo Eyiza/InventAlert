@@ -63,7 +63,7 @@ class UserServiceTest {
                 .role(request.role())
                 .isActive(true)
                 .build();
-        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(userRepository.saveAndFlush(any(User.class))).thenReturn(savedUser);
 
         UserResponse response = userService.createUser(companyId, request);
 
@@ -71,7 +71,7 @@ class UserServiceTest {
         assertThat(response.companyId()).isEqualTo(companyId);
         assertThat(response.role()).isEqualTo(Role.MANAGER);
         assertThat(response.isActive()).isTrue();
-        verify(userRepository).save(any(User.class));
+        verify(userRepository).saveAndFlush(any(User.class));
         verify(assignmentRepository).save(any(WarehouseAssignment.class));
     }
 
