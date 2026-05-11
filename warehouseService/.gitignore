@@ -14,20 +14,16 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea/
+.idea
 *.iws
 *.iml
 *.ipr
-
-
-.claude/
 
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
-.claude/
 /.nb-gradle/
 build/
 !**/src/main/**/build/
@@ -35,10 +31,3 @@ build/
 
 ### VS Code ###
 .vscode/
-
-### Local env — never commit ###
-env.properties
-
-
-### Planning docs — local only ###
-INVENTORY_BUILD_PLAN.md
