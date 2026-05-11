@@ -37,6 +37,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(StockConflictException.class)
+    public ResponseEntity<ErrorResponse> handleStockConflict(StockConflictException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     @ExceptionHandler({
             InsufficientStockException.class,
             WarehouseNotAssignedException.class,
