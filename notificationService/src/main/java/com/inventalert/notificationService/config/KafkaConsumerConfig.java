@@ -1,5 +1,6 @@
 package com.inventalert.notificationService.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,6 +9,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +43,16 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<String, String> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+
+        // Retry up to 4 times (5 total attempts): 2s → 4s → 8s → 16s
+        ExponentialBackOff backOff = new ExponentialBackOff(2_000L, 2.0);
+        backOff.setMaxInterval(30_000L);
+        backOff.setMaxElapsedTime(120_000L);
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(backOff);
+        // Malformed JSON is not recoverable — don't retry it
+        errorHandler.addNotRetryableExceptions(JsonProcessingException.class);
+        factory.setCommonErrorHandler(errorHandler);
+
         return factory;
     }
 }
