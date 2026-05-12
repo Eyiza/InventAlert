@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { warehouses, products, stockLevels, movements } from '../../data/mockData'
 
 const stockSlice = createSlice({
   name: 'stock',
-  initialState: { warehouses, products, stockLevels, movements },
+  initialState: { warehouses: [], products: [], stockLevels: [], movements: [] },
   reducers: {
     addWarehouse: (state, action) => {
       state.warehouses.push({

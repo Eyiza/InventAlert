@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { useDispatch } from 'react-redux'
-import { resetPassword } from '../../store/slices/authSlice'
+import { useResetPasswordMutation } from '../../apis/inventAlertApi'
 import { toast } from 'react-toastify'
 
 function EyeIcon() {
@@ -23,25 +22,29 @@ function EyeOffIcon() {
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
-  const emailFromUrl = searchParams.get('email') || ''
+  const tokenFromUrl = searchParams.get('token') || ''
   const [form, setForm] = useState({ newPassword: '', confirm: '' })
   const [show, setShow] = useState({ new: false, confirm: false })
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const dispatch = useDispatch()
   const navigate = useNavigate()
 
-  const handleSubmit = e => {
+  const [resetPasswordMutation, { isLoading }] = useResetPasswordMutation()
+
+  const handleSubmit = async e => {
     e.preventDefault()
     setError('')
     if (form.newPassword.length < 8) { setError('Password must be at least 8 characters'); return }
     if (form.newPassword !== form.confirm) { setError('Passwords do not match'); return }
-    setIsLoading(true)
-    setTimeout(() => {
-      dispatch(resetPassword({ email: emailFromUrl, newPassword: form.newPassword }))
+    if (!tokenFromUrl) { setError('Reset link is missing or invalid. Please request a new one.'); return }
+
+    const result = await resetPasswordMutation({ token: tokenFromUrl, newPassword: form.newPassword })
+
+    if (result.error) {
+      setError(result.error?.data?.message || 'Reset link is invalid or has expired.')
+    } else {
       toast.success('Password reset successfully — you can now sign in.')
       navigate('/login', { replace: true })
-    }, 700)
+    }
   }
 
   return (
@@ -54,9 +57,7 @@ export default function ResetPassword() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Reset your password</h1>
-          {emailFromUrl && (
-            <p className="text-gray-500 mt-1 text-sm">For <strong className="text-gray-700">{emailFromUrl}</strong></p>
-          )}
+          <p className="text-gray-500 mt-1 text-sm">Enter your new password below.</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

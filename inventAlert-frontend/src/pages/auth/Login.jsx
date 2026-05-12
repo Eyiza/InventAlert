@@ -1,24 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate, Link } from 'react-router'
-import { login, clearError } from '../../store/slices/authSlice'
+import { useLoginMutation, useSuperAdminLoginMutation } from '../../apis/inventAlertApi'
+import { setCredentials, clearError } from '../../store/slices/authSlice'
 
 const ROLE_ROUTES = {
   ADMIN: '/admin',
   MANAGER: '/manager',
   WAREHOUSE_STAFF: '/staff',
   PROCUREMENT_OFFICER: '/procurement',
-  SUPERADMIN: '/superadmin',
+  SUPER_ADMIN: '/superadmin',
 }
-
-const DEMO_ACCOUNTS = [
-  { email: 'admin@techwave.com', role: 'Admin', password: 'password123' },
-  { email: 'manager@techwave.com', role: 'Manager', password: 'password123' },
-  { email: 'staff.a@techwave.com', role: 'Staff (Alpha)', password: 'password123' },
-  { email: 'staff.b@techwave.com', role: 'Staff (Beta)', password: 'password123' },
-  { email: 'procurement@techwave.com', role: 'Procurement', password: 'password123' },
-  { email: 'superadmin@inventalert.com', role: 'Platform Admin', password: 'superadmin123' },
-]
 
 function EyeIcon() {
   return (
@@ -41,10 +33,14 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
   const dispatch = useDispatch()
   const navigate = useNavigate()
-  const { isAuthenticated, role, error } = useSelector(s => s.auth)
+  const { isAuthenticated, role } = useSelector(s => s.auth)
+
+  const [loginMutation, { isLoading: loginLoading }] = useLoginMutation()
+  const [superAdminLoginMutation, { isLoading: superAdminLoading }] = useSuperAdminLoginMutation()
+  const isLoading = loginLoading || superAdminLoading
 
   useEffect(() => {
     if (isAuthenticated && role) {
@@ -54,13 +50,22 @@ export default function Login() {
 
   useEffect(() => () => dispatch(clearError()), [dispatch])
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    setIsLoading(true)
-    setTimeout(() => {
-      dispatch(login({ email, password }))
-      setIsLoading(false)
-    }, 700)
+    setError('')
+
+    let result = await loginMutation({ email, password })
+
+    // 401/403 from regular login → try superadmin endpoint
+    if (result.error?.status === 401 || result.error?.status === 403) {
+      result = await superAdminLoginMutation({ email, password })
+    }
+
+    if (result.data) {
+      dispatch(setCredentials(result.data))
+    } else {
+      setError('Invalid email or password')
+    }
   }
 
   return (
@@ -151,24 +156,6 @@ export default function Login() {
               Create an account
             </Link>
           </p>
-        </div>
-
-        <div className="mt-5 bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-            Demo Accounts
-          </p>
-          <div className="space-y-1">
-            {DEMO_ACCOUNTS.map(acc => (
-              <button
-                key={acc.email}
-                onClick={() => { setEmail(acc.email); setPassword(acc.password) }}
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-teal-50 transition-colors text-sm flex items-center justify-between group"
-              >
-                <span className="text-gray-600 group-hover:text-gray-900 transition-colors">{acc.email}</span>
-                <span className="text-teal-600 font-medium text-xs">{acc.role}</span>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>
