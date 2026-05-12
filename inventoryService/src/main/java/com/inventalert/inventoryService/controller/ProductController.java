@@ -34,6 +34,7 @@ public class ProductController {
     }
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ProductResponse>> list() {
         return ResponseEntity.ok(productService.list());
     }

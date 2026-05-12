@@ -48,7 +48,8 @@ public class UserController {
     public ResponseEntity<UserResponse> createUser(
             @AuthenticationPrincipal JwtUser principal,
             @Valid @RequestBody CreateUserRequest request) {
-        return ResponseEntity.status(201).body(userService.createUser(principal.getCompanyId(), request));
+        return ResponseEntity.status(201).body(
+                userService.createUser(principal.getCompanyId(), request, principal.getRole()));
     }
 
     @Operation(
@@ -83,7 +84,8 @@ public class UserController {
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id,
             @Valid @RequestBody UpdateRoleRequest request) {
-        return ResponseEntity.ok(userService.updateRole(principal.getCompanyId(), id, request));
+        return ResponseEntity.ok(
+                userService.updateRole(principal.getCompanyId(), id, request, principal.getRole()));
     }
 
     @Operation(
@@ -103,7 +105,7 @@ public class UserController {
     public ResponseEntity<UserResponse> deactivateUser(
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id) {
-        return ResponseEntity.ok(userService.deactivateUser(principal.getCompanyId(), id));
+        return ResponseEntity.ok(userService.deactivateUser(principal.getCompanyId(), id, principal.getRole()));
     }
 
     @Operation(
@@ -159,7 +161,7 @@ public class UserController {
     public ResponseEntity<UserResponse> reactivateUser(
             @AuthenticationPrincipal JwtUser principal,
             @Parameter(description = "UUID of the user") @PathVariable String id) {
-        return ResponseEntity.ok(userService.reactivateUser(principal.getCompanyId(), id));
+        return ResponseEntity.ok(userService.reactivateUser(principal.getCompanyId(), id, principal.getRole()));
     }
 
     @Operation(
