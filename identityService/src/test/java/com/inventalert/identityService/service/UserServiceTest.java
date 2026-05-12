@@ -65,7 +65,7 @@ class UserServiceTest {
                 .build();
         when(userRepository.saveAndFlush(any(User.class))).thenReturn(savedUser);
 
-        UserResponse response = userService.createUser(companyId, request);
+        UserResponse response = userService.createUser(companyId, request, "ADMIN");
 
         assertThat(response.email()).isEqualTo("bob@acme.com");
         assertThat(response.companyId()).isEqualTo(companyId);
@@ -82,7 +82,7 @@ class UserServiceTest {
 
         when(userRepository.existsByCompanyIdAndEmail(companyId, request.email())).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.createUser(companyId, request))
+        assertThatThrownBy(() -> userService.createUser(companyId, request, "ADMIN"))
                 .isInstanceOf(EmailAlreadyExistsException.class)
                 .hasMessageContaining("bob@acme.com");
 
@@ -134,7 +134,7 @@ class UserServiceTest {
         when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.of(existingUser));
         when(userRepository.save(existingUser)).thenReturn(updatedUser);
 
-        UserResponse response = userService.updateRole(companyId, userId, request);
+        UserResponse response = userService.updateRole(companyId, userId, request, "ADMIN");
 
         assertThat(response.role()).isEqualTo(Role.WAREHOUSE_STAFF);
         assertThat(response.id()).isEqualTo(userId);
@@ -149,7 +149,7 @@ class UserServiceTest {
 
         when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.updateRole(companyId, userId, request))
+        assertThatThrownBy(() -> userService.updateRole(companyId, userId, request, "ADMIN"))
                 .isInstanceOf(UserNotFoundException.class)
                 .hasMessageContaining(userId);
 
@@ -182,7 +182,7 @@ class UserServiceTest {
         when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.of(activeUser));
         when(userRepository.save(activeUser)).thenReturn(deactivatedUser);
 
-        UserResponse response = userService.deactivateUser(companyId, userId);
+        UserResponse response = userService.deactivateUser(companyId, userId, "ADMIN");
 
         assertThat(response.isActive()).isFalse();
         assertThat(response.id()).isEqualTo(userId);
@@ -205,7 +205,7 @@ class UserServiceTest {
 
         when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.of(inactiveUser));
 
-        assertThatThrownBy(() -> userService.deactivateUser(companyId, userId))
+        assertThatThrownBy(() -> userService.deactivateUser(companyId, userId, "ADMIN"))
                 .isInstanceOf(UserAlreadyDeactivatedException.class)
                 .hasMessageContaining(userId);
 
