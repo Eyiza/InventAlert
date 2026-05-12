@@ -138,6 +138,66 @@ export const inventAlertApi = createApi({
       providesTags: (result, error, warehouseId) => [{ type: 'Stock', id: warehouseId }],
     }),
 
+    // ── Movements ─────────────────────────────────────────────────────────────
+    getMovements: build.query({
+      query: (params = {}) => ({ url: '/api/movements', params }),
+      providesTags: ['Movement'],
+    }),
+    recordMovement: build.mutation({
+      query: body => ({ url: '/api/movements', method: 'POST', body }),
+      invalidatesTags: (result, error, { warehouseId }) => ['Movement', { type: 'Stock', id: warehouseId }],
+    }),
+
+    // ── Transfers ─────────────────────────────────────────────────────────────
+    getTransfers: build.query({
+      query: () => '/api/transfers',
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Transfer'],
+    }),
+    initiateTransfer: build.mutation({
+      query: body => ({ url: '/api/transfers', method: 'POST', body }),
+      invalidatesTags: ['Transfer'],
+    }),
+    approveTransfer: build.mutation({
+      query: id => ({ url: `/api/transfers/${id}/approve`, method: 'PATCH' }),
+      invalidatesTags: ['Transfer'],
+    }),
+    rejectTransfer: build.mutation({
+      query: id => ({ url: `/api/transfers/${id}/reject`, method: 'PATCH' }),
+      invalidatesTags: ['Transfer'],
+    }),
+    dispatchTransfer: build.mutation({
+      query: id => ({ url: `/api/transfers/${id}/dispatch`, method: 'PATCH' }),
+      invalidatesTags: ['Transfer', 'Stock'],
+    }),
+    acceptTransfer: build.mutation({
+      query: id => ({ url: `/api/transfers/${id}/accept`, method: 'PATCH' }),
+      invalidatesTags: ['Transfer', 'Stock'],
+    }),
+    rejectDelivery: build.mutation({
+      query: id => ({ url: `/api/transfers/${id}/reject-delivery`, method: 'PATCH' }),
+      invalidatesTags: ['Transfer'],
+    }),
+
+    // ── Reconciliations ───────────────────────────────────────────────────────
+    getReconciliations: build.query({
+      query: () => '/api/reconciliations',
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Reconciliation'],
+    }),
+    submitReconciliation: build.mutation({
+      query: body => ({ url: '/api/reconciliations', method: 'POST', body }),
+      invalidatesTags: ['Reconciliation'],
+    }),
+    approveReconciliation: build.mutation({
+      query: id => ({ url: `/api/reconciliations/${id}/approve`, method: 'PATCH' }),
+      invalidatesTags: ['Reconciliation', 'Stock'],
+    }),
+    rejectReconciliation: build.mutation({
+      query: id => ({ url: `/api/reconciliations/${id}/reject`, method: 'PATCH' }),
+      invalidatesTags: ['Reconciliation'],
+    }),
+
   }),
 })
 
@@ -167,4 +227,17 @@ export const {
   useUpdateProductMutation,
   useImportProductsMutation,
   useGetStockByWarehouseQuery,
+  useGetMovementsQuery,
+  useRecordMovementMutation,
+  useGetTransfersQuery,
+  useInitiateTransferMutation,
+  useApproveTransferMutation,
+  useRejectTransferMutation,
+  useDispatchTransferMutation,
+  useAcceptTransferMutation,
+  useRejectDeliveryMutation,
+  useGetReconciliationsQuery,
+  useSubmitReconciliationMutation,
+  useApproveReconciliationMutation,
+  useRejectReconciliationMutation,
 } = inventAlertApi

@@ -4,11 +4,15 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { addMovement } from '../../store/slices/stockSlice'
-import { dispatchTransfer, acceptTransfer, rejectDelivery, addTransfer } from '../../store/slices/transfersSlice'
-import { submitReconciliation } from '../../store/slices/reconciliationsSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import {
+  useGetProductsQuery, useGetWarehousesQuery, useGetStockByWarehouseQuery,
+  useRecordMovementMutation,
+  useGetTransfersQuery, useInitiateTransferMutation, useDispatchTransferMutation,
+  useAcceptTransferMutation, useRejectDeliveryMutation,
+  useSubmitReconciliationMutation,
+} from '../../apis/inventAlertApi'
 
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -155,8 +159,9 @@ function SubmitBtn({ label, loading, color = 'teal' }) {
 // ── Stock Panel ───────────────────────────────────────────────────────────────
 
 function StockPanel() {
-  const { stockLevels, products } = useSelector(s => s.stock)
   const { warehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [], isLoading } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId })
+  const { data: products = [] } = useGetProductsQuery()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
@@ -212,7 +217,7 @@ function StockPanel() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">No stock items found.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">{isLoading ? 'Loading…' : 'No stock items found.'}</td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50/60">
                   <td className="px-4 py-3 font-medium text-gray-900">{r.productName}</td>
@@ -245,9 +250,10 @@ function StockPanel() {
 const EMPTY_INTAKE = { productId: '', quantity: '' }
 
 function IntakePanel() {
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { warehouseId, user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { warehouseId } = useSelector(s => s.auth)
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [recordMovement] = useRecordMovementMutation()
   const [rows, setRows] = useState([{ ...EMPTY_INTAKE }])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -265,15 +271,18 @@ function IntakePanel() {
     setSummary(valid.map(r => ({ ...r, productName: activeProducts.find(p => p.id === r.productId)?.name || r.productId, sku: activeProducts.find(p => p.id === r.productId)?.sku || '' })))
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setLoading(true)
-    setTimeout(() => {
-      summary.forEach(r => dispatch(addMovement({ productId: r.productId, warehouseId, type: 'INTAKE', quantity: +r.quantity, referenceId: null, createdBy: user.id })))
+    try {
+      await Promise.all(summary.map(r => recordMovement({ productId: r.productId, warehouseId, type: 'INTAKE', quantity: +r.quantity }).unwrap()))
       toast.success(`${summary.length} intake${summary.length > 1 ? 's' : ''} recorded`)
       setRows([{ ...EMPTY_INTAKE }])
       setSummary(null)
+    } catch {
+      toast.error('Failed to record intake')
+    } finally {
       setLoading(false)
-    }, 500)
+    }
   }
 
   const switchView = (mode) => {
@@ -322,10 +331,12 @@ function IntakePanel() {
             </tbody>
           </table>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setSummary(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Edit Items</button>
-          <SubmitBtn label={`Confirm & Record ${summary.length} Intake${summary.length > 1 ? 's' : ''}`} loading={loading} />
-        </div>
+        <form onSubmit={e => { e.preventDefault(); handleConfirm() }}>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setSummary(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Edit Items</button>
+            <SubmitBtn label={`Confirm & Record ${summary.length} Intake${summary.length > 1 ? 's' : ''}`} loading={loading} />
+          </div>
+        </form>
       </div>
     )
   }
@@ -429,9 +440,11 @@ function IntakePanel() {
 const EMPTY_SALE = { productId: '', quantity: '' }
 
 function SalePanel() {
-  const { products, stockLevels, warehouses } = useSelector(s => s.stock)
-  const { warehouseId, user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { warehouseId } = useSelector(s => s.auth)
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId })
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [recordMovement] = useRecordMovementMutation()
   const [rows, setRows] = useState([{ ...EMPTY_SALE }])
   const [rowErrors, setRowErrors] = useState({})
   const [summary, setSummary] = useState(null)
@@ -473,16 +486,19 @@ function SalePanel() {
     }))
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setLoading(true)
-    setTimeout(() => {
-      summary.forEach(r => dispatch(addMovement({ productId: r.productId, warehouseId, type: 'OUTBOUND_SALE', quantity: +r.quantity, referenceId: null, createdBy: user.id })))
+    try {
+      await Promise.all(summary.map(r => recordMovement({ productId: r.productId, warehouseId, type: 'OUTBOUND_SALE', quantity: +r.quantity }).unwrap()))
       toast.success(`${summary.length} sale${summary.length > 1 ? 's' : ''} recorded`)
       setRows([{ ...EMPTY_SALE }])
       setRowErrors({})
       setSummary(null)
+    } catch {
+      toast.error('Failed to record sale')
+    } finally {
       setLoading(false)
-    }, 500)
+    }
   }
 
   const switchView = (mode) => {
@@ -541,10 +557,12 @@ function SalePanel() {
             </tbody>
           </table>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setSummary(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Edit Items</button>
-          <SubmitBtn label={`Confirm & Record ${summary.length} Sale${summary.length > 1 ? 's' : ''}`} loading={loading} color="orange" />
-        </div>
+        <form onSubmit={e => { e.preventDefault(); handleConfirm() }}>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setSummary(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Edit Items</button>
+            <SubmitBtn label={`Confirm & Record ${summary.length} Sale${summary.length > 1 ? 's' : ''}`} loading={loading} color="orange" />
+          </div>
+        </form>
       </div>
     )
   }
@@ -669,9 +687,11 @@ function SalePanel() {
 const EMPTY_TRANSFER = { productId: '', quantity: '' }
 
 function RequestTransferPanel() {
-  const { products, warehouses, stockLevels } = useSelector(s => s.stock)
-  const { warehouseId, user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { warehouseId } = useSelector(s => s.auth)
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId })
+  const [initiateTransfer] = useInitiateTransferMutation()
   const [toWarehouseId, setToWarehouseId] = useState('')
   const [rows, setRows] = useState([{ ...EMPTY_TRANSFER }])
   const [summary, setSummary] = useState(null)
@@ -701,16 +721,19 @@ function RequestTransferPanel() {
     })
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setLoading(true)
-    setTimeout(() => {
-      dispatch(addTransfer(summary.items.map(r => ({ productId: r.productId, fromWarehouseId: warehouseId, toWarehouseId, quantity: +r.quantity, requestedBy: user.id }))))
+    try {
+      await Promise.all(summary.items.map(r => initiateTransfer({ productId: r.productId, fromWarehouseId: warehouseId, toWarehouseId, quantity: +r.quantity }).unwrap()))
       toast.success(`Transfer request submitted for ${summary.items.length} item${summary.items.length > 1 ? 's' : ''} — awaiting manager approval`)
       setRows([{ ...EMPTY_TRANSFER }])
       setToWarehouseId('')
       setSummary(null)
+    } catch {
+      toast.error('Failed to submit transfer request')
+    } finally {
       setLoading(false)
-    }, 500)
+    }
   }
 
   const switchView = (mode) => {
@@ -765,10 +788,12 @@ function RequestTransferPanel() {
             </tbody>
           </table>
         </div>
-        <div className="flex gap-3">
-          <button onClick={() => setSummary(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Edit Items</button>
-          <SubmitBtn label={`Submit Request (${summary.items.length} item${summary.items.length > 1 ? 's' : ''})`} loading={loading} color="blue" />
-        </div>
+        <form onSubmit={e => { e.preventDefault(); handleConfirm() }}>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setSummary(null)} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Edit Items</button>
+            <SubmitBtn label={`Submit Request (${summary.items.length} item${summary.items.length > 1 ? 's' : ''})`} loading={loading} color="blue" />
+          </div>
+        </form>
       </div>
     )
   }
@@ -893,20 +918,25 @@ function RequestTransferPanel() {
 // ── Incoming Transfers Panel ──────────────────────────────────────────────────
 
 function IncomingPanel() {
-  const { transfers } = useSelector(s => s.transfers)
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { warehouseId, user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { warehouseId } = useSelector(s => s.auth)
+  const { data: allTransfers = [] } = useGetTransfersQuery()
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [acceptTransfer] = useAcceptTransferMutation()
+  const [rejectDelivery] = useRejectDeliveryMutation()
   const [confirm, setConfirm] = useState(null)
 
-  const incoming = transfers
+  const incoming = allTransfers
     .filter(t => t.toWarehouseId === warehouseId && t.status === 'IN_TRANSIT')
     .map(t => ({ ...t, productName: products.find(p => p.id === t.productId)?.name || t.productId, fromName: warehouses.find(w => w.id === t.fromWarehouseId)?.name || t.fromWarehouseId }))
 
-  const handleAccept = t => {
-    dispatch(acceptTransfer(t.id))
-    dispatch(addMovement({ productId: t.productId, warehouseId, type: 'TRANSFER_IN', quantity: t.quantity, referenceId: t.id, createdBy: user.id }))
-    toast.success('Transfer accepted — stock updated')
+  const handleAccept = async t => {
+    try {
+      await acceptTransfer(t.id).unwrap()
+      toast.success('Transfer accepted — stock updated')
+    } catch {
+      toast.error('Failed to accept transfer')
+    }
   }
 
   return (
@@ -934,7 +964,7 @@ function IncomingPanel() {
                   <td className="px-5 py-3">
                     <div className="flex gap-2">
                       <button onClick={() => setConfirm({ action: () => handleAccept(t), title: 'Accept Delivery', message: `Accept ${t.quantity} units of ${t.productName} from ${t.fromName}? Stock will be added to your warehouse.`, label: 'Accept Delivery' })} className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium">Accept</button>
-                      <button onClick={() => setConfirm({ action: () => { dispatch(rejectDelivery(t.id)); toast.info('Delivery rejected') }, title: 'Reject Delivery', message: `Reject the delivery of ${t.quantity} units of ${t.productName} from ${t.fromName}?`, label: 'Reject Delivery', danger: true })} className="px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium">Reject</button>
+                      <button onClick={() => setConfirm({ action: async () => { try { await rejectDelivery(t.id).unwrap(); toast.info('Delivery rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Delivery', message: `Reject the delivery of ${t.quantity} units of ${t.productName} from ${t.fromName}?`, label: 'Reject Delivery', danger: true })} className="px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium">Reject</button>
                     </div>
                   </td>
                 </tr>
@@ -951,20 +981,24 @@ function IncomingPanel() {
 // ── Outgoing Transfers Panel ──────────────────────────────────────────────────
 
 function OutgoingPanel() {
-  const { transfers } = useSelector(s => s.transfers)
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { warehouseId, user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { warehouseId } = useSelector(s => s.auth)
+  const { data: allTransfers = [] } = useGetTransfersQuery()
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [dispatchTransfer] = useDispatchTransferMutation()
   const [confirm, setConfirm] = useState(null)
 
-  const outgoing = transfers
+  const outgoing = allTransfers
     .filter(t => t.fromWarehouseId === warehouseId && t.status === 'APPROVED')
     .map(t => ({ ...t, productName: products.find(p => p.id === t.productId)?.name || t.productId, toName: warehouses.find(w => w.id === t.toWarehouseId)?.name || t.toWarehouseId }))
 
-  const handleDispatch = t => {
-    dispatch(dispatchTransfer(t.id))
-    dispatch(addMovement({ productId: t.productId, warehouseId, type: 'TRANSFER_OUT', quantity: t.quantity, referenceId: t.id, createdBy: user.id }))
-    toast.success('Dispatch confirmed — stock deducted, now in transit')
+  const handleDispatch = async t => {
+    try {
+      await dispatchTransfer(t.id).unwrap()
+      toast.success('Dispatch confirmed — stock deducted, now in transit')
+    } catch {
+      toast.error('Failed to dispatch transfer')
+    }
   }
 
   return (
@@ -1016,28 +1050,32 @@ function OutgoingPanel() {
 // ── Reconciliation Panel ──────────────────────────────────────────────────────
 
 function ReconciliationPanel() {
-  const { products, stockLevels, warehouses } = useSelector(s => s.stock)
-  const { warehouseId, user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { warehouseId } = useSelector(s => s.auth)
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId })
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [submitReconciliation] = useSubmitReconciliationMutation()
   const [form, setForm] = useState({ productId: '', physicalCount: '', reason: '' })
   const [loading, setLoading] = useState(false)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
   const myWarehouse = warehouses.find(w => w.id === warehouseId)
   const activeProducts = products.filter(p => p.isActive)
-  const systemCount = form.productId ? stockLevels.find(sl => sl.productId === form.productId && sl.warehouseId === warehouseId)?.currentStock ?? 0 : null
+  const systemCount = form.productId ? stockLevels.find(sl => sl.productId === form.productId)?.currentStock ?? 0 : null
   const discrepancy = systemCount !== null && form.physicalCount !== '' ? +form.physicalCount - systemCount : null
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!form.productId || !form.physicalCount || !form.reason) return
-    const physical = +form.physicalCount
     setLoading(true)
-    setTimeout(() => {
-      dispatch(submitReconciliation({ productId: form.productId, warehouseId, systemCount, physicalCount: physical, discrepancy: physical - systemCount, reason: form.reason, createdBy: user.id }))
+    try {
+      await submitReconciliation({ productId: form.productId, warehouseId, physicalCount: +form.physicalCount, reason: form.reason }).unwrap()
       toast.success('Reconciliation submitted — awaiting manager review')
       setForm({ productId: '', physicalCount: '', reason: '' })
+    } catch {
+      toast.error('Failed to submit reconciliation')
+    } finally {
       setLoading(false)
-    }, 500)
+    }
   }
 
   return (
@@ -1088,7 +1126,7 @@ function ComplaintsPanel() {
     if (!form.subject || !form.message) return
     setLoading(true)
     setTimeout(() => {
-      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.name, email: me?.email, companyName, companyId }))
+      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
       setLoading(false)
       setSubmitted(true)
     }, 500)
@@ -1132,15 +1170,16 @@ function ComplaintsPanel() {
 
 export default function StaffDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
-  const { transfers } = useSelector(s => s.transfers)
   const { warehouseId } = useSelector(s => s.auth)
-  const { stockLevels, warehouses } = useSelector(s => s.stock)
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId })
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: allTransfers = [] } = useGetTransfersQuery()
   const myWarehouse = warehouses.find(w => w.id === warehouseId) || null
-  const incomingCount = transfers.filter(t => t.toWarehouseId === warehouseId && t.status === 'IN_TRANSIT').length
-  const outgoingCount = transfers.filter(t => t.fromWarehouseId === warehouseId && t.status === 'APPROVED').length
+  const incomingCount = allTransfers.filter(t => t.toWarehouseId === warehouseId && t.status === 'IN_TRANSIT').length
+  const outgoingCount = allTransfers.filter(t => t.fromWarehouseId === warehouseId && t.status === 'APPROVED').length
 
   const navItems = [
-    { id: 'stock', label: 'Stock', badge: stockLevels.filter(sl => sl.warehouseId === warehouseId && sl.currentStock < sl.threshold).length,
+    { id: 'stock', label: 'Stock', badge: stockLevels.filter(sl => sl.currentStock < sl.threshold).length,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 6v12M14 6v12M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z" /></svg>,
     },
     { id: 'intake', label: 'Record Intake', badge: 0, icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" /></svg> },
