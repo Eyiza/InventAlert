@@ -4,6 +4,7 @@ import com.inventalert.inventoryService.model.AlertStatus;
 import com.inventalert.inventoryService.model.StockLevel;
 import com.inventalert.inventoryService.repository.RestockAlertRepository;
 import com.inventalert.inventoryService.repository.StockLevelRepository;
+import com.inventalert.inventoryService.repository.TransferSuggestionRepository;
 import com.inventalert.inventoryService.service.impl.ThresholdCheckServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,9 @@ class ThresholdCheckServiceTest {
 
     @Mock
     private RestockAlertRepository restockAlertRepository;
+
+    @Mock
+    private TransferSuggestionRepository transferSuggestionRepository;
 
     @Mock
     private RestockAlertService restockAlertService;
@@ -86,6 +90,9 @@ class ThresholdCheckServiceTest {
         // surplusStock has 100 - 10 = 90 surplus, shortage = 20 - 5 = 15 -> qualifies
         when(stockLevelRepository.findByProductIdAndWarehouseIdNot("p1", "w1"))
                 .thenReturn(List.of(surplusStock));
+        when(transferSuggestionRepository.existsByProductIdAndToWarehouseIdAndStatusIn(
+                eq("p1"), eq("w1"), anyList()))
+                .thenReturn(false);
 
         thresholdCheckService.checkThreshold("p1", "w1", "company1");
 
