@@ -24,6 +24,8 @@ const baseQueryWithAuthRedirect = async (args, api, extraOptions) => {
 export const inventAlertApi = createApi({
   reducerPath: 'inventAlertApi',
   baseQuery: baseQueryWithAuthRedirect,
+  refetchOnFocus: true,
+  refetchOnReconnect: true,
   tagTypes: ['User', 'Company', 'Warehouse', 'Product', 'Stock', 'Movement', 'Transfer', 'Reconciliation', 'Alert', 'Notification', 'Analytics'],
   endpoints: build => ({
 
