@@ -29,6 +29,7 @@ export default function Signup() {
   const [logoPreview, setLogoPreview] = useState(null)
   const [logoFile, setLogoFile] = useState(null)
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { isAuthenticated } = useSelector(s => s.auth)
@@ -56,26 +57,32 @@ export default function Signup() {
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
 
-    let companyLogo = null
-    if (logoFile) {
-      try {
-        companyLogo = await uploadToCloudinary(logoFile)
-      } catch {
-        setError('Logo upload failed. Please try again.')
-        return
+    setIsSubmitting(true)
+    try {
+      let companyLogo = null
+      if (logoFile) {
+        try {
+          companyLogo = await uploadToCloudinary(logoFile)
+        } catch {
+          setError('Logo upload failed. Please try again.')
+          return
+        }
       }
-    }
 
-    const result = await signupMutation({
-      companyName: form.companyName,
-      adminEmail: form.adminEmail,
-      password: form.password,
-    })
+      const result = await signupMutation({
+        companyName: form.companyName,
+        adminEmail: form.adminEmail,
+        password: form.password,
+        logoUrl: companyLogo,
+      })
 
-    if (result.data) {
-      dispatch(setCredentials({ ...result.data, companyLogo }))
-    } else {
-      setError(result.error?.data?.message || 'Sign up failed. Please try again.')
+      if (result.data) {
+        dispatch(setCredentials({ ...result.data, companyLogo }))
+      } else {
+        setError(result.error?.data?.message || 'Sign up failed. Please try again.')
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -194,16 +201,16 @@ export default function Signup() {
             </div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition-colors mt-2 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading && (
+              {isSubmitting && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {isLoading ? 'Creating account…' : 'Create Account'}
+              {isSubmitting ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
           <p className="text-center text-sm text-gray-500 mt-6">

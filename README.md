@@ -143,6 +143,10 @@ docker compose up -d
 # 2. Wait ~30 seconds for health checks, then start app services + Nginx
 docker compose --profile app up -d
 
+# To rebuild services after code changes:
+docker compose --profile app up -d --build
+docker compose --profile app up -d --build identity-service
+
 # 3. Start the frontend (not included in Docker)
 cd inventAlert-frontend
 npm install        # first time only
