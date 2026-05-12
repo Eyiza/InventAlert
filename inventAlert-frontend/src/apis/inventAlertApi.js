@@ -24,7 +24,7 @@ const baseQueryWithAuthRedirect = async (args, api, extraOptions) => {
 export const inventAlertApi = createApi({
   reducerPath: 'inventAlertApi',
   baseQuery: baseQueryWithAuthRedirect,
-  tagTypes: ['User', 'Company', 'Warehouse', 'Product', 'Stock', 'Movement', 'Transfer', 'Reconciliation', 'Alert', 'Notification'],
+  tagTypes: ['User', 'Company', 'Warehouse', 'Product', 'Stock', 'Movement', 'Transfer', 'Reconciliation', 'Alert', 'Notification', 'Analytics'],
   endpoints: build => ({
 
     // ── Auth ──────────────────────────────────────────────────────────────────
@@ -209,6 +209,28 @@ export const inventAlertApi = createApi({
       invalidatesTags: ['Reconciliation'],
     }),
 
+    // ── Analytics ─────────────────────────────────────────────────────────────
+    getStockSummary: build.query({
+      query: ({ from, to }) => ({ url: '/api/analytics/stock/summary', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
+    getMovementTrend: build.query({
+      query: ({ from, to }) => ({ url: '/api/analytics/stock/movements/trend', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
+    getTransferSummary: build.query({
+      query: ({ from, to }) => ({ url: '/api/analytics/transfers/summary', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
+    getAlertSummary: build.query({
+      query: ({ from, to }) => ({ url: '/api/analytics/alerts/summary', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
+    getAlertsByWarehouse: build.query({
+      query: ({ from, to }) => ({ url: '/api/analytics/alerts/by-warehouse', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
+
   }),
 })
 
@@ -253,4 +275,9 @@ export const {
   useSubmitReconciliationMutation,
   useApproveReconciliationMutation,
   useRejectReconciliationMutation,
+  useGetStockSummaryQuery,
+  useGetMovementTrendQuery,
+  useGetTransferSummaryQuery,
+  useGetAlertSummaryQuery,
+  useGetAlertsByWarehouseQuery,
 } = inventAlertApi
