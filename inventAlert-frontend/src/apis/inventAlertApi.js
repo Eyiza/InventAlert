@@ -179,6 +179,17 @@ export const inventAlertApi = createApi({
       invalidatesTags: ['Transfer'],
     }),
 
+    // ── Notifications ─────────────────────────────────────────────────────────
+    getNotifications: build.query({
+      query: () => '/api/notifications',
+      transformResponse: res => res.map(n => ({ ...n, id: n.notificationId, isRead: n.read })),
+      providesTags: ['Notification'],
+    }),
+    markNotificationRead: build.mutation({
+      query: id => ({ url: `/api/notifications/${id}/read`, method: 'PATCH' }),
+      invalidatesTags: ['Notification'],
+    }),
+
     // ── Reconciliations ───────────────────────────────────────────────────────
     getReconciliations: build.query({
       query: () => '/api/reconciliations',
@@ -227,6 +238,8 @@ export const {
   useUpdateProductMutation,
   useImportProductsMutation,
   useGetStockByWarehouseQuery,
+  useGetNotificationsQuery,
+  useMarkNotificationReadMutation,
   useGetMovementsQuery,
   useRecordMovementMutation,
   useGetTransfersQuery,
