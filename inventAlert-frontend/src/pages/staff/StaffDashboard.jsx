@@ -1171,9 +1171,9 @@ function ComplaintsPanel() {
 export default function StaffDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
   const { warehouseId } = useSelector(s => s.auth)
-  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId })
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId, pollingInterval: 30000 })
   const { data: warehouses = [] } = useGetWarehousesQuery()
-  const { data: allTransfers = [] } = useGetTransfersQuery()
+  const { data: allTransfers = [] } = useGetTransfersQuery(undefined, { pollingInterval: 30000 })
   const myWarehouse = warehouses.find(w => w.id === warehouseId) || null
   const incomingCount = allTransfers.filter(t => t.toWarehouseId === warehouseId && t.status === 'IN_TRANSIT').length
   const outgoingCount = allTransfers.filter(t => t.fromWarehouseId === warehouseId && t.status === 'APPROVED').length

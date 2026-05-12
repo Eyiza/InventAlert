@@ -994,9 +994,9 @@ export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
   const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
   const { data: warehouses = [] } = useGetWarehousesQuery()
-  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
-  const { data: transfers = [] } = useGetTransfersQuery()
-  const { data: reconciliations = [] } = useGetReconciliationsQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId, pollingInterval: 30000 })
+  const { data: transfers = [] } = useGetTransfersQuery(undefined, { pollingInterval: 30000 })
+  const { data: reconciliations = [] } = useGetReconciliationsQuery(undefined, { pollingInterval: 30000 })
 
   const myWarehouse = warehouses.find(w => w.id === myWarehouseId) || null
 
