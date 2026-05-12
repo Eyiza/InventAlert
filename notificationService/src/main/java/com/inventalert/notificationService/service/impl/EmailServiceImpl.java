@@ -42,6 +42,5 @@ public class EmailServiceImpl implements EmailService {
             }
         }
         log.error("Email delivery failed after 3 attempts for {}: {}", to, lastException.getMessage(), lastException);
-        throw lastException;
     }
 }
