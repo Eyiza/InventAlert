@@ -11,6 +11,7 @@ import com.inventalert.inventoryService.service.GoogleMapsService;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import com.inventalert.inventoryService.service.TransferService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -34,6 +35,9 @@ public class TransferServiceImpl implements TransferService {
     private final RestockAlertService restockAlertService;
     private final GoogleMapsService googleMapsService;
     private final TransferEventProducer eventProducer;
+
+    @Value("${transfer.max.distance.km:150}")
+    private double maxTransferDistanceKm;
 
     @Override
     @Transactional
@@ -62,7 +66,7 @@ public class TransferServiceImpl implements TransferService {
             }
         }
 
-        if (bestCandidate == null) return;
+        if (bestCandidate == null || minDistance > maxTransferDistanceKm) return;
 
         TransferSuggestion suggestion = TransferSuggestion.builder()
                 .productId(productId)
