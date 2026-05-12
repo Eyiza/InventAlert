@@ -17,6 +17,9 @@ public class TransferSuggestion {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    @Version
+    private int version;
+
     @Column(nullable = false)
     private String productId;
 

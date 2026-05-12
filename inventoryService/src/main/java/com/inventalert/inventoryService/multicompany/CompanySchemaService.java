@@ -26,7 +26,7 @@ public class CompanySchemaService {
 
     private final DataSourceConfig dataSourceConfig;
 
-    public void provisionSchema(String companyId) {
+    public synchronized void provisionSchema(String companyId) {
         String schemaName = "company_" + companyId;
 
         try (Connection conn = DriverManager.getConnection(masterUrl, username, password);
