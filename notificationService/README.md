@@ -102,9 +102,36 @@ Unit tests include:
 
 | Topic | Action |
 |-------|--------|
+| `notification.events` | Creates an in-app notification, sends email, and pushes over WebSocket |
+| `password.reset.requested` | Sends a password reset email only — no notification record created |
 | `restock.alert` | Creates low-stock notification and sends email to warehouse managers |
 | `transfer.approved` | Notifies relevant users of an approved transfer |
 | `reconciliation.approved` | Notifies relevant users of a completed reconciliation |
+---
+
+## Verifying email delivery
+
+To confirm your SMTP credentials work without starting the identity service, inject a password reset event directly into Kafka using the console producer:
+
+```bash
+docker exec -it inventalert-kafka /bin/kafka-console-producer --topic password.reset.requested --bootstrap-server localhost:9092
+```
+
+Paste the following JSON and press Enter:
+
+```json
+{"eventId":"test-001","userId":"user-123","email":"your-real-email@example.com","token":"testtoken123","expiresAt":"2026-05-12T23:59:00"}
+```
+
+Press `Ctrl+C` to exit. The notification service picks it up within a second and sends the email.
+
+Optionally, you can test the consumer is receiving events by running the Kafka console consumer in another terminal:
+
+```bash
+docker exec -it inventalert-kafka kafka-console-consumer --topic password.reset.requested --from-beginning --bootstrap-server localhost:9092
+```
+
+> Make sure your SMTP credentials are set in `src/main/resources/env.properties` (not `.env` — that file is for Docker). The service must be running before you publish the event.
 
 ---
 
