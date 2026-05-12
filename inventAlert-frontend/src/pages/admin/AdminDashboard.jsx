@@ -4,8 +4,7 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { setCompanyLogo, registerLocalUser } from '../../store/slices/authSlice'
-import { uploadToCloudinary } from '../../services/cloudinary'
+import { registerLocalUser } from '../../store/slices/authSlice'
 import {
   addWarehouse, updateWarehouse, toggleWarehouseActive,
   addProduct, updateProduct, toggleProductActive,
@@ -394,71 +393,31 @@ function WarehouseDetail({ warehouse, onBack }) {
 // ── Company Profile Panel ──────────────────────────────────────────────────────
 
 function CompanyPanel() {
-  const { companyName, companyLogo } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
-  const fileRef = useRef()
-  const [uploading, setUploading] = useState(false)
-
-  const handleLogoChange = async (e) => {
-    const file = e.target.files[0]
-    e.target.value = ''
-    if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('File must be under 2 MB')
-      return
-    }
-    setUploading(true)
-    try {
-      const url = await uploadToCloudinary(file)
-      dispatch(setCompanyLogo(url))
-      toast.success('Company logo updated')
-    } catch {
-      toast.error('Upload failed — please try again')
-    } finally {
-      setUploading(false)
-    }
-  }
+  const { companyName, companyId } = useSelector(s => s.auth)
+  const { users } = useSelector(s => s.users)
+  const companyUsers = users.filter(u => u.companyId === companyId)
+  const activeUsers = companyUsers.filter(u => u.isActive)
 
   return (
     <div className="space-y-4 max-w-xl">
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">Company Branding</h3>
-        <div className="flex items-center gap-6">
-          <div className="shrink-0">
-            {uploading ? (
-              <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center border border-gray-200">
-                <svg className="w-6 h-6 text-teal-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              </div>
-            ) : companyLogo ? (
-              <img src={companyLogo} alt="Company logo" className="w-20 h-20 rounded-2xl object-contain border border-gray-200 bg-gray-50" />
-            ) : (
-              <div className="w-20 h-20 rounded-2xl bg-teal-100 flex items-center justify-center border-2 border-dashed border-teal-300">
-                <span className="text-3xl font-bold text-teal-600">{companyName?.[0]}</span>
-              </div>
-            )}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-14 h-14 rounded-2xl bg-teal-100 flex items-center justify-center shrink-0">
+            <span className="text-2xl font-bold text-teal-600">{companyName?.[0]}</span>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-900 mb-1">{companyName}</p>
-            <p className="text-xs text-gray-500 mb-3">Upload your company logo to personalise your dashboard. It appears in the sidebar for all team members.</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {uploading ? 'Uploading…' : companyLogo ? 'Change Logo' : 'Upload Logo'}
-              </button>
-              {companyLogo && !uploading && (
-                <button onClick={() => { dispatch(setCompanyLogo(null)); toast.info('Logo removed') }} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
-                  Remove
-                </button>
-              )}
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
-            <p className="text-xs text-gray-400 mt-2">PNG, JPG, SVG — up to 2 MB</p>
+            <h3 className="text-lg font-bold text-gray-900">{companyName}</h3>
+            <p className="text-xs text-gray-400 font-mono mt-0.5">{companyId}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">Total Users</p>
+            <p className="text-2xl font-bold text-gray-900">{companyUsers.length}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-4">
+            <p className="text-xs text-gray-500 mb-1">Active Users</p>
+            <p className="text-2xl font-bold text-teal-600">{activeUsers.length}</p>
           </div>
         </div>
       </div>
