@@ -10,6 +10,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Component
@@ -22,6 +23,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
 
     @Override
+    @Transactional
     public void run(ApplicationArguments args) {
         if (companyRepository.count() > 0) {
             log.info("[Seeder] Identity data already present — skipping");
@@ -39,6 +41,7 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private void seedCompany(String id, String name, String domain, String pw) {
+        if (companyRepository.existsById(id)) return;
         companyRepository.save(Company.builder()
                 .id(id)
                 .companyName(name)

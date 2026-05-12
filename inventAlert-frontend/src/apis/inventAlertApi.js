@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
+import { logout } from '../store/slices/authSlice'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081'
 
@@ -16,7 +17,9 @@ const AUTH_ENDPOINTS = ['login', 'superAdminLogin', 'signup', 'forgotPassword', 
 const baseQueryWithAuthRedirect = async (args, api, extraOptions) => {
   const result = await baseQuery(args, api, extraOptions)
   if (result.error?.status === 401 && !AUTH_ENDPOINTS.includes(api.endpoint)) {
-    window.location.href = '/login'
+    // Soft logout — clears Redux + localStorage without a page reload.
+    // ProtectedRoute will redirect to /login on the next render.
+    api.dispatch(logout())
   }
   return result
 }
