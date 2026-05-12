@@ -4,14 +4,15 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { approveTransfer, rejectTransfer } from '../../store/slices/transfersSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
-import { approveReconciliation, rejectReconciliation } from '../../store/slices/reconciliationsSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetUsersQuery, useCreateUserMutation,
   useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
-  useGetWarehousesQuery,
+  useGetWarehousesQuery, useGetProductsQuery, useGetStockByWarehouseQuery,
+  useGetMovementsQuery,
+  useGetTransfersQuery, useApproveTransferMutation, useRejectTransferMutation,
+  useGetReconciliationsQuery, useApproveReconciliationMutation, useRejectReconciliationMutation,
 } from '../../apis/inventAlertApi'
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -29,16 +30,13 @@ function SectionHeader({ title, subtitle }) {
 // ── Stock Overview ────────────────────────────────────────────────────────────
 
 function StockPanel() {
-  const { stockLevels, products } = useSelector(s => s.stock)
-  const { user: me } = useSelector(s => s.auth)
-  const { warehouseAssignments } = useSelector(s => s.users)
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [], isLoading } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: products = [] } = useGetProductsQuery()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
-  const myWarehouseIds = warehouseAssignments.filter(a => a.userId === me.id).map(a => a.warehouseId)
-
   const rows = stockLevels
-    .filter(sl => myWarehouseIds.includes(sl.warehouseId))
     .map(sl => ({
       ...sl,
       productName: products.find(p => p.id === sl.productId)?.name || sl.productId,
@@ -90,7 +88,7 @@ function StockPanel() {
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  {myWarehouseIds.length === 0 ? 'You are not assigned to a warehouse.' : 'No stock items match.'}
+                  {!myWarehouseId ? 'You are not assigned to a warehouse.' : isLoading ? 'Loading…' : 'No stock items match.'}
                 </td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50/60">
@@ -136,8 +134,14 @@ function SearchBar({ value, onChange, placeholder }) {
 }
 
 function MovementsPanel() {
-  const { movements, products, warehouses } = useSelector(s => s.stock)
-  const { users } = useSelector(s => s.users)
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: movements = [], isLoading } = useGetMovementsQuery(
+    myWarehouseId ? { warehouseId: myWarehouseId } : {},
+    { skip: !myWarehouseId },
+  )
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: users = [] } = useGetUsersQuery()
   const [typeFilter, setTypeFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
@@ -146,7 +150,7 @@ function MovementsPanel() {
       ...m,
       productName: products.find(p => p.id === m.productId)?.name || m.productId,
       warehouseName: warehouses.find(w => w.id === m.warehouseId)?.name || m.warehouseId,
-      createdByName: users.find(u => u.id === m.createdBy)?.name || m.createdBy,
+      createdByName: users.find(u => u.id === m.createdBy)?.email?.split('@')[0] || m.createdBy,
     }))
     .filter(m => typeFilter === 'ALL' || m.type === typeFilter)
     .filter(m => !search || m.productName.toLowerCase().includes(search.toLowerCase()) || m.warehouseName.toLowerCase().includes(search.toLowerCase()))
@@ -198,10 +202,11 @@ function MovementsPanel() {
 // ── Transfers Panel ───────────────────────────────────────────────────────────
 
 function TransfersPanel() {
-  const { transfers } = useSelector(s => s.transfers)
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { data: transfers = [], isLoading } = useGetTransfersQuery()
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [approveTransfer] = useApproveTransferMutation()
+  const [rejectTransfer] = useRejectTransferMutation()
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
@@ -260,11 +265,11 @@ function TransfersPanel() {
                     {t.status === 'SUGGESTED' ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setConfirm({ action: () => { dispatch(approveTransfer({ id: t.id, userId: user.id })); toast.success('Transfer approved') }, title: 'Approve Transfer', message: `Approve transfer of ${t.quantity} units of ${t.productName} from ${t.fromName} to ${t.toName}?`, label: 'Approve' })}
+                          onClick={() => setConfirm({ action: async () => { try { await approveTransfer(t.id).unwrap(); toast.success('Transfer approved') } catch { toast.error('Failed to approve') } }, title: 'Approve Transfer', message: `Approve transfer of ${t.quantity} units of ${t.productName} from ${t.fromName} to ${t.toName}?`, label: 'Approve' })}
                           className="px-2 py-1 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium"
                         >Approve</button>
                         <button
-                          onClick={() => setConfirm({ action: () => { dispatch(rejectTransfer(t.id)); toast.info('Transfer rejected') }, title: 'Reject Transfer', message: `Reject the transfer request for ${t.quantity} units of ${t.productName}?`, label: 'Reject', danger: true })}
+                          onClick={() => setConfirm({ action: async () => { try { await rejectTransfer(t.id).unwrap(); toast.info('Transfer rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Transfer', message: `Reject the transfer request for ${t.quantity} units of ${t.productName}?`, label: 'Reject', danger: true })}
                           className="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium"
                         >Reject</button>
                       </div>
@@ -286,11 +291,13 @@ function TransfersPanel() {
 // ── Reconciliations Panel ─────────────────────────────────────────────────────
 
 function ReconciliationsPanel() {
-  const { reconciliations } = useSelector(s => s.reconciliations)
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { users } = useSelector(s => s.users)
+  const { data: reconciliations = [], isLoading } = useGetReconciliationsQuery()
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: users = [] } = useGetUsersQuery()
   const { user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const [approveReconciliation] = useApproveReconciliationMutation()
+  const [rejectReconciliation] = useRejectReconciliationMutation()
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
@@ -300,7 +307,7 @@ function ReconciliationsPanel() {
       ...r,
       productName: products.find(p => p.id === r.productId)?.name || r.productId,
       warehouseName: warehouses.find(w => w.id === r.warehouseId)?.name || r.warehouseId,
-      createdByName: users.find(u => u.id === r.createdBy)?.name || r.createdBy,
+      createdByName: users.find(u => u.id === r.createdBy)?.email?.split('@')[0] || r.createdBy,
     }))
     .filter(r => statusFilter === 'ALL' || r.status === statusFilter)
     .filter(r => !search || r.productName.toLowerCase().includes(search.toLowerCase()) || r.warehouseName.toLowerCase().includes(search.toLowerCase()) || r.reason?.toLowerCase().includes(search.toLowerCase()))
@@ -362,11 +369,11 @@ function ReconciliationsPanel() {
                           ) : (
                             <>
                               <button
-                                onClick={() => setConfirm({ action: () => { dispatch(approveReconciliation({ id: r.id, userId: user.id })); toast.success('Reconciliation approved') }, title: 'Approve Reconciliation', message: `Approve the stock count discrepancy of ${r.discrepancy > 0 ? '+' : ''}${r.discrepancy} for ${r.productName} at ${r.warehouseName}?`, label: 'Approve' })}
+                                onClick={() => setConfirm({ action: async () => { try { await approveReconciliation(r.id).unwrap(); toast.success('Reconciliation approved') } catch { toast.error('Failed to approve') } }, title: 'Approve Reconciliation', message: `Approve the stock count discrepancy of ${r.discrepancy > 0 ? '+' : ''}${r.discrepancy} for ${r.productName} at ${r.warehouseName}?`, label: 'Approve' })}
                                 className="px-2 py-1 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium"
                               >Approve</button>
                               <button
-                                onClick={() => setConfirm({ action: () => { dispatch(rejectReconciliation(r.id)); toast.info('Reconciliation rejected') }, title: 'Reject Reconciliation', message: `Reject this reconciliation request for ${r.productName}?`, label: 'Reject', danger: true })}
+                                onClick={() => setConfirm({ action: async () => { try { await rejectReconciliation(r.id).unwrap(); toast.info('Reconciliation rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Reconciliation', message: `Reject this reconciliation request for ${r.productName}?`, label: 'Reject', danger: true })}
                                 className="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium"
                               >Reject</button>
                             </>
@@ -391,12 +398,80 @@ function ReconciliationsPanel() {
 // ── Analytics Panel ───────────────────────────────────────────────────────────
 
 function AnalyticsPanel() {
-  const { stockVelocity, lowStockForecast, reorderRecommendations, transferEfficiency, alertFrequency, movementSummary } = useSelector(s => s.analytics)
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: transfers = [] } = useGetTransfersQuery()
+  const { data: movements = [] } = useGetMovementsQuery(
+    myWarehouseId ? { warehouseId: myWarehouseId } : {},
+    { skip: !myWarehouseId },
+  )
   const [section, setSection] = useState('velocity')
 
-  const maxVelocity = Math.max(...stockVelocity.map(s => s.velocityPerDay))
-  const maxAlertCount = Math.max(...alertFrequency.map(a => a.alertCount))
-  const maxMovement = Math.max(...movementSummary.map(d => Math.max(d.totalIntake, d.totalOutboundSales)))
+  const prodName = id => products.find(p => p.id === id)?.name || id
+  const whName = id => warehouses.find(w => w.id === id)?.name || id
+
+  const stockVelocity = stockLevels
+    .filter(sl => (sl.velocityPerDay ?? 0) > 0)
+    .map(sl => ({ productName: prodName(sl.productId), warehouseName: whName(sl.warehouseId), velocityPerDay: sl.velocityPerDay, daysUntilEmpty: sl.daysUntilEmpty }))
+    .sort((a, b) => b.velocityPerDay - a.velocityPerDay)
+
+  const lowStockForecast = stockLevels
+    .filter(sl => sl.currentStock < sl.threshold * 1.25)
+    .map(sl => ({ productName: prodName(sl.productId), warehouseName: whName(sl.warehouseId), currentStock: sl.currentStock, threshold: sl.threshold, daysUntilEmpty: sl.daysUntilEmpty, urgency: sl.currentStock < sl.threshold ? 'CRITICAL' : 'WARNING' }))
+    .sort((a, b) => (a.daysUntilEmpty ?? 999) - (b.daysUntilEmpty ?? 999))
+
+  const reorderRecommendations = stockLevels
+    .filter(sl => sl.currentStock < sl.threshold)
+    .map(sl => ({
+      productName: prodName(sl.productId),
+      warehouseName: whName(sl.warehouseId),
+      avgVelocity: sl.velocityPerDay?.toFixed(1) ?? '—',
+      suggestedQuantity: Math.max(sl.threshold * 2 - sl.currentStock, sl.threshold),
+      recommendedOrderDate: sl.daysUntilEmpty != null
+        ? new Date(Date.now() + sl.daysUntilEmpty * 0.5 * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : 'ASAP',
+    }))
+
+  const transferGroups = {}
+  transfers.forEach(t => {
+    const key = `${t.fromWarehouseId}|${t.toWarehouseId}`
+    if (!transferGroups[key]) transferGroups[key] = { fromWarehouseId: t.fromWarehouseId, toWarehouseId: t.toWarehouseId, totalSuggested: 0, totalAccepted: 0, totalRejected: 0 }
+    transferGroups[key].totalSuggested++
+    if (t.status === 'COMPLETED') transferGroups[key].totalAccepted++
+    if (t.status === 'REJECTED') transferGroups[key].totalRejected++
+  })
+  const transferEfficiency = Object.values(transferGroups).map(g => ({
+    fromWarehouseName: whName(g.fromWarehouseId),
+    toWarehouseName: whName(g.toWarehouseId),
+    totalSuggested: g.totalSuggested,
+    totalAccepted: g.totalAccepted,
+    totalRejected: g.totalRejected,
+    acceptanceRate: g.totalSuggested > 0 ? (g.totalAccepted / g.totalSuggested) * 100 : 0,
+  }))
+
+  const alertFrequency = stockLevels
+    .filter(sl => sl.currentStock < sl.threshold)
+    .map(sl => ({ productName: prodName(sl.productId), warehouseName: whName(sl.warehouseId), alertCount: 1, avgDaysBetweenAlerts: sl.daysUntilEmpty ?? '—' }))
+
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const movementSummary = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(today); day.setDate(day.getDate() - (6 - i))
+    const next = new Date(day); next.setDate(next.getDate() + 1)
+    const dayMoves = movements.filter(m => { const dt = new Date(m.createdAt); return dt >= day && dt < next })
+    return {
+      summaryDate: day.toISOString(),
+      totalIntake: dayMoves.filter(m => m.type === 'INTAKE').reduce((s, m) => s + m.quantity, 0),
+      totalOutboundSales: dayMoves.filter(m => m.type === 'OUTBOUND_SALE').reduce((s, m) => s + m.quantity, 0),
+      transfersIn: dayMoves.filter(m => m.type === 'TRANSFER_IN').reduce((s, m) => s + m.quantity, 0),
+      transfersOut: dayMoves.filter(m => m.type === 'TRANSFER_OUT').reduce((s, m) => s + m.quantity, 0),
+    }
+  })
+
+  const maxVelocity = stockVelocity.length > 0 ? Math.max(...stockVelocity.map(s => s.velocityPerDay)) : 1
+  const maxAlertCount = alertFrequency.length > 0 ? Math.max(...alertFrequency.map(a => a.alertCount)) : 1
+  const maxMovement = movementSummary.length > 0 ? Math.max(...movementSummary.map(d => Math.max(d.totalIntake, d.totalOutboundSales)), 1) : 1
 
   const SECTIONS = [
     { id: 'velocity', label: 'Stock Velocity' },
@@ -884,22 +959,18 @@ function ComplaintsPanel() {
 
 export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
-  const { transfers } = useSelector(s => s.transfers)
-  const { reconciliations } = useSelector(s => s.reconciliations)
-  const { stockLevels } = useSelector(s => s.stock)
   const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
   const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: transfers = [] } = useGetTransfersQuery()
+  const { data: reconciliations = [] } = useGetReconciliationsQuery()
 
   const myWarehouse = warehouses.find(w => w.id === myWarehouseId) || null
-
-  const myWarehouseStockLevels = myWarehouseId
-    ? stockLevels.filter(sl => sl.warehouseId === myWarehouseId)
-    : []
 
   const navItems = [
     {
       id: 'stock', label: 'Stock Overview',
-      badge: myWarehouseStockLevels.filter(sl => sl.currentStock < sl.threshold).length,
+      badge: stockLevels.filter(sl => sl.currentStock < sl.threshold).length,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 6v12M14 6v12M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z" /></svg>,
     },
     {
