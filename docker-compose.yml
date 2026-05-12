@@ -57,6 +57,26 @@ services:
       timeout: 10s
       retries: 5
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: inventalert-clickhouse
+    environment:
+      CLICKHOUSE_DB: inventalert_analytics
+      CLICKHOUSE_USER: analytics_user
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./docker/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Application services (profile: app) ───────────────────────────────────────
   # Start with:  docker compose --profile app up
   # Infrastructure only: docker compose up
@@ -146,3 +166,4 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  clickhouse-data:

@@ -31,7 +31,7 @@ class EmailServiceTest {
     @Test
     void SendEmail_ValidEmail_CheckIfMailSentTest() {
         emailService.sendNotificationEmail(
-                "adebayo@konga.ng", "RESTOCK_ALERT", "Low stock on Indomie noodles");
+                "preciousmichael002@gmail.com", "RESTOCK_ALERT", "Low stock on Indomie noodles");
 
         verify(mailSender).send(any(SimpleMailMessage.class));
     }
@@ -41,7 +41,7 @@ class EmailServiceTest {
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
 
         emailService.sendNotificationEmail(
-                "chukwuemeka@fidelity.ng",
+                "preciousmichael002@gmail.com",
                 "TRANSFER_SUGGESTION",
                 "Transfer 50 units of garri from Apapa to Ikeja warehouse");
 
@@ -49,7 +49,7 @@ class EmailServiceTest {
         SimpleMailMessage sent = captor.getValue();
 
         assertThat(sent.getFrom()).isEqualTo("noreply@inventalert.com");
-        assertThat(sent.getTo()).containsExactly("chukwuemeka@fidelity.ng");
+        assertThat(sent.getTo()).containsExactly("preciousmichael002@gmail.com");
         assertThat(sent.getSubject()).isEqualTo("TRANSFER_SUGGESTION");
         assertThat(sent.getText()).isEqualTo("Transfer 50 units of garri from Apapa to Ikeja warehouse");
     }
@@ -61,7 +61,7 @@ class EmailServiceTest {
                 .when(mailSender).send(any(SimpleMailMessage.class));
 
         assertDoesNotThrow(() -> emailService.sendNotificationEmail(
-                "ngozi@stanbic.ng", "RESTOCK_ALERT", "Low stock on garri"));
+                "preciousmichael002@gmail.com", "RESTOCK_ALERT", "Low stock on garri"));
 
         verify(mailSender, times(2)).send(any(SimpleMailMessage.class));
     }
@@ -72,7 +72,7 @@ class EmailServiceTest {
                 .when(mailSender).send(any(SimpleMailMessage.class));
 
         assertDoesNotThrow(() -> emailService.sendNotificationEmail(
-                "emeka@heritage.ng", "TRANSFER_APPROVED", "Transfer approved for Apapa warehouse"));
+                "preciousmichael002@gmail.com", "TRANSFER_APPROVED", "Transfer approved for Apapa warehouse"));
 
         verify(mailSender, times(3)).send(any(SimpleMailMessage.class));
     }
