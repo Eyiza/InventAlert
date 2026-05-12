@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit'
+import { setupListeners } from '@reduxjs/toolkit/query'
 import { inventAlertApi } from '../apis/inventAlertApi'
 import authReducer from './slices/authSlice'
 import stockReducer from './slices/stockSlice'
@@ -28,5 +29,7 @@ const store = configureStore({
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware().concat(inventAlertApi.middleware),
 })
+
+setupListeners(store.dispatch)
 
 export default store
