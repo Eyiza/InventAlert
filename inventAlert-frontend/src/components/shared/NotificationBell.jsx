@@ -1,18 +1,25 @@
 import { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useSelector } from 'react-redux'
 import NotificationDrawer from './NotificationDrawer'
-import { markAllAsRead } from '../../store/slices/notificationsSlice'
+import { useNotificationSocket } from '../../hooks/useNotificationSocket'
+import { useGetNotificationsQuery, useMarkNotificationReadMutation } from '../../apis/inventAlertApi'
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
-  const dispatch = useDispatch()
-  const { user } = useSelector(s => s.auth)
-  const { notifications, wsConnected } = useSelector(s => s.notifications)
+  const { token } = useSelector(s => s.auth)
+  const { wsConnected } = useSelector(s => s.notifications)
+  const [markNotificationRead] = useMarkNotificationReadMutation()
 
-  const mine = notifications.filter(n => n.userId === user?.id)
-  const unread = mine.filter(n => !n.isRead).length
+  useNotificationSocket()
 
-  const handleMarkAll = () => dispatch(markAllAsRead(user?.id))
+  const { data: notifications = [] } = useGetNotificationsQuery(undefined, { skip: !token })
+
+  const unreadItems = notifications.filter(n => !n.isRead)
+  const unreadCount = unreadItems.length
+
+  const handleMarkAll = () => {
+    unreadItems.forEach(n => markNotificationRead(n.id))
+  }
 
   return (
     <>
@@ -25,9 +32,9 @@ export default function NotificationBell() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
-        {unread > 0 && (
+        {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-4.5 h-4.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
-            {unread > 9 ? '9+' : unread}
+            {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
         {wsConnected && (
@@ -38,7 +45,7 @@ export default function NotificationBell() {
       <NotificationDrawer
         open={open}
         onClose={() => setOpen(false)}
-        notifications={mine}
+        notifications={notifications}
         onMarkAll={handleMarkAll}
       />
     </>

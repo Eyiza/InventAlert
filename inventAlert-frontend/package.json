@@ -11,12 +11,14 @@
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",
+    "@stomp/stompjs": "^7.3.0",
     "@tailwindcss/vite": "^4.2.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-redux": "^9.2.0",
     "react-router": "^7.14.1",
     "react-toastify": "^11.1.0",
+    "sockjs-client": "^1.6.1",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
