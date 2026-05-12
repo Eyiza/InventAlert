@@ -49,4 +49,11 @@ public class WarehouseController {
         warehouseService.deactivate(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> activate(@PathVariable String id) {
+        warehouseService.activate(id);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -2,6 +2,7 @@ package com.inventalert.identityService.security.filter;
 
 import com.inventalert.identityService.model.CompanyStatus;
 import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.security.model.JwtUser;
 import com.inventalert.identityService.security.service.JwtUtil;
 import jakarta.servlet.FilterChain;
@@ -23,6 +24,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -44,19 +46,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String role      = jwtUtil.extractRole(token);
         String companyId = jwtUtil.extractCompanyId(token);
+        String userId    = jwtUtil.extractUserId(token);
 
-        if (companyId != null && !"SUPER_ADMIN".equals(role)) {
-            boolean suspended = companyRepository.findById(companyId)
-                    .map(c -> c.getStatus() == CompanyStatus.SUSPENDED)
-                    .orElse(false);
-            if (suspended) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Company account is suspended");
+        if (!"SUPER_ADMIN".equals(role)) {
+            if (companyId != null) {
+                boolean suspended = companyRepository.findById(companyId)
+                        .map(c -> c.getStatus() == CompanyStatus.SUSPENDED)
+                        .orElse(false);
+                if (suspended) {
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Company account is suspended");
+                    return;
+                }
+            }
+
+            boolean deactivated = userRepository.findById(userId)
+                    .map(u -> !u.isActive())
+                    .orElse(true);
+            if (deactivated) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "User account is deactivated");
                 return;
             }
         }
 
         JwtUser principal = new JwtUser(
-                jwtUtil.extractUserId(token),
+                userId,
                 companyId,
                 role,
                 jwtUtil.extractWarehouseId(token)

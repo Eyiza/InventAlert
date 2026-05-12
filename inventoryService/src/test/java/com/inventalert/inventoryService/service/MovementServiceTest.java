@@ -2,11 +2,14 @@ package com.inventalert.inventoryService.service;
 
 import com.inventalert.inventoryService.dto.request.RecordMovementRequest;
 import com.inventalert.inventoryService.dto.response.StockMovementResponse;
+import com.inventalert.inventoryService.exception.CsvImportException;
+import com.inventalert.inventoryService.exception.CsvParseException;
 import com.inventalert.inventoryService.exception.InsufficientStockException;
 import com.inventalert.inventoryService.exception.InvalidMovementTypeException;
 import com.inventalert.inventoryService.exception.WarehouseNotAssignedException;
 import com.inventalert.inventoryService.kafka.StockMovementProducer;
 import com.inventalert.inventoryService.model.*;
+import com.inventalert.inventoryService.repository.ProductRepository;
 import com.inventalert.inventoryService.repository.StockMovementRepository;
 import com.inventalert.inventoryService.service.impl.MovementServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,9 +18,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +47,9 @@ class MovementServiceTest {
 
     @Mock
     private StockMovementProducer movementProducer;
+
+    @Mock
+    private ProductRepository productRepository;
 
     @InjectMocks
     private MovementServiceImpl movementService;
@@ -151,5 +161,35 @@ class MovementServiceTest {
         List<StockMovementResponse> result = movementService.listMovements("p1", "w1", null, null, null);
 
         assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void importIntakeFromCsv_throwsWhenStaffAtWrongWarehouse() {
+        MockMultipartFile file = new MockMultipartFile("file", new byte[0]);
+
+        assertThatThrownBy(() -> movementService.importIntakeFromCsv("w1", file, "user1", "w99", "company1"))
+                .isInstanceOf(WarehouseNotAssignedException.class);
+    }
+
+    @Test
+    void importIntakeFromCsv_throwsCsvParseExceptionOnMalformedFile() throws IOException {
+        MockMultipartFile file = mock(MockMultipartFile.class);
+        when(file.getInputStream()).thenThrow(new IOException("disk error"));
+
+        assertThatThrownBy(() -> movementService.importIntakeFromCsv("w1", file, "user1", "w1", "company1"))
+                .isInstanceOf(CsvParseException.class);
+    }
+
+    @Test
+    void importIntakeFromCsv_throwsCsvImportExceptionWhenQuantityIsZero() throws IOException {
+        String csv = "sku,quantity,referenceNumber\nSKU-001,0,REF001\n";
+        MockMultipartFile file = new MockMultipartFile("file", csv.getBytes(StandardCharsets.UTF_8));
+
+        Product product = Product.builder().id("p1").name("Widget").sku("SKU-001")
+                .unitOfMeasure("units").defaultThreshold(10).isActive(true).build();
+        when(productRepository.findBySkuAndIsActiveTrue("SKU-001")).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> movementService.importIntakeFromCsv("w1", file, "user1", "w1", "company1"))
+                .isInstanceOf(CsvImportException.class);
     }
 }

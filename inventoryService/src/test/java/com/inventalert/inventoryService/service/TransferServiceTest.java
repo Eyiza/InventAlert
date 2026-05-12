@@ -161,4 +161,38 @@ class TransferServiceTest {
         assertThatThrownBy(() -> transferService.accept("t3", "staff2", "w99", "company1"))
                 .isInstanceOf(WarehouseNotAssignedException.class);
     }
+
+    @Test
+    void rejectDelivery_restoresSourceStockAndRecordsMovementAndEscalatesToAlert() {
+        when(transferRepository.findById("t3")).thenReturn(Optional.of(inTransit));
+        when(stockLevelRepository.findByProductIdAndWarehouseId("p1", "w1"))
+                .thenReturn(Optional.of(fromStock));
+        when(transferRepository.save(any())).thenReturn(inTransit);
+        when(restockAlertService.createAlert(any(), any(), anyInt(), anyInt(), any()))
+                .thenReturn(RestockAlert.builder().id("alert1").build());
+
+        transferService.rejectDelivery("t3", "staff2", "w2", "company1");
+
+        assertThat(inTransit.getStatus()).isEqualTo(TransferStatus.DELIVERY_REJECTED);
+        assertThat(fromStock.getCurrentStock()).isEqualTo(120); // 100 + 20 restored
+        verify(stockMovementRepository).save(any());
+        verify(restockAlertService).createAlert(any(), any(), anyInt(), anyInt(), any());
+        verify(eventProducer).publishTransferRejected(any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectDelivery_throwsWhenNotInTransit() {
+        when(transferRepository.findById("t1")).thenReturn(Optional.of(suggested));
+
+        assertThatThrownBy(() -> transferService.rejectDelivery("t1", "staff2", "w2", "company1"))
+                .isInstanceOf(InvalidStateTransitionException.class);
+    }
+
+    @Test
+    void rejectDelivery_throwsWhenStaffNotAssignedToDestinationWarehouse() {
+        when(transferRepository.findById("t3")).thenReturn(Optional.of(inTransit));
+
+        assertThatThrownBy(() -> transferService.rejectDelivery("t3", "staff2", "w99", "company1"))
+                .isInstanceOf(WarehouseNotAssignedException.class);
+    }
 }
