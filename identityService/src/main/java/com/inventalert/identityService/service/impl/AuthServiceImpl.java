@@ -63,6 +63,7 @@ public class AuthServiceImpl implements AuthService {
         Company company = Company.builder()
                 .companyName(request.getCompanyName())
                 .adminEmail(request.getAdminEmail())
+                .logoUrl(request.getLogoUrl())
                 .build();
         Company savedCompany = companyRepository.save(company);
 
