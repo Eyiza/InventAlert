@@ -33,6 +33,8 @@ FRONTEND_ADDITIONS.md
 AUDIT_REPORT.md
 DATABASE_ARCHITECTURE.md
 INTEGRATION_PLAN.md
+*_BUILD_PLAN.md
+CUSTOMER_PRESENTATION.md
 
 # Maven build output
 target/
@@ -90,3 +92,4 @@ docker-compose.override.yml
 
 env.properties
 SENIOR_DEV_HANDOFF.md
+follow-up.md
