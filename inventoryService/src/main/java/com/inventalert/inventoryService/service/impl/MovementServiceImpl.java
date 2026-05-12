@@ -13,6 +13,10 @@ import com.opencsv.bean.CsvBindByName;
 import com.opencsv.bean.CsvToBeanBuilder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,7 +25,10 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +42,11 @@ public class MovementServiceImpl implements MovementService {
     private final ProductRepository productRepository;
 
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public StockMovementResponse recordIntake(RecordMovementRequest request, String userId,
                                                String staffWarehouseId, String companyId) {
@@ -66,7 +78,19 @@ public class MovementServiceImpl implements MovementService {
         return toResponse(saved);
     }
 
+    @Recover
+    StockMovementResponse recoverRecordIntake(ObjectOptimisticLockingFailureException ex,
+                                               RecordMovementRequest request, String userId,
+                                               String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
+    }
+
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public StockMovementResponse recordOutboundSale(RecordMovementRequest request, String userId,
                                                      String staffWarehouseId, String companyId) {
@@ -105,6 +129,13 @@ public class MovementServiceImpl implements MovementService {
         return toResponse(saved);
     }
 
+    @Recover
+    StockMovementResponse recoverRecordOutboundSale(ObjectOptimisticLockingFailureException ex,
+                                                     RecordMovementRequest request, String userId,
+                                                     String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
+    }
+
     @Override
     public List<StockMovementResponse> listMovements(String productId, String warehouseId,
                                                       MovementType type, LocalDateTime from, LocalDateTime to) {
@@ -113,6 +144,11 @@ public class MovementServiceImpl implements MovementService {
     }
 
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public List<StockMovementResponse> importIntakeFromCsv(String warehouseId, MultipartFile file,
                                                             String userId, String staffWarehouseId, String companyId) {
@@ -127,19 +163,26 @@ public class MovementServiceImpl implements MovementService {
                     .withIgnoreLeadingWhiteSpace(true)
                     .build().parse();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse CSV", e);
+            throw new CsvParseException("Failed to parse CSV file. Please check the file format and try again.", e);
         }
 
         List<CsvImportErrorResponse.RowError> errors = new ArrayList<>();
+        Map<String, Product> productMap = new HashMap<>();
         for (int i = 0; i < rows.size(); i++) {
             IntakeCsvRow row = rows.get(i);
             int rowNum = i + 1;
             if (row.getSku() == null || row.getSku().isBlank()) {
                 errors.add(new CsvImportErrorResponse.RowError(rowNum, "sku is required"));
-            } else if (!productRepository.findBySkuAndIsActiveTrue(row.getSku()).isPresent()) {
-                errors.add(new CsvImportErrorResponse.RowError(rowNum, "Product not found for SKU: " + row.getSku()));
-            } else if (row.getQuantity() <= 0) {
-                errors.add(new CsvImportErrorResponse.RowError(rowNum, "quantity must be > 0"));
+            } else {
+                Optional<Product> found = productRepository.findBySkuAndIsActiveTrue(row.getSku());
+                if (found.isEmpty()) {
+                    errors.add(new CsvImportErrorResponse.RowError(rowNum, "Product not found for SKU: " + row.getSku()));
+                } else {
+                    productMap.put(row.getSku(), found.get());
+                    if (row.getQuantity() <= 0) {
+                        errors.add(new CsvImportErrorResponse.RowError(rowNum, "quantity must be > 0"));
+                    }
+                }
             }
         }
 
@@ -149,7 +192,7 @@ public class MovementServiceImpl implements MovementService {
 
         List<StockMovementResponse> results = new ArrayList<>();
         for (IntakeCsvRow row : rows) {
-            Product product = productRepository.findBySkuAndIsActiveTrue(row.getSku()).orElseThrow();
+            Product product = productMap.get(row.getSku());
             StockLevel level = stockLevelService.getOrCreate(product.getId(), warehouseId);
 
             StockMovement movement = StockMovement.builder()
@@ -164,6 +207,13 @@ public class MovementServiceImpl implements MovementService {
             results.add(toResponse(saved));
         }
         return results;
+    }
+
+    @Recover
+    List<StockMovementResponse> recoverImportIntakeFromCsv(ObjectOptimisticLockingFailureException ex,
+                                                            String warehouseId, MultipartFile file,
+                                                            String userId, String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
     }
 
     private StockMovementResponse toResponse(StockMovement m) {

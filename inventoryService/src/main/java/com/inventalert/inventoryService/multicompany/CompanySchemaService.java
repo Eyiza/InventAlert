@@ -26,7 +26,7 @@ public class CompanySchemaService {
 
     private final DataSourceConfig dataSourceConfig;
 
-    public void provisionSchema(String companyId) {
+    public synchronized void provisionSchema(String companyId) {
         String schemaName = "company_" + companyId;
 
         try (Connection conn = DriverManager.getConnection(masterUrl, username, password);
@@ -57,6 +57,10 @@ public class CompanySchemaService {
     }
 
     private String buildSchemaUrl(String schemaName) {
-        return masterUrl.replace("/?", "/" + schemaName + "?");
+        int qIndex = masterUrl.indexOf('?');
+        String path = qIndex >= 0 ? masterUrl.substring(0, qIndex) : masterUrl;
+        String query = qIndex >= 0 ? masterUrl.substring(qIndex) : "";
+        int lastSlash = path.lastIndexOf('/');
+        return path.substring(0, lastSlash + 1) + schemaName + query;
     }
 }

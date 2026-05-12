@@ -5,6 +5,7 @@ import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { setCompanyLogo, registerLocalUser } from '../../store/slices/authSlice'
+import { uploadToCloudinary } from '../../services/cloudinary'
 import {
   addWarehouse, updateWarehouse, toggleWarehouseActive,
   addProduct, updateProduct, toggleProductActive,
@@ -71,6 +72,37 @@ function SearchBar({ value, onChange, placeholder }) {
         placeholder={placeholder}
         className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent w-72"
       />
+    </div>
+  )
+}
+
+function ViewToggle({ mode, onChange }) {
+  return (
+    <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden shrink-0" title="Switch view">
+      <button
+        type="button"
+        onClick={() => onChange('cards')}
+        className={`px-2.5 py-1.5 transition-colors ${mode === 'cards' ? 'bg-teal-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+        title="Card view"
+      >
+        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+          <rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" />
+          <rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('table')}
+        className={`px-2.5 py-1.5 border-l border-gray-200 transition-colors ${mode === 'table' ? 'bg-teal-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+        title="Table view"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+          <rect x="1" y="1" width="14" height="14" rx="1.5" strokeWidth="1.5" />
+          <line x1="1" y1="5.5" x2="15" y2="5.5" strokeWidth="1" />
+          <line x1="1" y1="10" x2="15" y2="10" strokeWidth="1" />
+          <line x1="5.5" y1="1" x2="5.5" y2="15" strokeWidth="1" />
+        </svg>
+      </button>
     </div>
   )
 }
@@ -396,16 +428,23 @@ function CompanyPanel() {
   const { companyName, companyLogo } = useSelector(s => s.auth)
   const dispatch = useDispatch()
   const fileRef = useRef()
+  const [uploading, setUploading] = useState(false)
 
-  const handleLogoChange = (e) => {
+  const handleLogoChange = async (e) => {
     const file = e.target.files[0]
+    e.target.value = ''
     if (!file) return
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      dispatch(setCompanyLogo(reader.result))
+    if (file.size > 2 * 1024 * 1024) { toast.error('File must be under 2 MB'); return }
+    setUploading(true)
+    try {
+      const url = await uploadToCloudinary(file)
+      dispatch(setCompanyLogo(url))
       toast.success('Company logo updated')
+    } catch {
+      toast.error('Upload failed — please try again')
+    } finally {
+      setUploading(false)
     }
-    reader.readAsDataURL(file)
   }
 
   return (
@@ -414,7 +453,14 @@ function CompanyPanel() {
         <h3 className="font-semibold text-gray-900 mb-4">Company Branding</h3>
         <div className="flex items-center gap-6">
           <div className="shrink-0">
-            {companyLogo ? (
+            {uploading ? (
+              <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center border border-gray-200">
+                <svg className="w-6 h-6 text-teal-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              </div>
+            ) : companyLogo ? (
               <img src={companyLogo} alt="Company logo" className="w-20 h-20 rounded-2xl object-contain border border-gray-200 bg-gray-50" />
             ) : (
               <div className="w-20 h-20 rounded-2xl bg-teal-100 flex items-center justify-center border-2 border-dashed border-teal-300">
@@ -428,11 +474,12 @@ function CompanyPanel() {
             <div className="flex gap-2">
               <button
                 onClick={() => fileRef.current?.click()}
-                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium"
+                disabled={uploading}
+                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {companyLogo ? 'Change Logo' : 'Upload Logo'}
+                {uploading ? 'Uploading…' : companyLogo ? 'Change Logo' : 'Upload Logo'}
               </button>
-              {companyLogo && (
+              {companyLogo && !uploading && (
                 <button onClick={() => { dispatch(setCompanyLogo(null)); toast.info('Logo removed') }} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
                   Remove
                 </button>
@@ -610,6 +657,7 @@ function ProductsPanel() {
   const [showBatch, setShowBatch] = useState(false)
   const [edit, setEdit] = useState(null)
   const [form, setForm] = useState({ name: '', sku: '', unitOfMeasure: '', defaultThreshold: '' })
+  const [addViewMode, setAddViewMode] = useState('cards')
   const [search, setSearch] = useState('')
   const [csvText, setCsvText] = useState('')
   const [csvPreview, setCsvPreview] = useState([])
@@ -628,7 +676,16 @@ function ProductsPanel() {
   const updateRow = (i, field, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
   const removeRow = i => setRows(rs => rs.filter((_, idx) => idx !== i))
 
-  const openAdd = () => { setRows([{ ...EMPTY_ROW }]); setEdit(null); setShowAdd(true) }
+  const switchAddView = (mode) => {
+    if (mode === 'table') {
+      setRows(rs => { const p = [...rs]; while (p.length < 10) p.push({ ...EMPTY_ROW }); return p })
+    } else {
+      setRows(rs => { const ne = rs.filter(r => r.name || r.sku); return ne.length > 0 ? ne : [{ ...EMPTY_ROW }] })
+    }
+    setAddViewMode(mode)
+  }
+
+  const openAdd = () => { setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards'); setEdit(null); setShowAdd(true) }
   const openEdit = p => { setForm({ name: p.name, sku: p.sku, unitOfMeasure: p.unitOfMeasure, defaultThreshold: p.defaultThreshold }); setEdit(p); setShowAdd(true) }
 
   const handleSubmit = e => {
@@ -758,70 +815,109 @@ function ProductsPanel() {
       )}
 
       {showAdd && !edit && (
-        <Modal title="Add Products" wide onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]) }}>
+        <Modal title="Add Products" wide onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards') }}>
           <form onSubmit={handleSubmit}>
-            <div className="space-y-3 mb-4 max-h-105 overflow-y-auto pr-1">
-              {rows.map((row, i) => (
-                <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                      Product {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <button
-                      type="button" onClick={() => removeRow(i)}
-                      disabled={rows.length === 1}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Name <span className="text-red-400">*</span></label>
-                      <input
-                        value={row.name} onChange={e => updateRow(i, 'name', e.target.value)}
-                        placeholder="e.g. Industrial Laptop" required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">SKU <span className="text-red-400">*</span></label>
-                      <input
-                        value={row.sku} onChange={e => updateRow(i, 'sku', e.target.value)}
-                        placeholder="e.g. LAP-001" required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white font-mono focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Unit of Measure</label>
-                      <input
-                        value={row.unitOfMeasure} onChange={e => updateRow(i, 'unitOfMeasure', e.target.value)}
-                        placeholder="units / kg / boxes"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Default Threshold</label>
-                      <input
-                        type="number" min="0"
-                        value={row.defaultThreshold} onChange={e => updateRow(i, 'defaultThreshold', e.target.value)}
-                        placeholder="e.g. 20"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-500">{rows.length} product{rows.length !== 1 ? 's' : ''} to add</p>
+              <ViewToggle mode={addViewMode} onChange={switchAddView} />
             </div>
-            <button
-              type="button"
-              onClick={() => setRows(rs => [...rs, { ...EMPTY_ROW }])}
-              className="flex items-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors justify-center font-medium mb-4"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Add another product
-            </button>
-            <BtnRow onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]) }} submitLabel={`Add ${rows.length > 1 ? `${rows.length} Products` : 'Product'}`} />
+
+            {addViewMode === 'table' ? (
+              <div className="rounded-lg border border-gray-300 overflow-visible mb-4">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="w-8 border-b-2 border-b-gray-300 border-r border-r-gray-300 py-2.5 text-center text-[11px] text-gray-500 font-medium select-none">#</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300">Name</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300 w-32">SKU</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300 w-28">Unit</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 w-24">Threshold</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i} className="border-b border-gray-200 last:border-b-0">
+                        <td className="w-8 bg-gray-50 border-r border-gray-200 text-center text-[11px] text-gray-400 select-none py-1 tabular-nums">{i + 1}</td>
+                        <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
+                          <input
+                            value={row.name} onChange={e => updateRow(i, 'name', e.target.value)}
+                            placeholder="Industrial Laptop"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                          />
+                        </td>
+                        <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
+                          <input
+                            value={row.sku} onChange={e => updateRow(i, 'sku', e.target.value)}
+                            placeholder="LAP-001"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm font-mono placeholder:text-gray-300"
+                          />
+                        </td>
+                        <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
+                          <input
+                            value={row.unitOfMeasure} onChange={e => updateRow(i, 'unitOfMeasure', e.target.value)}
+                            placeholder="units"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                          />
+                        </td>
+                        <td className="p-0 focus-within:bg-blue-50/50">
+                          <input
+                            type="number" min="0" value={row.defaultThreshold}
+                            onChange={e => updateRow(i, 'defaultThreshold', e.target.value)}
+                            placeholder="20"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{rows.filter(r => r.name || r.sku).length} of {rows.length} rows filled</span>
+                  <button type="button" onClick={() => setRows(rs => { const a = [...rs]; for (let j = 0; j < 10; j++) a.push({ ...EMPTY_ROW }); return a })} className="text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                    + Add 10 more rows
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 mb-4 max-h-96 overflow-y-auto pr-1">
+                  {rows.map((row, i) => (
+                    <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4 relative">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Product {String(i + 1).padStart(2, '0')}</span>
+                        <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Name <span className="text-red-400">*</span></label>
+                          <input value={row.name} onChange={e => updateRow(i, 'name', e.target.value)} placeholder="e.g. Industrial Laptop" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">SKU <span className="text-red-400">*</span></label>
+                          <input value={row.sku} onChange={e => updateRow(i, 'sku', e.target.value)} placeholder="e.g. LAP-001" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white font-mono focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Unit of Measure</label>
+                          <input value={row.unitOfMeasure} onChange={e => updateRow(i, 'unitOfMeasure', e.target.value)} placeholder="units / kg / boxes" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Default Threshold</label>
+                          <input type="number" min="0" value={row.defaultThreshold} onChange={e => updateRow(i, 'defaultThreshold', e.target.value)} placeholder="e.g. 20" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_ROW }])} className="flex items-center gap-2 w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors justify-center font-medium mb-4">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  Add another product
+                </button>
+              </>
+            )}
+
+            <BtnRow onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards') }} submitLabel={`Add ${rows.filter(r => r.name).length > 1 ? `${rows.filter(r => r.name).length} Products` : 'Product'}`} />
           </form>
         </Modal>
       )}

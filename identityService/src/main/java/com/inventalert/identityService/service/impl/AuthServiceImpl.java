@@ -118,7 +118,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void forgotPassword(ForgotPasswordRequest request) {
-        userRepository.findByEmail(request.email()).ifPresent(user -> {
+        userRepository.findByEmail(request.email()).filter(User::isActive).ifPresent(user -> {
             // Invalidate any existing pending token for this user before issuing a new one
             passwordResetTokenRepository.findByUserIdAndUsedFalse(user.getId())
                     .ifPresent(existing -> {
@@ -152,6 +152,8 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findById(resetToken.getUserId())
                 .orElseThrow(InvalidResetTokenException::new);
+
+        if (!user.isActive()) throw new InvalidResetTokenException();
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);

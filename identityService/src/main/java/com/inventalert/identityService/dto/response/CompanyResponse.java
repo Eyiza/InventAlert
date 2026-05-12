@@ -10,6 +10,7 @@ public record CompanyResponse(
         String companyName,
         String adminEmail,
         CompanyStatus status,
+        String logoUrl,
         LocalDateTime createdAt
 ) {
     public static CompanyResponse from(Company company) {
@@ -18,6 +19,7 @@ public record CompanyResponse(
                 company.getCompanyName(),
                 company.getAdminEmail(),
                 company.getStatus(),
+                company.getLogoUrl(),
                 company.getCreatedAt()
         );
     }

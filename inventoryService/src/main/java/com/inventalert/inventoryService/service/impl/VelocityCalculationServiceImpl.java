@@ -7,6 +7,9 @@ import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.repository.StockMovementRepository;
 import com.inventalert.inventoryService.service.VelocityCalculationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,8 @@ public class VelocityCalculationServiceImpl implements VelocityCalculationServic
 
     @Override
     @Async
+    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class,
+               maxAttempts = 3, backoff = @Backoff(delay = 50, multiplier = 2))
     @Transactional
     public void recalculate(String productId, String warehouseId) {
         LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);

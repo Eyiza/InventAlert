@@ -1,6 +1,7 @@
 package com.inventalert.inventoryService.multicompany;
 
 import com.inventalert.inventoryService.security.service.JwtUtil;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -18,9 +19,13 @@ public class CompanyRoutingInterceptor implements HandlerInterceptor {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
-            String companyId = jwtUtil.extractCompanyId(token);
-            if (companyId != null) {
-                CompanyContext.set(companyId);
+            try {
+                String companyId = jwtUtil.extractCompanyId(token);
+                if (companyId != null) {
+                    CompanyContext.set(companyId);
+                }
+            } catch (JwtException ignored) {
+                // Security filter handles invalid tokens; interceptor only routes valid ones
             }
         }
         return true;
