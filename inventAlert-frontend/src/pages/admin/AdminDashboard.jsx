@@ -16,6 +16,7 @@ import {
 } from '../../store/slices/usersSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
 
 function Modal({ title, onClose, children, wide }) {
   return (
@@ -512,7 +513,14 @@ function ManageWarehouseModal({ wh, form, setForm, onClose, dispatch }) {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Edit Details</p>
             <form onSubmit={handleEdit} className="space-y-3">
               <Field label="Name" name="name" value={form.name} onChange={ch} placeholder="Warehouse Alpha" required />
-              <Field label="Address" name="address" value={form.address} onChange={ch} placeholder="123 Street, City, State" required />
+              <Field label="Address">
+                <PlacesAutocompleteInput
+                  value={form.address}
+                  onChange={addr => setForm(f => ({ ...f, address: addr }))}
+                  placeholder="123 Street, City, State"
+                  required
+                />
+              </Field>
               <button type="submit" className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Save Changes</button>
             </form>
           </div>
@@ -629,7 +637,14 @@ function WarehousesPanel() {
         <Modal title={edit ? 'Edit Warehouse' : 'Add Warehouse'} onClose={() => setShowAdd(false)}>
           <form onSubmit={handleSubmit} className="space-y-3">
             <Field label="Warehouse Name" name="name" value={form.name} onChange={ch} placeholder="Warehouse Alpha" required />
-            <Field label="Address" name="address" value={form.address} onChange={ch} placeholder="123 Street, City, State" required />
+            <Field label="Address">
+              <PlacesAutocompleteInput
+                value={form.address}
+                onChange={addr => setForm(f => ({ ...f, address: addr }))}
+                placeholder="15 Awolowo Road, Ikoyi, Lagos"
+                required
+              />
+            </Field>
             <BtnRow onClose={() => setShowAdd(false)} submitLabel={edit ? 'Update Warehouse' : 'Add Warehouse'} />
           </form>
         </Modal>
