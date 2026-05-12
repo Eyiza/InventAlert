@@ -72,6 +72,25 @@ Swagger UI: `http://localhost:8081/swagger-ui.html`
 
 ---
 
+## Dev seed data
+
+On first startup, the service seeds **4 companies and 20 users** into `inventalert_identity`. This is controlled by `app.seed-data=true` in `src/main/resources/env.properties`.
+
+The seeder implements `ApplicationRunner` — Spring calls it automatically after the context loads. It checks `companyRepository.count() > 0` before doing anything, so it is safe to restart the service repeatedly without re-seeding.
+
+**All seeded users share the password `Password123!`**
+
+| Company | Admin email | Other users (same domain) |
+|---|---|---|
+| Pharmaplus Nigeria Ltd | admin@pharmaplus.ng | manager@, staff1@, staff2@, proc@ |
+| Eko Fresh Market | admin@ekofresh.ng | manager@, staff1@, staff2@, proc@ |
+| Lagos Living Furniture | admin@lagosfurniture.ng | manager@, staff1@, staff2@, proc@ |
+| TechZone Gadgets | admin@techzone.ng | manager@, staff1@, staff2@, proc@ |
+
+To reseed from scratch, truncate the `company` and `user` tables then restart. To disable seeding permanently, set `app.seed-data=false` in `env.properties`.
+
+---
+
 ## Testing
 
 ```bash
