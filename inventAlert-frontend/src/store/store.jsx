@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit'
+import { inventAlertApi } from '../apis/inventAlertApi'
 import authReducer from './slices/authSlice'
 import stockReducer from './slices/stockSlice'
 import usersReducer from './slices/usersSlice'
@@ -22,8 +23,10 @@ const store = configureStore({
     analytics: analyticsReducer,
     superadmin: superadminReducer,
     purchaseOrders: purchaseOrdersReducer,
+    [inventAlertApi.reducerPath]: inventAlertApi.reducer,
   },
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware(),
+  middleware: getDefaultMiddleware =>
+    getDefaultMiddleware().concat(inventAlertApi.middleware),
 })
 
 export default store

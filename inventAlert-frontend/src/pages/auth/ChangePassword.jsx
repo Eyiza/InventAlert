@@ -6,7 +6,7 @@ import { toast } from 'react-toastify'
 
 const ROLE_HOME = {
   ADMIN: '/admin', MANAGER: '/manager', WAREHOUSE_STAFF: '/staff',
-  PROCUREMENT_OFFICER: '/procurement', SUPERADMIN: '/superadmin',
+  PROCUREMENT_OFFICER: '/procurement', SUPER_ADMIN: '/superadmin',
 }
 
 function EyeIcon() {
@@ -58,7 +58,7 @@ export default function ChangePassword() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Set your password</h1>
-          <p className="text-gray-500 mt-1 text-sm">Hi {user?.name?.split(' ')[0]} — create a new password to continue.</p>
+          <p className="text-gray-500 mt-1 text-sm">Hi {user?.email?.split('@')[0]} — create a new password to continue.</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

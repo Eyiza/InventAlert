@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { users, warehouseAssignments } from '../../data/mockData'
 
 const usersSlice = createSlice({
   name: 'users',
-  initialState: { users, warehouseAssignments },
+  initialState: { users: [], warehouseAssignments: [] },
   reducers: {
     addUser: (state, action) => {
       state.users.push({

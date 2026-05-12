@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate, Link } from 'react-router'
-import { signup } from '../../store/slices/authSlice'
+import { useSignupMutation } from '../../apis/inventAlertApi'
+import { setCredentials } from '../../store/slices/authSlice'
+import { uploadToCloudinary } from '../../services/cloudinary'
 
 function EyeIcon() {
   return (
@@ -21,15 +23,17 @@ function EyeOffIcon() {
 }
 
 export default function Signup() {
-  const [form, setForm] = useState({ companyName: '', email: '', password: '', confirm: '' })
+  const [form, setForm] = useState({ companyName: '', adminEmail: '', password: '', confirm: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [logoPreview, setLogoPreview] = useState(null)
+  const [logoFile, setLogoFile] = useState(null)
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { isAuthenticated } = useSelector(s => s.auth)
+
+  const [signupMutation, { isLoading }] = useSignupMutation()
 
   useEffect(() => {
     if (isAuthenticated) navigate('/admin', { replace: true })
@@ -40,21 +44,39 @@ export default function Signup() {
   const handleLogoChange = (e) => {
     const file = e.target.files[0]
     if (!file) return
+    setLogoFile(file)
     const reader = new FileReader()
     reader.onloadend = () => setLogoPreview(reader.result)
     reader.readAsDataURL(file)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     if (form.password !== form.confirm) { setError('Passwords do not match'); return }
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
-    setIsLoading(true)
-    setTimeout(() => {
-      dispatch(signup({ companyName: form.companyName, email: form.email, logo: logoPreview }))
-      setIsLoading(false)
-    }, 700)
+
+    let companyLogo = null
+    if (logoFile) {
+      try {
+        companyLogo = await uploadToCloudinary(logoFile)
+      } catch {
+        setError('Logo upload failed. Please try again.')
+        return
+      }
+    }
+
+    const result = await signupMutation({
+      companyName: form.companyName,
+      adminEmail: form.adminEmail,
+      password: form.password,
+    })
+
+    if (result.data) {
+      dispatch(setCredentials({ ...result.data, companyLogo }))
+    } else {
+      setError(result.error?.data?.message || 'Sign up failed. Please try again.')
+    }
   }
 
   return (
@@ -106,7 +128,7 @@ export default function Signup() {
                   </label>
                   <input id="logo-upload" type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
                   {logoPreview && (
-                    <button type="button" onClick={() => setLogoPreview(null)} className="ml-2 text-xs text-red-500 hover:underline">Remove</button>
+                    <button type="button" onClick={() => { setLogoPreview(null); setLogoFile(null) }} className="ml-2 text-xs text-red-500 hover:underline">Remove</button>
                   )}
                   <p className="text-xs text-gray-400 mt-1">PNG, JPG, SVG — up to 2 MB</p>
                 </div>
@@ -127,9 +149,9 @@ export default function Signup() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Admin Email</label>
               <input
-                name="email"
+                name="adminEmail"
                 type="email"
-                value={form.email}
+                value={form.adminEmail}
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent text-sm"
                 placeholder="admin@yourcompany.com"

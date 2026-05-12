@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { transfers } from '../../data/mockData'
 
 const transfersSlice = createSlice({
   name: 'transfers',
-  initialState: { transfers },
+  initialState: { transfers: [] },
   reducers: {
     approveTransfer: (state, action) => {
       const t = state.transfers.find(x => x.id === action.payload.id)
