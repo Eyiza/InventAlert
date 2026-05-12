@@ -4,7 +4,7 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { suspendCompany, reactivateCompany, updateCompanyLogo, resolveComplaint, reviewComplaint } from '../../store/slices/superadminSlice'
+import { suspendCompany, reactivateCompany, resolveComplaint, reviewComplaint } from '../../store/slices/superadminSlice'
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -59,17 +59,6 @@ function CompaniesPanel() {
     setConfirm(null)
   }
 
-  const handleLogoUpload = (companyId, e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      dispatch(updateCompanyLogo({ companyId, logo: reader.result }))
-      toast.success('Company logo updated')
-    }
-    reader.readAsDataURL(file)
-  }
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -94,7 +83,7 @@ function CompaniesPanel() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['Company', 'Admin Email', 'Status', 'Registered', 'Logo', 'Actions'].map(h => (
+                {['Company', 'Admin Email', 'Status', 'Registered', 'Actions'].map(h => (
                   <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -117,12 +106,6 @@ function CompaniesPanel() {
                   <td className="px-5 py-4 text-gray-600">{c.adminEmail}</td>
                   <td className="px-5 py-4"><StatusBadge status={c.status} /></td>
                   <td className="px-5 py-4 text-gray-500 text-xs">{fmtDate(c.createdAt)}</td>
-                  <td className="px-5 py-4">
-                    <label className="cursor-pointer text-xs text-teal-600 hover:underline font-medium">
-                      {c.logo ? 'Change' : 'Upload'}
-                      <input type="file" accept="image/*" onChange={e => handleLogoUpload(c.id, e)} className="hidden" />
-                    </label>
-                  </td>
                   <td className="px-5 py-4">
                     <button
                       onClick={() => handleAction(c)}

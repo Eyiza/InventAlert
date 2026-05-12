@@ -1,14 +1,17 @@
 package com.inventalert.inventoryService.service.impl;
 
+import com.inventalert.inventoryService.model.DistanceSource;
+import com.inventalert.inventoryService.service.DistanceResult;
 import com.inventalert.inventoryService.service.GoogleMapsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -23,10 +26,10 @@ public class GoogleMapsServiceImpl implements GoogleMapsService {
 
     @Override
     @Cacheable(value = "distanceCache", key = "#fromId + '_' + #toId")
-    public Double getDrivingDistanceKm(String fromId, BigDecimal fromLat, BigDecimal fromLng,
-                                        String toId, BigDecimal toLat, BigDecimal toLng) {
+    public DistanceResult getDrivingDistanceKm(String fromId, BigDecimal fromLat, BigDecimal fromLng,
+                                                String toId, BigDecimal toLat, BigDecimal toLng) {
         if (apiKey == null || apiKey.isBlank()) {
-            return haversine(fromLat, fromLng, toLat, toLng);
+            return new DistanceResult(haversine(fromLat, fromLng, toLat, toLng), DistanceSource.HAVERSINE);
         }
         try {
             SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -34,26 +37,30 @@ public class GoogleMapsServiceImpl implements GoogleMapsService {
             factory.setReadTimeout(timeoutSeconds * 1000);
             RestTemplate restTemplate = new RestTemplate(factory);
 
-            String url = "https://maps.googleapis.com/maps/api/directions/json" +
-                    "?origin=" + fromLat + "," + fromLng +
-                    "&destination=" + toLat + "," + toLng +
-                    "&key=" + apiKey;
+            String url = "https://maps.googleapis.com/maps/api/distancematrix/json"
+                    + "?origins=" + fromLat + "," + fromLng
+                    + "&destinations=" + toLat + "," + toLng
+                    + "&mode=driving"
+                    + "&key=" + apiKey;
 
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
 
             if (response != null) {
                 @SuppressWarnings("unchecked")
-                var routes = (java.util.List<Map<String, Object>>) response.get("routes");
-                if (routes != null && !routes.isEmpty()) {
+                var rows = (List<Map<String, Object>>) response.get("rows");
+                if (rows != null && !rows.isEmpty()) {
                     @SuppressWarnings("unchecked")
-                    var legs = (java.util.List<Map<String, Object>>) routes.get(0).get("legs");
-                    if (legs != null && !legs.isEmpty()) {
-                        @SuppressWarnings("unchecked")
-                        var distance = (Map<String, Object>) legs.get(0).get("distance");
-                        if (distance != null) {
-                            int meters = (Integer) distance.get("value");
-                            return meters / 1000.0;
+                    var elements = (List<Map<String, Object>>) rows.get(0).get("elements");
+                    if (elements != null && !elements.isEmpty()) {
+                        Map<String, Object> element = elements.get(0);
+                        if ("OK".equals(element.get("status"))) {
+                            @SuppressWarnings("unchecked")
+                            var distance = (Map<String, Object>) element.get("distance");
+                            if (distance != null) {
+                                int meters = (Integer) distance.get("value");
+                                return new DistanceResult(meters / 1000.0, DistanceSource.GOOGLE_MAPS);
+                            }
                         }
                     }
                 }
@@ -61,7 +68,7 @@ public class GoogleMapsServiceImpl implements GoogleMapsService {
         } catch (Exception e) {
             log.warn("Google Maps API call failed, falling back to Haversine: {}", e.getMessage());
         }
-        return haversine(fromLat, fromLng, toLat, toLng);
+        return new DistanceResult(haversine(fromLat, fromLng, toLat, toLng), DistanceSource.HAVERSINE);
     }
 
     private double haversine(BigDecimal lat1, BigDecimal lon1, BigDecimal lat2, BigDecimal lon2) {

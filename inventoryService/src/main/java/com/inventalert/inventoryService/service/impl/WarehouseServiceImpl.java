@@ -63,6 +63,15 @@ public class WarehouseServiceImpl implements WarehouseService {
         warehouseRepository.save(warehouse);
     }
 
+    @Override
+    @Transactional
+    public void activate(String id) {
+        Warehouse warehouse = warehouseRepository.findById(id)
+                .orElseThrow(() -> new WarehouseNotFoundException(id));
+        warehouse.setActive(true);
+        warehouseRepository.save(warehouse);
+    }
+
     private WarehouseResponse toResponse(Warehouse w) {
         return WarehouseResponse.builder()
                 .id(w.getId())

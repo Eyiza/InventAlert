@@ -62,7 +62,7 @@ function Select({ label, hint, children: options, ...props }) {
   )
 }
 
-function FilterableSelect({ value, onChange, options, placeholder = 'Select…', required }) {
+function FilterableSelect({ value, onChange, options, placeholder = 'Select…', required, inputClassName }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const selected = options.find(o => o.value === value)
@@ -79,7 +79,7 @@ function FilterableSelect({ value, onChange, options, placeholder = 'Select…',
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
         onFocus={() => { setOpen(true); setQuery('') }}
         required={required && !value}
-        className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+        className={inputClassName ?? "w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"}
       />
       {open && (
         <div className="absolute z-50 top-full mt-0.5 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg max-h-44 overflow-y-auto">
@@ -107,6 +107,37 @@ function FilterableSelect({ value, onChange, options, placeholder = 'Select…',
         <option value="">{placeholder}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+    </div>
+  )
+}
+
+function ViewToggle({ mode, onChange }) {
+  return (
+    <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden shrink-0" title="Switch view">
+      <button
+        type="button"
+        onClick={() => onChange('cards')}
+        className={`px-2.5 py-1.5 transition-colors ${mode === 'cards' ? 'bg-teal-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+        title="Card view"
+      >
+        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 16 16">
+          <rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" />
+          <rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('table')}
+        className={`px-2.5 py-1.5 border-l border-gray-200 transition-colors ${mode === 'table' ? 'bg-teal-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}
+        title="Table view"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 16 16">
+          <rect x="1" y="1" width="14" height="14" rx="1.5" strokeWidth="1.5" />
+          <line x1="1" y1="5.5" x2="15" y2="5.5" strokeWidth="1" />
+          <line x1="1" y1="10" x2="15" y2="10" strokeWidth="1" />
+          <line x1="5.5" y1="1" x2="5.5" y2="15" strokeWidth="1" />
+        </svg>
+      </button>
     </div>
   )
 }
@@ -220,6 +251,7 @@ function IntakePanel() {
   const [rows, setRows] = useState([{ ...EMPTY_INTAKE }])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [viewMode, setViewMode] = useState('cards')
   const myWarehouse = warehouses.find(w => w.id === warehouseId)
   const activeProducts = products.filter(p => p.isActive)
 
@@ -242,6 +274,15 @@ function IntakePanel() {
       setSummary(null)
       setLoading(false)
     }, 500)
+  }
+
+  const switchView = (mode) => {
+    if (mode === 'table') {
+      setRows(rs => { const p = [...rs]; while (p.length < 10) p.push({ ...EMPTY_INTAKE }); return p })
+    } else {
+      setRows(rs => { const ne = rs.filter(r => r.productId || r.quantity); return ne.length > 0 ? ne : [{ ...EMPTY_INTAKE }] })
+    }
+    setViewMode(mode)
   }
 
   if (summary) {
@@ -289,45 +330,94 @@ function IntakePanel() {
     )
   }
 
+  const validCount = rows.filter(r => r.productId).length
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
       <PageHeader
         title="Record Stock Intake"
         subtitle={`Adding stock to ${myWarehouse?.name || 'your warehouse'}`}
+        action={<ViewToggle mode={viewMode} onChange={switchView} />}
       />
       <form onSubmit={handleSubmit} className="space-y-4">
-        {rows.map((row, i) => (
-          <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
-              <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        {viewMode === 'table' ? (
+          <div className="rounded-lg border border-gray-300 overflow-visible">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="w-10 border-b-2 border-b-gray-300 border-r border-r-gray-300 py-2.5 text-center text-[11px] text-gray-500 font-medium select-none">#</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300">Product</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 w-36">Qty to Add</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i} className="border-b border-gray-200 last:border-b-0">
+                    <td className="w-10 bg-gray-50 border-r border-gray-200 text-center text-[11px] text-gray-400 select-none py-1 tabular-nums">{i + 1}</td>
+                    <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
+                      <FilterableSelect
+                        value={row.productId}
+                        onChange={val => updateRow(i, 'productId', val)}
+                        options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                        placeholder="Select a product…"
+                        inputClassName="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                      />
+                    </td>
+                    <td className="p-0 focus-within:bg-blue-50/50">
+                      <input
+                        type="number" min="1" value={row.quantity}
+                        onChange={e => updateRow(i, 'quantity', e.target.value)}
+                        placeholder="0"
+                        className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400">{rows.filter(r => r.productId || r.quantity).length} of {rows.length} rows filled</span>
+              <button type="button" onClick={() => setRows(rs => { const a = [...rs]; for (let j = 0; j < 10; j++) a.push({ ...EMPTY_INTAKE }); return a })} className="text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                + Add 10 more rows
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
-                <FilterableSelect
-                  value={row.productId}
-                  onChange={val => updateRow(i, 'productId', val)}
-                  options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
-                  placeholder="Select a product…"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Quantity <span className="text-red-400">*</span></label>
-                <input type="number" min="1" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="e.g. 50" required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600" />
-              </div>
-            </div>
           </div>
-        ))}
-        <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_INTAKE }])} className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors font-medium flex items-center justify-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Add another item
-        </button>
+        ) : (
+          <>
+            {rows.map((row, i) => (
+              <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
+                  <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
+                    <FilterableSelect
+                      value={row.productId}
+                      onChange={val => updateRow(i, 'productId', val)}
+                      options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                      placeholder="Select a product…"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Quantity <span className="text-red-400">*</span></label>
+                    <input type="number" min="1" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="e.g. 50" required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600" />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_INTAKE }])} className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors font-medium flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add another item
+            </button>
+          </>
+        )}
         <div className="pt-1">
-          <SubmitBtn label={`Review ${rows.filter(r => r.productId).length > 1 ? `${rows.filter(r => r.productId).length} Intakes` : 'Intake'}`} loading={false} />
+          <SubmitBtn label={`Review ${validCount > 1 ? `${validCount} Intakes` : 'Intake'}`} loading={false} />
         </div>
       </form>
     </div>
@@ -346,6 +436,7 @@ function SalePanel() {
   const [rowErrors, setRowErrors] = useState({})
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [viewMode, setViewMode] = useState('cards')
   const myWarehouse = warehouses.find(w => w.id === warehouseId)
   const activeProducts = products.filter(p => p.isActive)
 
@@ -392,6 +483,16 @@ function SalePanel() {
       setSummary(null)
       setLoading(false)
     }, 500)
+  }
+
+  const switchView = (mode) => {
+    if (mode === 'table') {
+      setRows(rs => { const p = [...rs]; while (p.length < 10) p.push({ ...EMPTY_SALE }); return p })
+    } else {
+      setRows(rs => { const ne = rs.filter(r => r.productId || r.quantity); return ne.length > 0 ? ne : [{ ...EMPTY_SALE }] })
+      setRowErrors({})
+    }
+    setViewMode(mode)
   }
 
   if (summary) {
@@ -448,54 +549,115 @@ function SalePanel() {
     )
   }
 
+  const validCount = rows.filter(r => r.productId).length
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <PageHeader title="Record Outbound Sale" subtitle={`Selling from ${myWarehouse?.name || 'your warehouse'}`} />
+      <PageHeader title="Record Outbound Sale" subtitle={`Selling from ${myWarehouse?.name || 'your warehouse'}`} action={<ViewToggle mode={viewMode} onChange={switchView} />} />
       <form onSubmit={handleSubmit} className="space-y-4">
-        {rows.map((row, i) => {
-          const avail = getStock(row.productId)
-          const prod = getProd(row.productId)
-          return (
-            <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
-                <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
-                  <FilterableSelect
-                    value={row.productId}
-                    onChange={val => updateRow(i, 'productId', val)}
-                    options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
-                    placeholder="Select a product…"
-                    required
-                  />
-                  {avail !== null && (
-                    <span className={`mt-1.5 inline-block text-xs px-2.5 py-1 rounded-lg font-medium ${avail === 0 ? 'bg-red-50 text-red-600' : avail < 10 ? 'bg-amber-50 text-amber-600' : 'bg-teal-50 text-teal-600'}`}>
-                      {avail} {prod?.unitOfMeasure || 'units'} available
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Quantity <span className="text-red-400">*</span></label>
-                  <input type="number" min="1" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="e.g. 5" required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600" />
-                  {rowErrors[i] && (
-                    <span className="mt-1.5 inline-block text-xs text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-200">{rowErrors[i]}</span>
-                  )}
-                </div>
-              </div>
+        {viewMode === 'table' ? (
+          <div className="rounded-lg border border-gray-300 overflow-visible">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="w-10 border-b-2 border-b-gray-300 border-r border-r-gray-300 py-2.5 text-center text-[11px] text-gray-500 font-medium select-none">#</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300">Product</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300 w-28">Available</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 w-36">Qty to Sell</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => {
+                  const avail = getStock(row.productId)
+                  const prod = getProd(row.productId)
+                  return (
+                    <tr key={i} className="border-b border-gray-200 last:border-b-0">
+                      <td className="w-10 bg-gray-50 border-r border-gray-200 text-center text-[11px] text-gray-400 select-none py-1 tabular-nums">{i + 1}</td>
+                      <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
+                        <FilterableSelect
+                          value={row.productId}
+                          onChange={val => updateRow(i, 'productId', val)}
+                          options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                          placeholder="Select a product…"
+                          inputClassName="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 border-r border-gray-200 bg-gray-50/60">
+                        {avail !== null ? (
+                          <span className={`text-xs font-medium tabular-nums ${avail === 0 ? 'text-red-600' : avail < 10 ? 'text-amber-600' : 'text-teal-600'}`}>
+                            {avail} {prod?.unitOfMeasure || ''}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className={`p-0 focus-within:bg-blue-50/50 ${rowErrors[i] ? 'bg-red-50/60' : ''}`}>
+                        <input
+                          type="number" min="1" value={row.quantity}
+                          onChange={e => updateRow(i, 'quantity', e.target.value)}
+                          placeholder="0"
+                          className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                        />
+                        {rowErrors[i] && <p className="px-3 pb-1.5 text-[10px] text-red-600 leading-tight">{rowErrors[i]}</p>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400">{rows.filter(r => r.productId || r.quantity).length} of {rows.length} rows filled</span>
+              <button type="button" onClick={() => setRows(rs => { const a = [...rs]; for (let j = 0; j < 10; j++) a.push({ ...EMPTY_SALE }); return a })} className="text-xs font-medium text-orange-500 hover:text-orange-600 transition-colors">
+                + Add 10 more rows
+              </button>
             </div>
-          )
-        })}
-        <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_SALE }])} className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50/40 transition-colors font-medium flex items-center justify-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Add another item
-        </button>
+          </div>
+        ) : (
+          <>
+            {rows.map((row, i) => {
+              const avail = getStock(row.productId)
+              const prod = getProd(row.productId)
+              return (
+                <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
+                    <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
+                      <FilterableSelect
+                        value={row.productId}
+                        onChange={val => updateRow(i, 'productId', val)}
+                        options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                        placeholder="Select a product…"
+                        required
+                      />
+                      {avail !== null && (
+                        <span className={`mt-1.5 inline-block text-xs px-2.5 py-1 rounded-lg font-medium ${avail === 0 ? 'bg-red-50 text-red-600' : avail < 10 ? 'bg-amber-50 text-amber-600' : 'bg-teal-50 text-teal-600'}`}>
+                          {avail} {prod?.unitOfMeasure || 'units'} available
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Quantity <span className="text-red-400">*</span></label>
+                      <input type="number" min="1" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="e.g. 5" required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600" />
+                      {rowErrors[i] && (
+                        <span className="mt-1.5 inline-block text-xs text-red-600 bg-red-50 px-2.5 py-1 rounded-lg border border-red-200">{rowErrors[i]}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_SALE }])} className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50/40 transition-colors font-medium flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add another item
+            </button>
+          </>
+        )}
         <div className="pt-1">
-          <SubmitBtn label={`Review ${rows.filter(r => r.productId).length > 1 ? `${rows.filter(r => r.productId).length} Sales` : 'Sale'}`} loading={false} color="orange" />
+          <SubmitBtn label={`Review ${validCount > 1 ? `${validCount} Sales` : 'Sale'}`} loading={false} color="orange" />
         </div>
       </form>
     </div>
@@ -514,6 +676,7 @@ function RequestTransferPanel() {
   const [rows, setRows] = useState([{ ...EMPTY_TRANSFER }])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [viewMode, setViewMode] = useState('cards')
   const myWarehouse = warehouses.find(w => w.id === warehouseId)
   const otherWarehouses = warehouses.filter(w => w.isActive && w.id !== warehouseId)
   const activeProducts = products.filter(p => p.isActive)
@@ -548,6 +711,15 @@ function RequestTransferPanel() {
       setSummary(null)
       setLoading(false)
     }, 500)
+  }
+
+  const switchView = (mode) => {
+    if (mode === 'table') {
+      setRows(rs => { const p = [...rs]; while (p.length < 10) p.push({ ...EMPTY_TRANSFER }); return p })
+    } else {
+      setRows(rs => { const ne = rs.filter(r => r.productId || r.quantity); return ne.length > 0 ? ne : [{ ...EMPTY_TRANSFER }] })
+    }
+    setViewMode(mode)
   }
 
   if (summary) {
@@ -601,9 +773,11 @@ function RequestTransferPanel() {
     )
   }
 
+  const validCount = rows.filter(r => r.productId).length
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <PageHeader title="Request Transfer Out" subtitle={`Sending stock from ${myWarehouse?.name || 'your warehouse'} to another`} />
+      <PageHeader title="Request Transfer Out" subtitle={`Sending stock from ${myWarehouse?.name || 'your warehouse'} to another`} action={<ViewToggle mode={viewMode} onChange={switchView} />} />
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Destination Warehouse <span className="text-red-400">*</span></label>
@@ -613,47 +787,104 @@ function RequestTransferPanel() {
           </select>
         </div>
 
-        {rows.map((row, i) => {
-          const avail = row.productId ? getStock(row.productId) : null
-          const prod = products.find(p => p.id === row.productId)
-          return (
-            <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
-                <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
-                  <FilterableSelect
-                    value={row.productId}
-                    onChange={val => updateRow(i, 'productId', val)}
-                    options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
-                    placeholder="Select a product…"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Quantity <span className="text-red-400">*</span></label>
-                  <input type="number" min="1" max={avail ?? undefined} value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="Qty" required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600" />
-                  {avail !== null && (
-                    <span className={`mt-1.5 inline-block text-xs px-2.5 py-1 rounded-lg font-medium ${avail === 0 ? 'bg-red-50 text-red-600' : avail < 10 ? 'bg-amber-50 text-amber-600' : 'bg-teal-50 text-teal-600'}`}>
-                      {avail} {prod?.unitOfMeasure || 'units'} available
-                    </span>
-                  )}
-                </div>
-              </div>
+        {viewMode === 'table' ? (
+          <div className="rounded-lg border border-gray-300 overflow-visible">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="w-10 border-b-2 border-b-gray-300 border-r border-r-gray-300 py-2.5 text-center text-[11px] text-gray-500 font-medium select-none">#</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300">Product</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300 w-28">Available</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 w-36">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => {
+                  const avail = row.productId ? getStock(row.productId) : null
+                  const prod = products.find(p => p.id === row.productId)
+                  return (
+                    <tr key={i} className="border-b border-gray-200 last:border-b-0">
+                      <td className="w-10 bg-gray-50 border-r border-gray-200 text-center text-[11px] text-gray-400 select-none py-1 tabular-nums">{i + 1}</td>
+                      <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
+                        <FilterableSelect
+                          value={row.productId}
+                          onChange={val => updateRow(i, 'productId', val)}
+                          options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                          placeholder="Select a product…"
+                          inputClassName="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 border-r border-gray-200 bg-gray-50/60">
+                        {avail !== null ? (
+                          <span className={`text-xs font-medium tabular-nums ${avail === 0 ? 'text-red-600' : avail < 10 ? 'text-amber-600' : 'text-teal-600'}`}>
+                            {avail} {prod?.unitOfMeasure || ''}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="p-0 focus-within:bg-blue-50/50">
+                        <input
+                          type="number" min="1" max={avail ?? undefined} value={row.quantity}
+                          onChange={e => updateRow(i, 'quantity', e.target.value)}
+                          placeholder="0"
+                          className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400">{rows.filter(r => r.productId || r.quantity).length} of {rows.length} rows filled</span>
+              <button type="button" onClick={() => setRows(rs => { const a = [...rs]; for (let j = 0; j < 10; j++) a.push({ ...EMPTY_TRANSFER }); return a })} className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                + Add 10 more rows
+              </button>
             </div>
-          )
-        })}
-
-        <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_TRANSFER }])} className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors font-medium flex items-center justify-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Add another item
-        </button>
-        <div className="pt-1"><SubmitBtn label={`Review Request (${rows.filter(r => r.productId).length} item${rows.filter(r => r.productId).length !== 1 ? 's' : ''})`} loading={false} color="blue" /></div>
+          </div>
+        ) : (
+          <>
+            {rows.map((row, i) => {
+              const avail = row.productId ? getStock(row.productId) : null
+              const prod = products.find(p => p.id === row.productId)
+              return (
+                <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Item {String(i + 1).padStart(2, '0')}</span>
+                    <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Product <span className="text-red-400">*</span></label>
+                      <FilterableSelect
+                        value={row.productId}
+                        onChange={val => updateRow(i, 'productId', val)}
+                        options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
+                        placeholder="Select a product…"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Quantity <span className="text-red-400">*</span></label>
+                      <input type="number" min="1" max={avail ?? undefined} value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="Qty" required className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600" />
+                      {avail !== null && (
+                        <span className={`mt-1.5 inline-block text-xs px-2.5 py-1 rounded-lg font-medium ${avail === 0 ? 'bg-red-50 text-red-600' : avail < 10 ? 'bg-amber-50 text-amber-600' : 'bg-teal-50 text-teal-600'}`}>
+                          {avail} {prod?.unitOfMeasure || 'units'} available
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_TRANSFER }])} className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-teal-400 hover:text-teal-600 hover:bg-teal-50/40 transition-colors font-medium flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add another item
+            </button>
+          </>
+        )}
+        <div className="pt-1"><SubmitBtn label={`Review Request (${validCount} item${validCount !== 1 ? 's' : ''})`} loading={false} color="blue" /></div>
       </form>
     </div>
   )

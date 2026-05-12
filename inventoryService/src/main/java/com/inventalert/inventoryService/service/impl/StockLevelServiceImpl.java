@@ -10,6 +10,9 @@ import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.repository.WarehouseRepository;
 import com.inventalert.inventoryService.service.StockLevelService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +44,12 @@ public class StockLevelServiceImpl implements StockLevelService {
                             .threshold(product.getDefaultThreshold())
                             .velocityPerDay(BigDecimal.ZERO)
                             .build();
-                    return stockLevelRepository.save(level);
+                    try {
+                        return stockLevelRepository.save(level);
+                    } catch (DataIntegrityViolationException e) {
+                        return stockLevelRepository.findByProductIdAndWarehouseId(productId, warehouseId)
+                                .orElseThrow();
+                    }
                 });
     }
 
@@ -55,10 +63,8 @@ public class StockLevelServiceImpl implements StockLevelService {
     }
 
     @Override
-    public List<StockLevelResponse> getAllStockLevels() {
-        return stockLevelRepository.findAll().stream()
-                .map(this::toResponse)
-                .toList();
+    public Page<StockLevelResponse> getAllStockLevels(Pageable pageable) {
+        return stockLevelRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override

@@ -2,8 +2,10 @@ package com.inventalert.inventoryService.service.impl;
 
 import com.inventalert.inventoryService.model.AlertStatus;
 import com.inventalert.inventoryService.model.StockLevel;
+import com.inventalert.inventoryService.model.TransferStatus;
 import com.inventalert.inventoryService.repository.RestockAlertRepository;
 import com.inventalert.inventoryService.repository.StockLevelRepository;
+import com.inventalert.inventoryService.repository.TransferSuggestionRepository;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import com.inventalert.inventoryService.service.ThresholdCheckService;
 import com.inventalert.inventoryService.service.TransferService;
@@ -12,7 +14,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +21,7 @@ public class ThresholdCheckServiceImpl implements ThresholdCheckService {
 
     private final StockLevelRepository stockLevelRepository;
     private final RestockAlertRepository restockAlertRepository;
+    private final TransferSuggestionRepository transferSuggestionRepository;
     private final RestockAlertService restockAlertService;
     private final TransferService transferService;
 
@@ -40,13 +42,16 @@ public class ThresholdCheckServiceImpl implements ThresholdCheckService {
                 .findByProductIdAndWarehouseIdNot(productId, warehouseId)
                 .stream()
                 .filter(c -> (c.getCurrentStock() - c.getThreshold()) >= shortage)
-                .collect(Collectors.toList());
+                .toList();
 
         if (candidates.isEmpty()) {
             restockAlertService.createAlert(
                     productId, warehouseId, level.getCurrentStock(), level.getThreshold(), companyId);
         } else {
-            transferService.createSuggestion(productId, warehouseId, candidates, shortage, companyId);
+            if (!transferSuggestionRepository.existsByProductIdAndToWarehouseIdAndStatusIn(
+                    productId, warehouseId, List.of(TransferStatus.SUGGESTED, TransferStatus.APPROVED))) {
+                transferService.createSuggestion(productId, warehouseId, candidates, shortage, companyId);
+            }
         }
     }
 }

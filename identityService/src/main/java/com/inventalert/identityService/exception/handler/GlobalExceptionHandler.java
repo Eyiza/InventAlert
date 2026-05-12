@@ -1,11 +1,14 @@
 package com.inventalert.identityService.exception.handler;
 
 import com.inventalert.identityService.dto.response.ErrorResponse;
+import com.inventalert.identityService.exception.AssignmentNotFoundException;
+import com.inventalert.identityService.exception.ComplaintNotFoundException;
 import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.exception.EmailAlreadyExistsException;
+import com.inventalert.identityService.exception.InvalidResetTokenException;
+import com.inventalert.identityService.exception.UserAlreadyActiveException;
 import com.inventalert.identityService.exception.UserAlreadyDeactivatedException;
 import com.inventalert.identityService.exception.UserNotFoundException;
-import com.inventalert.identityService.exception.InvalidResetTokenException;
 import com.inventalert.identityService.exception.WarehouseManagerConflictException;
 import com.inventalert.identityService.exception.WarehouseRequiredException;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
@@ -38,6 +41,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserAlreadyDeactivatedException.class)
     public ResponseEntity<ErrorResponse> handleAlreadyDeactivated(UserAlreadyDeactivatedException ex) {
         return ResponseEntity.status(409).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(UserAlreadyActiveException.class)
+    public ResponseEntity<ErrorResponse> handleAlreadyActive(UserAlreadyActiveException ex) {
+        return ResponseEntity.status(409).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AssignmentNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAssignmentNotFound(AssignmentNotFoundException ex) {
+        return ResponseEntity.status(404).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ComplaintNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleComplaintNotFound(ComplaintNotFoundException ex) {
+        return ResponseEntity.status(404).body(new ErrorResponse(ex.getMessage()));
     }
 
     @ExceptionHandler(WarehouseRequiredException.class)

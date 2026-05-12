@@ -1,5 +1,6 @@
 package com.inventalert.identityService.service.impl;
 
+import com.inventalert.identityService.dto.request.UpdateCompanyRequest;
 import com.inventalert.identityService.dto.response.CompanyResponse;
 import com.inventalert.identityService.exception.CompanyNotFoundException;
 import com.inventalert.identityService.kafka.CompanyEventProducer;
@@ -53,6 +54,27 @@ public class CompanyServiceImpl implements CompanyService {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new CompanyNotFoundException(companyId));
         company.setStatus(CompanyStatus.ACTIVE);
+        return CompanyResponse.from(companyRepository.save(company));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CompanyResponse getMyCompany(String companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CompanyNotFoundException(companyId));
+        return CompanyResponse.from(company);
+    }
+
+    @Override
+    public CompanyResponse updateMyCompany(String companyId, UpdateCompanyRequest request) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CompanyNotFoundException(companyId));
+        if (request.getCompanyName() != null) {
+            company.setCompanyName(request.getCompanyName());
+        }
+        if (request.getLogoUrl() != null) {
+            company.setLogoUrl(request.getLogoUrl());
+        }
         return CompanyResponse.from(companyRepository.save(company));
     }
 

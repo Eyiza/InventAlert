@@ -79,6 +79,7 @@ public class DataSourceConfig {
         config.setDriverClassName("com.mysql.cj.jdbc.Driver");
         config.setMaximumPoolSize(2);
         config.setPoolName("pool-master");
+        config.setInitializationFailTimeout(0);
         return new HikariDataSource(config);
     }
 }

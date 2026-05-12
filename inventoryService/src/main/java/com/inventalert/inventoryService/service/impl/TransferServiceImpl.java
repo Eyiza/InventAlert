@@ -1,14 +1,22 @@
 package com.inventalert.inventoryService.service.impl;
 
+import com.inventalert.inventoryService.dto.request.StaffInitiateTransferRequest;
 import com.inventalert.inventoryService.dto.response.TransferSuggestionResponse;
 import com.inventalert.inventoryService.exception.*;
 import com.inventalert.inventoryService.kafka.TransferEventProducer;
 import com.inventalert.inventoryService.model.*;
 import com.inventalert.inventoryService.repository.*;
+import com.inventalert.inventoryService.service.DistanceResult;
 import com.inventalert.inventoryService.service.GoogleMapsService;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import com.inventalert.inventoryService.service.TransferService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,20 +44,21 @@ public class TransferServiceImpl implements TransferService {
 
         StockLevel bestCandidate = null;
         double minDistance = Double.MAX_VALUE;
-        DistanceSource distanceSource = DistanceSource.GOOGLE_MAPS;
+        DistanceSource bestDistanceSource = DistanceSource.GOOGLE_MAPS;
 
         for (StockLevel candidate : candidates) {
             Warehouse fromWarehouse = warehouseRepository
                     .findByIdAndIsActiveTrue(candidate.getWarehouseId()).orElse(null);
             if (fromWarehouse == null) continue;
 
-            Double distance = googleMapsService.getDrivingDistanceKm(
+            DistanceResult result = googleMapsService.getDrivingDistanceKm(
                     fromWarehouse.getId(), fromWarehouse.getLatitude(), fromWarehouse.getLongitude(),
                     toWarehouse.getId(), toWarehouse.getLatitude(), toWarehouse.getLongitude());
 
-            if (distance < minDistance) {
-                minDistance = distance;
+            if (result.km() < minDistance) {
+                minDistance = result.km();
                 bestCandidate = candidate;
+                bestDistanceSource = result.source();
             }
         }
 
@@ -61,7 +70,7 @@ public class TransferServiceImpl implements TransferService {
                 .toWarehouseId(deficitWarehouseId)
                 .quantity(shortage)
                 .distanceKm(BigDecimal.valueOf(minDistance))
-                .distanceSource(distanceSource)
+                .distanceSource(bestDistanceSource)
                 .status(TransferStatus.SUGGESTED)
                 .build();
 
@@ -72,12 +81,43 @@ public class TransferServiceImpl implements TransferService {
     }
 
     @Override
-    public List<TransferSuggestionResponse> list(String role, String warehouseId) {
+    @Transactional
+    public TransferSuggestionResponse initiateByStaff(StaffInitiateTransferRequest request,
+                                                      String staffId, String companyId) {
+        Warehouse fromWarehouse = warehouseRepository.findByIdAndIsActiveTrue(request.getFromWarehouseId())
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getFromWarehouseId()));
+        Warehouse toWarehouse = warehouseRepository.findByIdAndIsActiveTrue(request.getToWarehouseId())
+                .orElseThrow(() -> new WarehouseNotFoundException(request.getToWarehouseId()));
+
+        DistanceResult distanceResult = googleMapsService.getDrivingDistanceKm(
+                fromWarehouse.getId(), fromWarehouse.getLatitude(), fromWarehouse.getLongitude(),
+                toWarehouse.getId(), toWarehouse.getLatitude(), toWarehouse.getLongitude());
+
+        TransferSuggestion suggestion = TransferSuggestion.builder()
+                .productId(request.getProductId())
+                .fromWarehouseId(request.getFromWarehouseId())
+                .toWarehouseId(request.getToWarehouseId())
+                .quantity(request.getQuantity())
+                .distanceKm(BigDecimal.valueOf(distanceResult.km()))
+                .distanceSource(distanceResult.source())
+                .status(TransferStatus.SUGGESTED)
+                .build();
+
+        TransferSuggestion saved = transferRepository.save(suggestion);
+        eventProducer.publishTransferSuggestionCreated(
+                companyId, saved.getId(), request.getFromWarehouseId(),
+                request.getToWarehouseId(), request.getProductId(),
+                request.getQuantity(), distanceResult.km());
+        return toResponse(saved);
+    }
+
+    @Override
+    public Page<TransferSuggestionResponse> list(String role, String warehouseId, Pageable pageable) {
         if ("WAREHOUSE_STAFF".equals(role)) {
-            return transferRepository.findByFromWarehouseIdOrToWarehouseId(warehouseId, warehouseId)
-                    .stream().map(this::toResponse).toList();
+            return transferRepository.findByFromWarehouseIdOrToWarehouseId(warehouseId, warehouseId, pageable)
+                    .map(this::toResponse);
         }
-        return transferRepository.findAll().stream().map(this::toResponse).toList();
+        return transferRepository.findAll(pageable).map(this::toResponse);
     }
 
     @Override
@@ -110,6 +150,11 @@ public class TransferServiceImpl implements TransferService {
     }
 
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public void dispatch(String id, String staffId, String staffWarehouseId, String companyId) {
         TransferSuggestion suggestion = findOrThrow(id);
@@ -123,6 +168,10 @@ public class TransferServiceImpl implements TransferService {
         StockLevel fromStock = stockLevelRepository
                 .findByProductIdAndWarehouseId(suggestion.getProductId(), suggestion.getFromWarehouseId())
                 .orElseThrow(() -> new StockLevelNotFoundException(suggestion.getProductId(), suggestion.getFromWarehouseId()));
+
+        if (fromStock.getCurrentStock() < suggestion.getQuantity()) {
+            throw new InsufficientStockException(fromStock.getCurrentStock(), suggestion.getQuantity());
+        }
 
         fromStock.setCurrentStock(fromStock.getCurrentStock() - suggestion.getQuantity());
         stockLevelRepository.save(fromStock);
@@ -140,7 +189,18 @@ public class TransferServiceImpl implements TransferService {
         transferRepository.save(suggestion);
     }
 
+    @Recover
+    void recoverDispatch(ObjectOptimisticLockingFailureException ex,
+                         String id, String staffId, String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
+    }
+
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public void accept(String id, String staffId, String staffWarehouseId, String companyId) {
         TransferSuggestion suggestion = findOrThrow(id);
@@ -172,7 +232,18 @@ public class TransferServiceImpl implements TransferService {
         eventProducer.publishTransferAccepted(companyId, id, staffId);
     }
 
+    @Recover
+    void recoverAccept(ObjectOptimisticLockingFailureException ex,
+                       String id, String staffId, String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
+    }
+
     @Override
+    @Retryable(
+        retryFor = ObjectOptimisticLockingFailureException.class,
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 50, multiplier = 2)
+    )
     @Transactional
     public void rejectDelivery(String id, String staffId, String staffWarehouseId, String companyId) {
         TransferSuggestion suggestion = findOrThrow(id);
@@ -182,6 +253,23 @@ public class TransferServiceImpl implements TransferService {
         if (!suggestion.getToWarehouseId().equals(staffWarehouseId)) {
             throw new WarehouseNotAssignedException(suggestion.getToWarehouseId());
         }
+
+        StockLevel fromStock = stockLevelRepository
+                .findByProductIdAndWarehouseId(suggestion.getProductId(), suggestion.getFromWarehouseId())
+                .orElseThrow(() -> new StockLevelNotFoundException(suggestion.getProductId(), suggestion.getFromWarehouseId()));
+
+        fromStock.setCurrentStock(fromStock.getCurrentStock() + suggestion.getQuantity());
+        stockLevelRepository.save(fromStock);
+
+        stockMovementRepository.save(StockMovement.builder()
+                .productId(suggestion.getProductId())
+                .warehouseId(suggestion.getFromWarehouseId())
+                .type(MovementType.TRANSFER_IN)
+                .quantity(suggestion.getQuantity())
+                .referenceId(id)
+                .createdBy(staffId)
+                .build());
+
         suggestion.setStatus(TransferStatus.DELIVERY_REJECTED);
         transferRepository.save(suggestion);
 
@@ -189,6 +277,12 @@ public class TransferServiceImpl implements TransferService {
                 suggestion.getProductId(), suggestion.getToWarehouseId(), 0, 0, companyId);
         String alertId = alert != null ? alert.getId() : null;
         eventProducer.publishTransferRejected(companyId, id, staffId, alertId);
+    }
+
+    @Recover
+    void recoverRejectDelivery(ObjectOptimisticLockingFailureException ex,
+                               String id, String staffId, String staffWarehouseId, String companyId) {
+        throw new StockConflictException();
     }
 
     private TransferSuggestion findOrThrow(String id) {

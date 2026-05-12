@@ -6,13 +6,14 @@ import com.inventalert.inventoryService.security.model.JwtUser;
 import com.inventalert.inventoryService.service.ReconciliationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/reconciliations")
@@ -32,8 +33,9 @@ public class ReconciliationController {
 
     @GetMapping
     @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<List<ReconciliationResponse>> list() {
-        return ResponseEntity.ok(reconciliationService.list());
+    public ResponseEntity<Page<ReconciliationResponse>> list(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(reconciliationService.list(pageable));
     }
 
     @PatchMapping("/{id}/approve")
