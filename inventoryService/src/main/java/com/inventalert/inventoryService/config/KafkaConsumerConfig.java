@@ -8,7 +8,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +38,13 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<String, Object> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+
+        // Schema provisioning is critical — retry for up to 5 minutes: 2s → 4s → 8s → 16s → 30s → …
+        ExponentialBackOff backOff = new ExponentialBackOff(2_000L, 2.0);
+        backOff.setMaxInterval(30_000L);
+        backOff.setMaxElapsedTime(300_000L);
+        factory.setCommonErrorHandler(new DefaultErrorHandler(backOff));
+
         return factory;
     }
 }
