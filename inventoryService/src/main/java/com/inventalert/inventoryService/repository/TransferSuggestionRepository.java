@@ -14,4 +14,5 @@ public interface TransferSuggestionRepository extends JpaRepository<TransferSugg
     Optional<TransferSuggestion> findByIdAndStatus(String id, TransferStatus status);
     List<TransferSuggestion> findByFromWarehouseIdOrToWarehouseId(String fromWarehouseId, String toWarehouseId);
     Page<TransferSuggestion> findByFromWarehouseIdOrToWarehouseId(String fromWarehouseId, String toWarehouseId, Pageable pageable);
+    boolean existsByProductIdAndToWarehouseIdAndStatusIn(String productId, String toWarehouseId, List<TransferStatus> statuses);
 }
