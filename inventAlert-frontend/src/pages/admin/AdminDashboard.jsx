@@ -676,7 +676,16 @@ function ProductsPanel() {
   const updateRow = (i, field, val) => setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: val } : r))
   const removeRow = i => setRows(rs => rs.filter((_, idx) => idx !== i))
 
-  const openAdd = () => { setRows([{ ...EMPTY_ROW }]); setEdit(null); setShowAdd(true) }
+  const switchAddView = (mode) => {
+    if (mode === 'table') {
+      setRows(rs => { const p = [...rs]; while (p.length < 10) p.push({ ...EMPTY_ROW }); return p })
+    } else {
+      setRows(rs => { const ne = rs.filter(r => r.name || r.sku); return ne.length > 0 ? ne : [{ ...EMPTY_ROW }] })
+    }
+    setAddViewMode(mode)
+  }
+
+  const openAdd = () => { setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards'); setEdit(null); setShowAdd(true) }
   const openEdit = p => { setForm({ name: p.name, sku: p.sku, unitOfMeasure: p.unitOfMeasure, defaultThreshold: p.defaultThreshold }); setEdit(p); setShowAdd(true) }
 
   const handleSubmit = e => {
@@ -810,71 +819,64 @@ function ProductsPanel() {
           <form onSubmit={handleSubmit}>
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs text-gray-500">{rows.length} product{rows.length !== 1 ? 's' : ''} to add</p>
-              <ViewToggle mode={addViewMode} onChange={setAddViewMode} />
+              <ViewToggle mode={addViewMode} onChange={switchAddView} />
             </div>
 
             {addViewMode === 'table' ? (
-              <div className="rounded-xl border border-gray-200 overflow-hidden mb-4">
+              <div className="rounded-lg border border-gray-300 overflow-visible mb-4">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide w-8">#</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name <span className="text-red-400">*</span></th>
-                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide w-32">SKU <span className="text-red-400">*</span></th>
-                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide w-28">Unit</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide w-24">Threshold</th>
-                      <th className="w-10"></th>
+                    <tr className="bg-gray-100">
+                      <th className="w-8 border-b-2 border-b-gray-300 border-r border-r-gray-300 py-2.5 text-center text-[11px] text-gray-500 font-medium select-none">#</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300">Name</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300 w-32">SKU</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300 w-28">Unit</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 w-24">Threshold</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody>
                     {rows.map((row, i) => (
-                      <tr key={i}>
-                        <td className="px-3 py-2 text-gray-400 text-xs font-mono">{String(i + 1).padStart(2, '0')}</td>
-                        <td className="px-3 py-2">
+                      <tr key={i} className="border-b border-gray-200 last:border-b-0">
+                        <td className="w-8 bg-gray-50 border-r border-gray-200 text-center text-[11px] text-gray-400 select-none py-1 tabular-nums">{i + 1}</td>
+                        <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
                           <input
                             value={row.name} onChange={e => updateRow(i, 'name', e.target.value)}
-                            placeholder="Industrial Laptop" required
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                            placeholder="Industrial Laptop"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
                           <input
                             value={row.sku} onChange={e => updateRow(i, 'sku', e.target.value)}
-                            placeholder="LAP-001" required
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white font-mono focus:outline-none focus:ring-2 focus:ring-teal-600"
+                            placeholder="LAP-001"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm font-mono placeholder:text-gray-300"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
                           <input
                             value={row.unitOfMeasure} onChange={e => updateRow(i, 'unitOfMeasure', e.target.value)}
                             placeholder="units"
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="p-0 focus-within:bg-blue-50/50">
                           <input
-                            type="number" min="0" value={row.defaultThreshold} onChange={e => updateRow(i, 'defaultThreshold', e.target.value)}
+                            type="number" min="0" value={row.defaultThreshold}
+                            onChange={e => updateRow(i, 'defaultThreshold', e.target.value)}
                             placeholder="20"
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                            className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
                           />
-                        </td>
-                        <td className="px-3 py-2">
-                          <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <button
-                  type="button"
-                  onClick={() => setRows(rs => [...rs, { ...EMPTY_ROW }])}
-                  className="w-full py-2.5 text-sm text-gray-500 hover:text-teal-600 hover:bg-teal-50/40 transition-colors font-medium flex items-center justify-center gap-1.5 border-t border-gray-100"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                  Add row
-                </button>
+                <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{rows.filter(r => r.name || r.sku).length} of {rows.length} rows filled</span>
+                  <button type="button" onClick={() => setRows(rs => { const a = [...rs]; for (let j = 0; j < 10; j++) a.push({ ...EMPTY_ROW }); return a })} className="text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                    + Add 10 more rows
+                  </button>
+                </div>
               </div>
             ) : (
               <>

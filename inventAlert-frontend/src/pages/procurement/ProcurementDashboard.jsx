@@ -15,7 +15,7 @@ const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', d
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
-function FilterableSelect({ value, onChange, options, placeholder = 'Select…', required }) {
+function FilterableSelect({ value, onChange, options, placeholder = 'Select…', required, inputClassName }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const selected = options.find(o => o.value === value)
@@ -32,7 +32,7 @@ function FilterableSelect({ value, onChange, options, placeholder = 'Select…',
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
         onFocus={() => { setOpen(true); setQuery('') }}
         required={required && !value}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"
+        className={inputClassName ?? "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent"}
       />
       {open && (
         <div className="absolute z-50 top-full mt-0.5 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
@@ -335,6 +335,15 @@ function ReceiveGoodsPanel({ myWarehouseIds }) {
     setTimeout(() => setSuccess(false), 4000)
   }
 
+  const switchView = (mode) => {
+    if (mode === 'table') {
+      setRows(rs => { const p = [...rs]; while (p.length < 10) p.push({ ...EMPTY_GOODS_ROW }); return p })
+    } else {
+      setRows(rs => { const ne = rs.filter(r => r.productId || r.quantity); return ne.length > 0 ? ne : [{ ...EMPTY_GOODS_ROW }] })
+    }
+    setViewMode(mode)
+  }
+
   if (summary) {
     return (
       <div className="space-y-4">
@@ -419,53 +428,50 @@ function ReceiveGoodsPanel({ myWarehouseIds }) {
                 {myWarehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </div>
-            <ViewToggle mode={viewMode} onChange={setViewMode} />
+            <ViewToggle mode={viewMode} onChange={switchView} />
           </div>
 
           {viewMode === 'table' ? (
-            <div className="rounded-xl border border-gray-200 overflow-visible">
+            <div className="rounded-lg border border-gray-300 overflow-visible">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Product</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide w-40">Qty Received</th>
-                    <th className="w-10"></th>
+                  <tr className="bg-gray-100">
+                    <th className="w-10 border-b-2 border-b-gray-300 border-r border-r-gray-300 py-2.5 text-center text-[11px] text-gray-500 font-medium select-none">#</th>
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 border-r border-r-gray-300">Product</th>
+                    <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide border-b-2 border-b-gray-300 w-40">Qty Received</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody>
                   {rows.map((row, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2 text-gray-400 text-xs font-mono">{String(i + 1).padStart(2, '0')}</td>
-                      <td className="px-3 py-2">
+                    <tr key={i} className="border-b border-gray-200 last:border-b-0">
+                      <td className="w-10 bg-gray-50 border-r border-gray-200 text-center text-[11px] text-gray-400 select-none py-1 tabular-nums">{i + 1}</td>
+                      <td className="p-0 border-r border-gray-200 focus-within:bg-blue-50/50">
                         <FilterableSelect
                           value={row.productId}
                           onChange={val => updateRow(i, 'productId', val)}
                           options={activeProducts.map(p => ({ value: p.id, label: `${p.name} (${p.sku})` }))}
                           placeholder="Select product…"
-                          required
+                          inputClassName="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="p-0 focus-within:bg-blue-50/50">
                         <input
-                          type="number" min="1" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} required
-                          placeholder="e.g. 50"
-                          className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-600"
+                          type="number" min="1" value={row.quantity}
+                          onChange={e => updateRow(i, 'quantity', e.target.value)}
+                          placeholder="0"
+                          className="w-full px-3 py-2.5 bg-transparent border-0 focus:outline-none text-sm placeholder:text-gray-300"
                         />
-                      </td>
-                      <td className="px-3 py-2">
-                        <button type="button" onClick={() => removeRow(i)} disabled={rows.length === 1} className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 disabled:opacity-0 disabled:pointer-events-none transition-colors">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <button type="button" onClick={() => setRows(rs => [...rs, { ...EMPTY_GOODS_ROW }])} className="w-full py-2.5 text-sm text-gray-500 hover:text-teal-600 hover:bg-teal-50/40 transition-colors font-medium flex items-center justify-center gap-1.5 border-t border-gray-100">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                Add row
-              </button>
+              <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 flex items-center justify-between">
+                <span className="text-xs text-gray-400">{rows.filter(r => r.productId || r.quantity).length} of {rows.length} rows filled</span>
+                <button type="button" onClick={() => setRows(rs => { const a = [...rs]; for (let j = 0; j < 10; j++) a.push({ ...EMPTY_GOODS_ROW }); return a })} className="text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors">
+                  + Add 10 more rows
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
