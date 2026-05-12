@@ -6,17 +6,16 @@ import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { setCompanyLogo } from '../../store/slices/authSlice'
 import { uploadToCloudinary } from '../../services/cloudinary'
-import {
-  addWarehouse, updateWarehouse, toggleWarehouseActive,
-  addProduct, updateProduct, toggleProductActive,
-} from '../../store/slices/stockSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
 import {
   useGetMyCompanyQuery, useUpdateMyCompanyMutation,
   useGetUsersQuery, useCreateUserMutation,
   useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
   useGetUserAssignmentsQuery, useAssignToWarehouseMutation, useRemoveAssignmentMutation,
-  useGetWarehousesQuery,
+  useGetWarehousesQuery, useCreateWarehouseMutation, useUpdateWarehouseMutation,
+  useDeactivateWarehouseMutation, useActivateWarehouseMutation,
+  useGetProductsQuery, useCreateProductMutation, useUpdateProductMutation, useImportProductsMutation,
+  useGetStockByWarehouseQuery,
 } from '../../apis/inventAlertApi'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
@@ -140,65 +139,26 @@ const ROLE_PILL = {
 }
 
 function WarehouseDetail({ warehouse, onBack }) {
-  const { warehouseAssignments, users } = useSelector(s => s.users)
-  const { stockLevels, products, movements, warehouses } = useSelector(s => s.stock)
-  const { transfers } = useSelector(s => s.transfers)
+  const { data: stockLevels = [], isLoading: stockLoading } = useGetStockByWarehouseQuery(warehouse.id)
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
   const [stockSearch, setStockSearch] = useState('')
   const [stockPage, setStockPage] = useState(0)
-  const [movSearch, setMovSearch] = useState('')
-  const [movPage, setMovPage] = useState(0)
-  const [tranSearch, setTranSearch] = useState('')
-  const [tranPage, setTranPage] = useState(0)
-  const [showAllStaff, setShowAllStaff] = useState(false)
   const WH_PAGE = 5
 
-  const assignedUserIds = warehouseAssignments.filter(a => a.warehouseId === warehouse.id).map(a => a.userId)
-  const assignedUsers = users.filter(u => assignedUserIds.includes(u.id))
-
-  const whStock = stockLevels
-    .filter(sl => sl.warehouseId === warehouse.id)
-    .map(sl => ({
-      ...sl,
-      productName: products.find(p => p.id === sl.productId)?.name || sl.productId,
-      sku: products.find(p => p.id === sl.productId)?.sku || '',
-      unit: products.find(p => p.id === sl.productId)?.unitOfMeasure || '',
-      status: sl.currentStock < sl.threshold ? 'CRITICAL' : sl.currentStock < sl.threshold * 1.25 ? 'WARNING' : 'OK',
-    }))
-
-  const whMovements = movements
-    .filter(m => m.warehouseId === warehouse.id)
-    .map(m => ({
-      ...m,
-      productName: products.find(p => p.id === m.productId)?.name || m.productId,
-      createdByName: users.find(u => u.id === m.createdBy)?.name || m.createdBy,
-    }))
-
-  const whTransfers = transfers
-    .filter(t => t.fromWarehouseId === warehouse.id || t.toWarehouseId === warehouse.id)
-    .map(t => ({
-      ...t,
-      productName: products.find(p => p.id === t.productId)?.name || t.productId,
-      direction: t.fromWarehouseId === warehouse.id ? 'OUT' : 'IN',
-      otherWarehouse: warehouses.find(w => w.id === (t.fromWarehouseId === warehouse.id ? t.toWarehouseId : t.fromWarehouseId))?.name || '?',
-    }))
+  const whStock = stockLevels.map(sl => ({
+    ...sl,
+    productName: products.find(p => p.id === sl.productId)?.name || sl.productId,
+    sku: products.find(p => p.id === sl.productId)?.sku || '',
+    unit: products.find(p => p.id === sl.productId)?.unitOfMeasure || '',
+    status: sl.currentStock < sl.threshold ? 'CRITICAL' : sl.currentStock < sl.threshold * 1.25 ? 'WARNING' : 'OK',
+  }))
 
   const criticalCount = whStock.filter(s => s.status === 'CRITICAL').length
-  const activeTransfers = whTransfers.filter(t => ['SUGGESTED', 'APPROVED', 'IN_TRANSIT'].includes(t.status)).length
-
-  const keyStaff = assignedUsers.filter(u => u.role === 'MANAGER' || u.role === 'PROCUREMENT_OFFICER')
-  const warehouseStaff = assignedUsers.filter(u => u.role === 'WAREHOUSE_STAFF')
 
   const filteredStock = whStock.filter(s => !stockSearch || s.productName.toLowerCase().includes(stockSearch.toLowerCase()) || s.sku.toLowerCase().includes(stockSearch.toLowerCase()))
   const stockPages = Math.max(1, Math.ceil(filteredStock.length / WH_PAGE))
   const pagedStock = filteredStock.slice(stockPage * WH_PAGE, (stockPage + 1) * WH_PAGE)
-
-  const filteredMov = whMovements.filter(m => !movSearch || m.productName.toLowerCase().includes(movSearch.toLowerCase()) || m.createdByName.toLowerCase().includes(movSearch.toLowerCase()))
-  const movPages = Math.max(1, Math.ceil(filteredMov.length / WH_PAGE))
-  const pagedMov = filteredMov.slice(movPage * WH_PAGE, (movPage + 1) * WH_PAGE)
-
-  const filteredTran = whTransfers.filter(t => !tranSearch || t.productName.toLowerCase().includes(tranSearch.toLowerCase()) || t.otherWarehouse.toLowerCase().includes(tranSearch.toLowerCase()))
-  const tranPages = Math.max(1, Math.ceil(filteredTran.length / WH_PAGE))
-  const pagedTran = filteredTran.slice(tranPage * WH_PAGE, (tranPage + 1) * WH_PAGE)
 
   return (
     <div className="space-y-5">
@@ -223,72 +183,10 @@ function WarehouseDetail({ warehouse, onBack }) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Assigned Users" value={assignedUsers.length} color="blue" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard title="Products in Stock" value={whStock.length} color="teal" />
         <StatCard title="Critical Items" value={criticalCount} color={criticalCount > 0 ? 'red' : 'green'} />
-        <StatCard title="Active Transfers" value={activeTransfers} color={activeTransfers > 0 ? 'amber' : 'green'} />
-      </div>
-
-      {/* Assigned Team */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Assigned Team <span className="text-gray-400 font-normal text-sm">({assignedUsers.length})</span></h3>
-        </div>
-        {assignedUsers.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-gray-400 italic">No users assigned to this warehouse.</p>
-        ) : (
-          <div className="p-4 space-y-3">
-            {keyStaff.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No manager or procurement officer assigned.</p>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                {keyStaff.map(u => (
-                  <div key={u.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
-                    <div className="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
-                      {u.name[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900 leading-tight">{u.name}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${ROLE_PILL[u.role] || 'bg-gray-100 text-gray-600'}`}>
-                        {u.role.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {warehouseStaff.length > 0 && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowAllStaff(s => !s)}
-                  className="flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium px-1 py-0.5 transition-colors"
-                >
-                  <svg className={`w-3.5 h-3.5 transition-transform ${showAllStaff ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  {showAllStaff ? 'Hide' : 'Show'} {warehouseStaff.length} warehouse staff member{warehouseStaff.length !== 1 ? 's' : ''}
-                </button>
-                {showAllStaff && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {warehouseStaff.map(u => (
-                      <div key={u.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                        <div className="w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-xs shrink-0">
-                          {u.name[0]}
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-900 leading-tight">{u.name}</p>
-                          <p className="text-xs text-gray-400">{u.email}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <StatCard title="Low Stock" value={whStock.filter(s => s.status === 'WARNING').length} color="amber" />
       </div>
 
       {/* Stock Levels */}
@@ -298,33 +196,37 @@ function WarehouseDetail({ warehouse, onBack }) {
           <SearchBar value={stockSearch} onChange={v => { setStockSearch(v); setStockPage(0) }} placeholder="Search product or SKU…" />
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Product', 'SKU', 'Unit', 'Stock', 'Threshold', 'Status'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {pagedStock.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400 text-sm">{stockSearch ? 'No matching stock items' : 'No stock recorded for this warehouse'}</td></tr>
-              ) : pagedStock.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50/60">
-                  <td className="px-5 py-3 font-medium text-gray-900">{s.productName}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-gray-500">{s.sku}</td>
-                  <td className="px-5 py-3 text-gray-600">{s.unit}</td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded font-semibold ${s.status === 'CRITICAL' ? 'text-red-700 bg-red-50' : s.status === 'WARNING' ? 'text-amber-700 bg-amber-50' : 'text-green-700 bg-green-50'}`}>
-                      {s.currentStock}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-gray-600">{s.threshold}</td>
-                  <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
+          {stockLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'SKU', 'Unit', 'Stock', 'Threshold', 'Status'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {pagedStock.length === 0 ? (
+                  <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400 text-sm">{stockSearch ? 'No matching stock items' : 'No stock recorded for this warehouse'}</td></tr>
+                ) : pagedStock.map(s => (
+                  <tr key={s.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-medium text-gray-900">{s.productName}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-gray-500">{s.sku}</td>
+                    <td className="px-5 py-3 text-gray-600">{s.unit}</td>
+                    <td className="px-5 py-3">
+                      <span className={`px-2 py-0.5 rounded font-semibold ${s.status === 'CRITICAL' ? 'text-red-700 bg-red-50' : s.status === 'WARNING' ? 'text-amber-700 bg-amber-50' : 'text-green-700 bg-green-50'}`}>
+                        {s.currentStock}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-gray-600">{s.threshold}</td>
+                    <td className="px-5 py-3"><StatusBadge status={s.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
         {stockPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
@@ -332,92 +234,6 @@ function WarehouseDetail({ warehouse, onBack }) {
             <div className="flex gap-1">
               <button disabled={stockPage === 0} onClick={() => setStockPage(p => p - 1)} className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Prev</button>
               <button disabled={stockPage >= stockPages - 1} onClick={() => setStockPage(p => p + 1)} className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Recent Movements */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Recent Movements <span className="text-gray-400 font-normal text-sm">({filteredMov.length})</span></h3>
-          <SearchBar value={movSearch} onChange={v => { setMovSearch(v); setMovPage(0) }} placeholder="Search product or person…" />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Product', 'Type', 'Qty', 'Recorded By', 'Date'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {pagedMov.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">No movements yet</td></tr>
-              ) : pagedMov.map(m => (
-                <tr key={m.id} className="hover:bg-gray-50/60">
-                  <td className="px-5 py-3 font-medium text-gray-900">{m.productName}</td>
-                  <td className="px-5 py-3"><StatusBadge status={m.type} size="xs" /></td>
-                  <td className="px-5 py-3 font-medium text-gray-900">{m.quantity}</td>
-                  <td className="px-5 py-3 text-gray-500">{m.createdByName}</td>
-                  <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDT(m.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {movPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
-            <span className="text-xs text-gray-400">Page {movPage + 1} of {movPages}</span>
-            <div className="flex gap-1">
-              <button disabled={movPage === 0} onClick={() => setMovPage(p => p - 1)} className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Prev</button>
-              <button disabled={movPage >= movPages - 1} onClick={() => setMovPage(p => p + 1)} className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Recent Transfers */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Recent Transfers <span className="text-gray-400 font-normal text-sm">({filteredTran.length})</span></h3>
-          <SearchBar value={tranSearch} onChange={v => { setTranSearch(v); setTranPage(0) }} placeholder="Search product or warehouse…" />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Product', 'Direction', 'Other Warehouse', 'Qty', 'Status'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {pagedTran.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">No transfers yet</td></tr>
-              ) : pagedTran.map(t => (
-                <tr key={t.id} className="hover:bg-gray-50/60">
-                  <td className="px-5 py-3 font-medium text-gray-900">{t.productName}</td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.direction === 'OUT' ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700'}`}>
-                      {t.direction}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-gray-600">{t.otherWarehouse}</td>
-                  <td className="px-5 py-3 font-medium text-gray-900">{t.quantity}</td>
-                  <td className="px-5 py-3"><StatusBadge status={t.status} size="xs" /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {tranPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
-            <span className="text-xs text-gray-400">Page {tranPage + 1} of {tranPages}</span>
-            <div className="flex gap-1">
-              <button disabled={tranPage === 0} onClick={() => setTranPage(p => p - 1)} className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Prev</button>
-              <button disabled={tranPage >= tranPages - 1} onClick={() => setTranPage(p => p + 1)} className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
             </div>
           </div>
         )}
@@ -502,14 +318,24 @@ function CompanyPanel() {
 
 // ── Warehouses Panel ──────────────────────────────────────────────────────────
 
-function ManageWarehouseModal({ wh, form, setForm, onClose, dispatch }) {
+function ManageWarehouseModal({ wh, onClose }) {
+  const [updateWarehouseMutation, { isLoading: isSaving }] = useUpdateWarehouseMutation()
+  const [deactivateWarehouse] = useDeactivateWarehouseMutation()
+  const [activateWarehouse] = useActivateWarehouseMutation()
+  const [form, setForm] = useState({ name: wh.name, address: wh.address })
   const [confirm, setConfirm] = useState(null)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
-  const handleEdit = e => {
+
+  const handleEdit = async e => {
     e.preventDefault()
-    dispatch(updateWarehouse({ id: wh.id, ...form }))
-    toast.success('Warehouse updated')
+    try {
+      await updateWarehouseMutation({ id: wh.id, name: form.name, address: form.address }).unwrap()
+      toast.success('Warehouse updated')
+    } catch (err) {
+      toast.error(err?.data?.message || 'Update failed')
+    }
   }
+
   return (
     <>
       <Modal title={`Manage — ${wh.name}`} wide onClose={onClose}>
@@ -526,7 +352,9 @@ function ManageWarehouseModal({ wh, form, setForm, onClose, dispatch }) {
                   required
                 />
               </Field>
-              <button type="submit" className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Save Changes</button>
+              <button type="submit" disabled={isSaving} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70">
+                {isSaving ? 'Saving…' : 'Save Changes'}
+              </button>
             </form>
           </div>
           <div className="pt-4 border-t border-gray-100">
@@ -534,7 +362,22 @@ function ManageWarehouseModal({ wh, form, setForm, onClose, dispatch }) {
             <div className="flex items-center justify-between">
               <StatusBadge status={wh.isActive ? 'ACTIVE' : 'SUSPENDED'} />
               <button
-                onClick={() => setConfirm({ action: () => { dispatch(toggleWarehouseActive(wh.id)); toast.success(wh.isActive ? 'Deactivated' : 'Activated'); onClose() }, title: wh.isActive ? 'Deactivate Warehouse' : 'Activate Warehouse', message: wh.isActive ? `Deactivate ${wh.name}? Users assigned here will lose warehouse access.` : `Activate ${wh.name}?`, label: wh.isActive ? 'Deactivate' : 'Activate', danger: wh.isActive })}
+                onClick={() => setConfirm({
+                  action: async () => {
+                    try {
+                      if (wh.isActive) await deactivateWarehouse(wh.id).unwrap()
+                      else await activateWarehouse(wh.id).unwrap()
+                      toast.success(wh.isActive ? 'Warehouse deactivated' : 'Warehouse activated')
+                      onClose()
+                    } catch (err) {
+                      toast.error(err?.data?.message || 'Action failed')
+                    }
+                  },
+                  title: wh.isActive ? 'Deactivate Warehouse' : 'Activate Warehouse',
+                  message: wh.isActive ? `Deactivate ${wh.name}? Users assigned here will lose warehouse access.` : `Activate ${wh.name}?`,
+                  label: wh.isActive ? 'Deactivate' : 'Activate',
+                  danger: wh.isActive,
+                })}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${wh.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
               >
                 {wh.isActive ? 'Deactivate' : 'Activate'}
@@ -549,16 +392,13 @@ function ManageWarehouseModal({ wh, form, setForm, onClose, dispatch }) {
 }
 
 function WarehousesPanel() {
-  const { warehouses } = useSelector(s => s.stock)
-  const { user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
-  const [showAdd, setShowAdd] = useState(false)
-  const [edit, setEdit] = useState(null)
+  const { data: warehouses = [], isLoading } = useGetWarehousesQuery()
+  const [createWarehouse, { isLoading: isCreating }] = useCreateWarehouseMutation()
   const [form, setForm] = useState({ name: '', address: '' })
   const [search, setSearch] = useState('')
   const [selectedWh, setSelectedWh] = useState(null)
   const [manageWh, setManageWh] = useState(null)
-  const [manageForm, setManageForm] = useState({ name: '', address: '' })
+  const [showAdd, setShowAdd] = useState(false)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   if (selectedWh) {
@@ -571,20 +411,17 @@ function WarehousesPanel() {
     w.address.toLowerCase().includes(search.toLowerCase())
   )
 
-  const openAdd = () => { setForm({ name: '', address: '' }); setEdit(null); setShowAdd(true) }
-  const openEdit = wh => { setForm({ name: wh.name, address: wh.address }); setEdit(wh); setShowAdd(true) }
-  const openManage = wh => { setManageForm({ name: wh.name, address: wh.address }); setManageWh(wh) }
+  const openAdd = () => { setForm({ name: '', address: '' }); setShowAdd(true) }
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    if (edit) {
-      dispatch(updateWarehouse({ id: edit.id, ...form }))
-      toast.success('Warehouse updated')
-    } else {
-      dispatch(addWarehouse({ ...form, createdBy: user.id }))
+    try {
+      await createWarehouse({ name: form.name, address: form.address }).unwrap()
       toast.success('Warehouse added')
+      setShowAdd(false)
+    } catch (err) {
+      toast.error(err?.data?.message || 'Failed to add warehouse')
     }
-    setShowAdd(false)
   }
 
   return (
@@ -605,41 +442,45 @@ function WarehousesPanel() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Name', 'Address', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">No warehouses found</td></tr>
-              ) : filtered.map(wh => (
-                <tr key={wh.id} className="hover:bg-gray-50/60">
-                  <td className="px-5 py-3 font-medium text-gray-900">{wh.name}</td>
-                  <td className="px-5 py-3 text-gray-600">{wh.address}</td>
-                  <td className="px-5 py-3"><StatusBadge status={wh.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setSelectedWh(wh)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                        View
-                      </button>
-                      <button onClick={() => openManage(wh)} className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors">
-                        Manage
-                      </button>
-                    </div>
-                  </td>
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Name', 'Address', 'Status', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">No warehouses found</td></tr>
+                ) : filtered.map(wh => (
+                  <tr key={wh.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-medium text-gray-900">{wh.name}</td>
+                    <td className="px-5 py-3 text-gray-600">{wh.address}</td>
+                    <td className="px-5 py-3"><StatusBadge status={wh.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setSelectedWh(wh)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                          View
+                        </button>
+                        <button onClick={() => setManageWh(wh)} className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors">
+                          Manage
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
       {showAdd && (
-        <Modal title={edit ? 'Edit Warehouse' : 'Add Warehouse'} onClose={() => setShowAdd(false)}>
+        <Modal title="Add Warehouse" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleSubmit} className="space-y-3">
             <Field label="Warehouse Name" name="name" value={form.name} onChange={ch} placeholder="Warehouse Alpha" required />
             <Field label="Address">
@@ -650,17 +491,14 @@ function WarehousesPanel() {
                 required
               />
             </Field>
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel={edit ? 'Update Warehouse' : 'Add Warehouse'} />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Warehouse'} />
           </form>
         </Modal>
       )}
       {manageWh && (
         <ManageWarehouseModal
           wh={warehouses.find(w => w.id === manageWh.id) || manageWh}
-          form={manageForm}
-          setForm={setManageForm}
           onClose={() => setManageWh(null)}
-          dispatch={dispatch}
         />
       )}
     </div>
@@ -670,16 +508,17 @@ function WarehousesPanel() {
 // ── Products Panel ────────────────────────────────────────────────────────────
 
 function ProductsPanel() {
-  const { products } = useSelector(s => s.stock)
-  const { user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { data: products = [], isLoading } = useGetProductsQuery()
+  const [createProduct, { isLoading: isCreating }] = useCreateProductMutation()
+  const [updateProductMutation, { isLoading: isUpdating }] = useUpdateProductMutation()
+  const [importProducts, { isLoading: isImporting }] = useImportProductsMutation()
   const [showAdd, setShowAdd] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
   const [edit, setEdit] = useState(null)
   const [form, setForm] = useState({ name: '', sku: '', unitOfMeasure: '', defaultThreshold: '' })
   const [addViewMode, setAddViewMode] = useState('cards')
   const [search, setSearch] = useState('')
-  const [csvText, setCsvText] = useState('')
+  const [csvFile, setCsvFile] = useState(null)
   const [csvPreview, setCsvPreview] = useState([])
   const [csvError, setCsvError] = useState('')
   const [confirm, setConfirm] = useState(null)
@@ -708,50 +547,54 @@ function ProductsPanel() {
   const openAdd = () => { setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards'); setEdit(null); setShowAdd(true) }
   const openEdit = p => { setForm({ name: p.name, sku: p.sku, unitOfMeasure: p.unitOfMeasure, defaultThreshold: p.defaultThreshold }); setEdit(p); setShowAdd(true) }
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (edit) {
-      dispatch(updateProduct({ id: edit.id, ...form, defaultThreshold: +form.defaultThreshold }))
-      toast.success('Product updated')
-      setShowAdd(false)
+      try {
+        await updateProductMutation({ id: edit.id, name: form.name, unitOfMeasure: form.unitOfMeasure, defaultThreshold: +form.defaultThreshold }).unwrap()
+        toast.success('Product updated')
+        setShowAdd(false)
+      } catch (err) {
+        toast.error(err?.data?.message || 'Failed to update product')
+      }
     } else {
       const valid = rows.filter(r => r.name && r.sku)
-      valid.forEach(r => dispatch(addProduct({ ...r, defaultThreshold: +r.defaultThreshold || 0, createdBy: user.id })))
-      toast.success(`${valid.length} product${valid.length !== 1 ? 's' : ''} added`)
-      setShowAdd(false)
-      setRows([{ ...EMPTY_ROW }])
+      if (valid.length === 0) { toast.error('Add at least one product with a name and SKU'); return }
+      try {
+        await Promise.all(valid.map(r => createProduct({ name: r.name, sku: r.sku, unitOfMeasure: r.unitOfMeasure || 'units', defaultThreshold: +r.defaultThreshold || 0 }).unwrap()))
+        toast.success(`${valid.length} product${valid.length !== 1 ? 's' : ''} added`)
+        setShowAdd(false)
+        setRows([{ ...EMPTY_ROW }])
+      } catch (err) {
+        toast.error(err?.data?.message || 'Failed to add products')
+      }
     }
   }
 
   const handleCSVFile = (e) => {
     const file = e.target.files[0]
     if (!file) return
+    setCsvFile(file)
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const text = ev.target.result
-      setCsvText(text)
-      const parsed = parseCSV(text)
+      const parsed = parseCSV(ev.target.result)
       if (parsed.length === 0) { setCsvError('No valid rows found. Check the format.'); setCsvPreview([]) }
       else { setCsvError(''); setCsvPreview(parsed) }
     }
     reader.readAsText(file)
   }
 
-  const handleBatchImport = () => {
-    if (csvPreview.length === 0) return
-    csvPreview.forEach(row => {
-      dispatch(addProduct({
-        name: row.name,
-        sku: row.sku,
-        unitOfMeasure: row.unitOfMeasure || 'units',
-        defaultThreshold: +row.defaultThreshold || 10,
-        createdBy: user.id,
-      }))
-    })
-    toast.success(`${csvPreview.length} products imported successfully`)
-    setShowBatch(false)
-    setCsvPreview([])
-    setCsvText('')
+  const handleBatchImport = async () => {
+    if (!csvFile) return
+    try {
+      const result = await importProducts(csvFile).unwrap()
+      toast.success(`${result.length} products imported successfully`)
+      setShowBatch(false)
+      setCsvPreview([])
+      setCsvFile(null)
+    } catch (err) {
+      toast.error(err?.data?.message || 'Import failed')
+    }
   }
 
   const downloadTemplate = () => {
@@ -784,41 +627,37 @@ function ProductsPanel() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Name', 'SKU', 'Unit', 'Default Threshold', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400 text-sm">No products found</td></tr>
-              ) : filtered.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50/60">
-                  <td className="px-5 py-3 font-medium text-gray-900">{p.name}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-gray-600">{p.sku}</td>
-                  <td className="px-5 py-3 text-gray-600">{p.unitOfMeasure}</td>
-                  <td className="px-5 py-3 font-medium text-gray-900">{p.defaultThreshold}</td>
-                  <td className="px-5 py-3"><StatusBadge status={p.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Name', 'SKU', 'Unit', 'Default Threshold', 'Status', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.length === 0 ? (
+                  <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400 text-sm">No products found</td></tr>
+                ) : filtered.map(p => (
+                  <tr key={p.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-medium text-gray-900">{p.name}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-gray-600">{p.sku}</td>
+                    <td className="px-5 py-3 text-gray-600">{p.unitOfMeasure}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{p.defaultThreshold}</td>
+                    <td className="px-5 py-3"><StatusBadge status={p.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
+                    <td className="px-5 py-3">
                       <button onClick={() => openEdit(p)} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition-colors">
                         Edit
                       </button>
-                      <button
-                        onClick={() => setConfirm({ action: () => { dispatch(toggleProductActive(p.id)); toast.success(p.isActive ? 'Product archived' : 'Product unarchived') }, title: p.isActive ? 'Archive Product' : 'Unarchive Product', message: p.isActive ? `Archive ${p.name}? It will no longer be available for new stock records.` : `Unarchive ${p.name}?`, label: p.isActive ? 'Archive' : 'Unarchive', danger: p.isActive })}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${p.isActive ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-teal-50 text-teal-700 border-teal-100 hover:bg-teal-100'}`}
-                      >
-                        {p.isActive ? 'Archive' : 'Unarchive'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -943,7 +782,7 @@ function ProductsPanel() {
       )}
 
       {showBatch && (
-        <Modal title="Batch Import Products" wide onClose={() => { setShowBatch(false); setCsvPreview([]); setCsvError('') }}>
+        <Modal title="Batch Import Products" wide onClose={() => { setShowBatch(false); setCsvPreview([]); setCsvError(''); setCsvFile(null) }}>
           <div className="space-y-4">
             <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
               <p className="text-sm text-teal-800 font-medium mb-1">CSV Format</p>
@@ -960,8 +799,8 @@ function ProductsPanel() {
               <svg className="w-10 h-10 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <p className="text-sm text-gray-600 font-medium">Click to upload CSV file</p>
-              <p className="text-xs text-gray-400 mt-1">or drag and drop</p>
+              <p className="text-sm text-gray-600 font-medium">{csvFile ? csvFile.name : 'Click to upload CSV file'}</p>
+              <p className="text-xs text-gray-400 mt-1">{csvFile ? 'Click to change file' : 'or drag and drop'}</p>
               <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleCSVFile} className="hidden" />
             </div>
             {csvError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{csvError}</p>}
@@ -988,14 +827,14 @@ function ProductsPanel() {
               </div>
             )}
             <div className="flex gap-2 pt-1">
-              <button type="button" onClick={() => { setShowBatch(false); setCsvPreview([]); setCsvError('') }} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => { setShowBatch(false); setCsvPreview([]); setCsvError(''); setCsvFile(null) }} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
               <button
                 type="button"
                 onClick={handleBatchImport}
-                disabled={csvPreview.length === 0}
+                disabled={!csvFile || isImporting}
                 className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Import {csvPreview.length > 0 ? `${csvPreview.length} Products` : 'Products'}
+                {isImporting ? 'Importing…' : csvPreview.length > 0 ? `Import ${csvPreview.length} Products` : 'Import Products'}
               </button>
             </div>
           </div>

@@ -88,10 +88,54 @@ export const inventAlertApi = createApi({
       invalidatesTags: (result, error, { userId }) => [{ type: 'User', id: `${userId}-assignments` }],
     }),
 
-    // ── Warehouses (basic list — full integration in Step 6) ─────────────────
+    // ── Warehouses ────────────────────────────────────────────────────────────
     getWarehouses: build.query({
       query: () => '/api/warehouses',
       providesTags: ['Warehouse'],
+    }),
+    createWarehouse: build.mutation({
+      query: body => ({ url: '/api/warehouses', method: 'POST', body }),
+      invalidatesTags: ['Warehouse'],
+    }),
+    updateWarehouse: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/api/warehouses/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Warehouse'],
+    }),
+    deactivateWarehouse: build.mutation({
+      query: id => ({ url: `/api/warehouses/${id}/deactivate`, method: 'PATCH' }),
+      invalidatesTags: ['Warehouse'],
+    }),
+    activateWarehouse: build.mutation({
+      query: id => ({ url: `/api/warehouses/${id}/activate`, method: 'PATCH' }),
+      invalidatesTags: ['Warehouse'],
+    }),
+
+    // ── Products ──────────────────────────────────────────────────────────────
+    getProducts: build.query({
+      query: () => '/api/products',
+      providesTags: ['Product'],
+    }),
+    createProduct: build.mutation({
+      query: body => ({ url: '/api/products', method: 'POST', body }),
+      invalidatesTags: ['Product'],
+    }),
+    updateProduct: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/api/products/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['Product'],
+    }),
+    importProducts: build.mutation({
+      query: file => {
+        const fd = new FormData()
+        fd.append('file', file)
+        return { url: '/api/products/import', method: 'POST', body: fd }
+      },
+      invalidatesTags: ['Product'],
+    }),
+
+    // ── Stock ─────────────────────────────────────────────────────────────────
+    getStockByWarehouse: build.query({
+      query: warehouseId => `/api/stock/${warehouseId}`,
+      providesTags: (result, error, warehouseId) => [{ type: 'Stock', id: warehouseId }],
     }),
 
   }),
@@ -114,4 +158,13 @@ export const {
   useAssignToWarehouseMutation,
   useRemoveAssignmentMutation,
   useGetWarehousesQuery,
+  useCreateWarehouseMutation,
+  useUpdateWarehouseMutation,
+  useDeactivateWarehouseMutation,
+  useActivateWarehouseMutation,
+  useGetProductsQuery,
+  useCreateProductMutation,
+  useUpdateProductMutation,
+  useImportProductsMutation,
+  useGetStockByWarehouseQuery,
 } = inventAlertApi
