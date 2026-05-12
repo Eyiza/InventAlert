@@ -1,25 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { useSelector } from 'react-redux'
-
-const ALL_KNOWN_EMAILS = [
-  'admin@techwave.com', 'manager@techwave.com', 'staff.a@techwave.com',
-  'staff.b@techwave.com', 'procurement@techwave.com', 'superadmin@inventalert.com',
-]
+import { useForgotPasswordMutation } from '../../apis/inventAlertApi'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const { localUsers } = useSelector(s => s.auth)
+  const [error, setError] = useState('')
 
-  const handleSubmit = e => {
+  const [forgotPasswordMutation, { isLoading }] = useForgotPasswordMutation()
+
+  const handleSubmit = async e => {
     e.preventDefault()
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
+    setError('')
+    const result = await forgotPasswordMutation({ email })
+    if (result.error) {
+      setError(result.error?.data?.message || 'Something went wrong. Please try again.')
+    } else {
       setSent(true)
-    }, 700)
+    }
   }
 
   if (sent) {
@@ -36,18 +34,6 @@ export default function ForgotPassword() {
             If <strong className="text-gray-700">{email}</strong> is registered, we've sent a password reset link.
           </p>
           <p className="text-gray-400 text-xs mb-8">Didn't receive it? Check your spam folder or try again in a few minutes.</p>
-
-          <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-6 text-left">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Demo — use reset link</p>
-            <p className="text-xs text-gray-500 mb-3">In production this would be an email link. For the demo, go directly to the reset page:</p>
-            <Link
-              to={`/reset-password?email=${encodeURIComponent(email)}`}
-              className="text-sm text-teal-600 font-semibold hover:underline"
-            >
-              → Open reset page for {email}
-            </Link>
-          </div>
-
           <Link to="/login" className="text-sm text-teal-600 font-medium hover:underline">
             ← Back to sign in
           </Link>
@@ -71,6 +57,9 @@ export default function ForgotPassword() {
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Email address</label>
               <input

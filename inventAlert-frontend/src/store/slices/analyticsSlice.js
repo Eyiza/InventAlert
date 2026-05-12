@@ -1,9 +1,15 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { analytics } from '../../data/mockData'
 
 const analyticsSlice = createSlice({
   name: 'analytics',
-  initialState: analytics,
+  initialState: {
+    stockVelocity: [],
+    lowStockForecast: [],
+    reorderRecommendations: [],
+    alertFrequency: [],
+    transferEfficiency: [],
+    movementSummary: [],
+  },
   reducers: {},
 })
 

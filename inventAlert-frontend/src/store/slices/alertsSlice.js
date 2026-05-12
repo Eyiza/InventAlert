@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { alerts } from '../../data/mockData'
 
 const alertsSlice = createSlice({
   name: 'alerts',
-  initialState: { alerts },
+  initialState: { alerts: [] },
   reducers: {
     acknowledgeAlert: (state, action) => {
       const alert = state.alerts.find(a => a.id === action.payload.alertId)
