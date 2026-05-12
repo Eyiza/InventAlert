@@ -7,9 +7,12 @@ import StatCard from '../../components/shared/StatCard'
 import { approveTransfer, rejectTransfer } from '../../store/slices/transfersSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
 import { approveReconciliation, rejectReconciliation } from '../../store/slices/reconciliationsSlice'
-import { addUser, updateUserRole, assignWarehouse, deactivateUser, reactivateUser } from '../../store/slices/usersSlice'
-import { registerLocalUser } from '../../store/slices/authSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import {
+  useGetUsersQuery, useCreateUserMutation,
+  useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
+  useGetWarehousesQuery,
+} from '../../apis/inventAlertApi'
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -597,53 +600,49 @@ function AnalyticsPanel() {
 // ── Team Panel ────────────────────────────────────────────────────────────────
 
 function TeamPanel() {
-  const { users, warehouseAssignments } = useSelector(s => s.users)
-  const { user: me, companyId } = useSelector(s => s.auth)
-  const { warehouses } = useSelector(s => s.stock)
-  const dispatch = useDispatch()
+  const { data: users = [], isLoading } = useGetUsersQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const [updateUserRole] = useUpdateUserRoleMutation()
+  const [deactivateUser] = useDeactivateUserMutation()
+  const [reactivateUser] = useReactivateUserMutation()
+  const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
   const [pendingRole, setPendingRole] = useState({})
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
   const [showAddUser, setShowAddUser] = useState(false)
   const [showTempPass, setShowTempPass] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
+  const [addForm, setAddForm] = useState({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
   const chAdd = e => setAddForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const myWarehouseIds = warehouseAssignments
-    .filter(a => a.userId === me.id)
-    .map(a => a.warehouseId)
-
-  const myWarehouseId = myWarehouseIds[0] || null
   const myWarehouseName = warehouses.find(w => w.id === myWarehouseId)?.name || null
 
-  const myWarehouseUserIds = warehouseAssignments
-    .filter(a => myWarehouseIds.includes(a.warehouseId))
-    .map(a => a.userId)
-
   const teamUsers = users.filter(u =>
-    u.companyId === companyId &&
-    myWarehouseUserIds.includes(u.id) &&
     u.role !== 'ADMIN' &&
-    (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+    u.email.toLowerCase().includes(search.toLowerCase())
   )
 
-  const saveRole = (userId, role) => {
-    dispatch(updateUserRole({ id: userId, role }))
-    toast.success('Role updated')
-    setPendingRole(r => { const n = { ...r }; delete n[userId]; return n })
+  const saveRole = async (userId, role) => {
+    try {
+      await updateUserRole({ id: userId, role }).unwrap()
+      toast.success('Role updated')
+      setPendingRole(r => { const n = { ...r }; delete n[userId]; return n })
+    } catch {
+      toast.error('Failed to update role')
+    }
   }
 
-  const handleAddUser = e => {
+  const handleAddUser = async e => {
     e.preventDefault()
-    if (!myWarehouseId) { toast.error('You are not assigned to a warehouse'); return }
-    const newId = `user-${Date.now()}`
-    dispatch(addUser({ ...addForm, companyId, id: newId }))
-    dispatch(registerLocalUser({ id: newId, name: addForm.name, email: addForm.email, password: addForm.password, role: addForm.role, companyId, companyName: null, warehouseId: myWarehouseId }))
-    dispatch(assignWarehouse({ userId: newId, warehouseId: myWarehouseId, companyId }))
-    toast.success(`${addForm.name} added to ${myWarehouseName}`)
-    setShowAddUser(false)
-    setShowTempPass(false)
-    setAddForm({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
+    try {
+      await createUser({ email: addForm.email, role: addForm.role, password: addForm.password, warehouseId: myWarehouseId || null }).unwrap()
+      toast.success(`User added${myWarehouseName ? ` to ${myWarehouseName}` : ''}`)
+      setShowAddUser(false)
+      setShowTempPass(false)
+      setAddForm({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
+    } catch (err) {
+      toast.error(err?.data?.message || 'Failed to add user')
+    }
   }
 
   return (
@@ -656,100 +655,109 @@ function TeamPanel() {
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <div>
             <h3 className="font-semibold text-gray-900">Team Members</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Staff assigned to your warehouse. You can update their roles.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Company staff. You can update their roles.</p>
           </div>
           <div className="flex items-center gap-2">
             <SearchBar value={search} onChange={setSearch} placeholder="Search members…" />
-            {myWarehouseId && (
-              <button
-                onClick={() => setShowAddUser(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                Add Member
-              </button>
-            )}
+            <button
+              onClick={() => setShowAddUser(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add Member
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Member', 'Email', 'Status', 'Role', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {teamUsers.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">
-                  {myWarehouseIds.length === 0 ? 'You are not assigned to any warehouses.' : 'No team members found.'}
-                </td></tr>
-              ) : teamUsers.map(u => {
-                const isAdmin = u.role === 'ADMIN'
-                const isMe = u.id === me.id
-                const pending = pendingRole[u.id]
-                return (
-                  <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
-                          {u.name[0]}
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Member', 'Email', 'Status', 'Role', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {teamUsers.length === 0 ? (
+                  <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">No team members found.</td></tr>
+                ) : teamUsers.map(u => {
+                  const displayName = u.email.split('@')[0]
+                  const isAdmin = u.role === 'ADMIN'
+                  const isMe = u.id === me?.id
+                  const pending = pendingRole[u.id]
+                  return (
+                    <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
+                            {displayName[0].toUpperCase()}
+                          </div>
+                          <span className="font-medium text-gray-900">{displayName}</span>
                         </div>
-                        <span className="font-medium text-gray-900">{u.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">{u.email}</td>
-                    <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
-                    <td className="px-5 py-3">
-                      {isAdmin || isMe ? (
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={u.role} />
-                          {isMe && <span className="text-xs text-gray-400">(you)</span>}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={pending ?? u.role}
-                            onChange={e => setPendingRole(r => ({ ...r, [u.id]: e.target.value }))}
-                            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-teal-600"
-                          >
-                            <option value="MANAGER">Manager</option>
-                            <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
-                            <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
-                          </select>
-                          {pending && pending !== u.role && (
-                            <button
-                              onClick={() => saveRole(u.id, pending)}
-                              className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700"
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">{u.email}</td>
+                      <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
+                      <td className="px-5 py-3">
+                        {isAdmin || isMe ? (
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status={u.role} />
+                            {isMe && <span className="text-xs text-gray-400">(you)</span>}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={pending ?? u.role}
+                              onChange={e => setPendingRole(r => ({ ...r, [u.id]: e.target.value }))}
+                              className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-teal-600"
                             >
-                              Save
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      {!isAdmin && !isMe && (
-                        <button
-                          onClick={() => setConfirm({
-                            action: () => { u.isActive ? dispatch(deactivateUser(u.id)) : dispatch(reactivateUser(u.id)); toast.success(u.isActive ? `${u.name} deactivated` : `${u.name} reactivated`) },
-                            title: u.isActive ? 'Deactivate Member' : 'Reactivate Member',
-                            message: u.isActive ? `Deactivate ${u.name}? They will lose access to the system.` : `Reactivate ${u.name}? They will regain access to the system.`,
-                            label: u.isActive ? 'Deactivate' : 'Reactivate',
-                            danger: u.isActive,
-                          })}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${u.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}
-                        >
-                          {u.isActive ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                              <option value="MANAGER">Manager</option>
+                              <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
+                              <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
+                            </select>
+                            {pending && pending !== u.role && (
+                              <button
+                                onClick={() => saveRole(u.id, pending)}
+                                className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700"
+                              >
+                                Save
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {!isAdmin && !isMe && (
+                          <button
+                            onClick={() => setConfirm({
+                              action: async () => {
+                                try {
+                                  if (u.isActive) await deactivateUser(u.id).unwrap()
+                                  else await reactivateUser(u.id).unwrap()
+                                  toast.success(u.isActive ? `${displayName} deactivated` : `${displayName} reactivated`)
+                                } catch {
+                                  toast.error('Action failed')
+                                }
+                              },
+                              title: u.isActive ? 'Deactivate Member' : 'Reactivate Member',
+                              message: u.isActive ? `Deactivate ${displayName}? They will lose access to the system.` : `Reactivate ${displayName}? They will regain access to the system.`,
+                              label: u.isActive ? 'Deactivate' : 'Reactivate',
+                              danger: u.isActive,
+                            })}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${u.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}
+                          >
+                            {u.isActive ? 'Deactivate' : 'Reactivate'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -766,10 +774,6 @@ function TeamPanel() {
               </button>
             </div>
             <form onSubmit={handleAddUser} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input name="name" value={addForm.name} onChange={chAdd} placeholder="Jane Doe" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input name="email" type="email" value={addForm.email} onChange={chAdd} placeholder="jane@company.com" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
@@ -798,7 +802,7 @@ function TeamPanel() {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setShowAddUser(false)} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-                <button type="submit" className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Add Member</button>
+                <button type="submit" disabled={isCreating} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70">{isCreating ? 'Adding…' : 'Add Member'}</button>
               </div>
             </form>
           </div>
@@ -820,7 +824,7 @@ function ComplaintsPanel() {
 
   const handleSubmit = e => {
     e.preventDefault()
-    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me.name, email: me.email, companyName, companyId }))
+    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
     setSubmitted(true)
     setForm({ subject: '', priority: 'MEDIUM', message: '' })
   }
@@ -882,11 +886,10 @@ export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
   const { transfers } = useSelector(s => s.transfers)
   const { reconciliations } = useSelector(s => s.reconciliations)
-  const { stockLevels, warehouses } = useSelector(s => s.stock)
-  const { user: me } = useSelector(s => s.auth)
-  const { warehouseAssignments } = useSelector(s => s.users)
+  const { stockLevels } = useSelector(s => s.stock)
+  const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: warehouses = [] } = useGetWarehousesQuery()
 
-  const myWarehouseId = warehouseAssignments.find(a => a.userId === me?.id)?.warehouseId || null
   const myWarehouse = warehouses.find(w => w.id === myWarehouseId) || null
 
   const myWarehouseStockLevels = myWarehouseId

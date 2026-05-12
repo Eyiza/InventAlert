@@ -4,17 +4,20 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { setCompanyLogo, registerLocalUser } from '../../store/slices/authSlice'
+import { setCompanyLogo } from '../../store/slices/authSlice'
 import { uploadToCloudinary } from '../../services/cloudinary'
 import {
   addWarehouse, updateWarehouse, toggleWarehouseActive,
   addProduct, updateProduct, toggleProductActive,
 } from '../../store/slices/stockSlice'
-import {
-  addUser, updateUserRole, deactivateUser, reactivateUser,
-  assignWarehouse, removeAssignment,
-} from '../../store/slices/usersSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
+import {
+  useGetMyCompanyQuery, useUpdateMyCompanyMutation,
+  useGetUsersQuery, useCreateUserMutation,
+  useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
+  useGetUserAssignmentsQuery, useAssignToWarehouseMutation, useRemoveAssignmentMutation,
+  useGetWarehousesQuery,
+} from '../../apis/inventAlertApi'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
 
@@ -428,6 +431,7 @@ function WarehouseDetail({ warehouse, onBack }) {
 function CompanyPanel() {
   const { companyName, companyLogo } = useSelector(s => s.auth)
   const dispatch = useDispatch()
+  const [updateMyCompany] = useUpdateMyCompanyMutation()
   const fileRef = useRef()
   const [uploading, setUploading] = useState(false)
 
@@ -439,6 +443,7 @@ function CompanyPanel() {
     setUploading(true)
     try {
       const url = await uploadToCloudinary(file)
+      await updateMyCompany({ logoUrl: url })
       dispatch(setCompanyLogo(url))
       toast.success('Company logo updated')
     } catch {
@@ -481,7 +486,7 @@ function CompanyPanel() {
                 {uploading ? 'Uploading…' : companyLogo ? 'Change Logo' : 'Upload Logo'}
               </button>
               {companyLogo && !uploading && (
-                <button onClick={() => { dispatch(setCompanyLogo(null)); toast.info('Logo removed') }} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
+                <button onClick={async () => { await updateMyCompany({ logoUrl: null }); dispatch(setCompanyLogo(null)); toast.info('Logo removed') }} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
                   Remove
                 </button>
               )}
@@ -1004,35 +1009,41 @@ function ProductsPanel() {
 // ── Users Panel ───────────────────────────────────────────────────────────────
 
 function ManageUserModal({ user: u, onClose }) {
-  const { warehouses } = useSelector(s => s.stock)
-  const { warehouseAssignments } = useSelector(s => s.users)
-  const { companyId } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: assignments = [] } = useGetUserAssignmentsQuery(u.id)
+  const [updateUserRoleMutation] = useUpdateUserRoleMutation()
+  const [assignToWarehouse] = useAssignToWarehouseMutation()
+  const [removeAssignmentMutation] = useRemoveAssignmentMutation()
+  const [deactivateUserMutation] = useDeactivateUserMutation()
+  const [reactivateUserMutation] = useReactivateUserMutation()
   const [role, setRole] = useState(u.role)
   const [addWh, setAddWh] = useState('')
   const [confirm, setConfirm] = useState(null)
 
-  const assignments = warehouseAssignments
-    .filter(a => a.userId === u.id)
-    .map(a => ({ ...a, warehouseName: warehouses.find(w => w.id === a.warehouseId)?.name || a.warehouseId }))
+  const displayName = u.email.split('@')[0]
+  const assignmentsWithName = assignments.map(a => ({
+    ...a,
+    warehouseName: warehouses.find(w => w.id === a.warehouseId)?.name || a.warehouseId,
+  }))
   const alreadyAssigned = assignments.length > 0
 
-  const saveRole = () => {
-    dispatch(updateUserRole({ id: u.id, role }))
-    toast.success('Role updated')
+  const saveRole = async () => {
+    const result = await updateUserRoleMutation({ id: u.id, role })
+    if (result.data) toast.success('Role updated')
+    else toast.error(result.error?.data?.message || 'Failed to update role')
   }
 
-  const doAssign = e => {
+  const doAssign = async e => {
     e.preventDefault()
     if (!addWh) return
-    dispatch(assignWarehouse({ userId: u.id, warehouseId: addWh, companyId }))
-    toast.success('Warehouse assigned')
-    setAddWh('')
+    const result = await assignToWarehouse({ id: u.id, warehouseId: addWh })
+    if (result.data) { toast.success('Warehouse assigned'); setAddWh('') }
+    else toast.error(result.error?.data?.message || 'Assignment failed')
   }
 
   return (
     <>
-      <Modal title={`Manage — ${u.name}`} wide onClose={onClose}>
+      <Modal title={`Manage — ${displayName}`} wide onClose={onClose}>
         <div className="space-y-5">
           {/* Role */}
           <div>
@@ -1060,15 +1071,15 @@ function ManageUserModal({ user: u, onClose }) {
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Warehouse Assignments</p>
             <div className="space-y-2">
-              {assignments.length === 0 ? (
+              {assignmentsWithName.length === 0 ? (
                 <p className="text-sm text-gray-400 italic">No warehouses assigned yet.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {assignments.map(a => (
+                  {assignmentsWithName.map(a => (
                     <span key={a.id} className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-full border border-teal-200 font-medium">
                       {a.warehouseName}
                       <button
-                        onClick={() => setConfirm({ action: () => { dispatch(removeAssignment(a.id)); toast.info('Assignment removed') }, title: 'Remove Assignment', message: `Remove ${u.name} from ${a.warehouseName}?`, label: 'Remove', danger: true })}
+                        onClick={() => setConfirm({ action: async () => { await removeAssignmentMutation({ userId: u.id, assignmentId: a.id }); toast.info('Assignment removed') }, title: 'Remove Assignment', message: `Remove ${displayName} from ${a.warehouseName}?`, label: 'Remove', danger: true })}
                         className="text-teal-400 hover:text-red-500 leading-none font-bold"
                       >×</button>
                     </span>
@@ -1101,11 +1112,11 @@ function ManageUserModal({ user: u, onClose }) {
           {/* Account status */}
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-700">{u.name}</p>
+              <p className="text-sm font-medium text-gray-700">{displayName}</p>
               <p className="text-xs text-gray-400">{u.email}</p>
             </div>
             <button
-              onClick={() => setConfirm({ action: () => { u.isActive ? dispatch(deactivateUser(u.id)) : dispatch(reactivateUser(u.id)); toast.success(u.isActive ? 'User deactivated' : 'User reactivated'); onClose() }, title: u.isActive ? 'Deactivate Account' : 'Reactivate Account', message: u.isActive ? `Deactivate ${u.name}? They will lose access to the system.` : `Reactivate ${u.name}? They will regain system access.`, label: u.isActive ? 'Deactivate' : 'Reactivate', danger: u.isActive })}
+              onClick={() => setConfirm({ action: async () => { u.isActive ? await deactivateUserMutation(u.id) : await reactivateUserMutation(u.id); toast.success(u.isActive ? 'User deactivated' : 'User reactivated'); onClose() }, title: u.isActive ? 'Deactivate Account' : 'Reactivate Account', message: u.isActive ? `Deactivate ${displayName}? They will lose access to the system.` : `Reactivate ${displayName}? They will regain system access.`, label: u.isActive ? 'Deactivate' : 'Reactivate', danger: u.isActive })}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${u.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
             >
               {u.isActive ? 'Deactivate Account' : 'Reactivate Account'}
@@ -1119,58 +1130,48 @@ function ManageUserModal({ user: u, onClose }) {
 }
 
 function UsersPanel() {
-  const { users, warehouseAssignments } = useSelector(s => s.users)
-  const { user: me, companyId } = useSelector(s => s.auth)
-  const { warehouses } = useSelector(s => s.stock)
-  const dispatch = useDispatch()
+  const { data: users = [], isLoading } = useGetUsersQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { user: me } = useSelector(s => s.auth)
+  const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
   const [showAdd, setShowAdd] = useState(false)
   const [showTempPass, setShowTempPass] = useState(false)
   const [manageUser, setManageUser] = useState(null)
-  const [form, setForm] = useState({ name: '', email: '', role: 'MANAGER', password: '', warehouseId: '' })
+  const [form, setForm] = useState({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
   const [search, setSearch] = useState('')
-  const [whFilter, setWhFilter] = useState('')
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const companyUsers = users
-    .filter(u => u.companyId === companyId)
-    .filter(u => !whFilter || warehouseAssignments.some(a => a.userId === u.id && a.warehouseId === whFilter))
-    .filter(u => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+  const filtered = users.filter(u =>
+    u.email.toLowerCase().includes(search.toLowerCase())
+  )
 
-  const handleAdd = e => {
+  const handleAdd = async e => {
     e.preventDefault()
-    const newId = `user-${Date.now()}`
-    dispatch(addUser({ ...form, companyId, id: newId }))
-    dispatch(registerLocalUser({ id: newId, name: form.name, email: form.email, password: form.password, role: form.role, companyId, companyName: null, warehouseId: form.warehouseId || null }))
-    if (form.warehouseId) {
-      dispatch(assignWarehouse({ userId: newId, warehouseId: form.warehouseId, companyId }))
+    try {
+      await createUser({ email: form.email, role: form.role, password: form.password, warehouseId: form.warehouseId || null }).unwrap()
+      toast.success('User created — they must set a new password on first login')
+      setShowAdd(false)
+      setShowTempPass(false)
+      setForm({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
+    } catch (err) {
+      toast.error(err?.data?.message || 'Failed to create user')
     }
-    toast.success(`${form.name} added — they must set a new password on first login`)
-    setShowAdd(false)
-    setShowTempPass(false)
-    setForm({ name: '', email: '', role: 'MANAGER', password: '', warehouseId: '' })
   }
 
-  const roleCount = r => users.filter(u => u.companyId === companyId && u.role === r).length
+  const roleCount = r => users.filter(u => u.role === r).length
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={users.filter(u => u.companyId === companyId).length} color="blue" />
-        <StatCard title="Active" value={users.filter(u => u.companyId === companyId && u.isActive).length} color="teal" />
+        <StatCard title="Total Users" value={users.length} color="blue" />
+        <StatCard title="Active" value={users.filter(u => u.isActive).length} color="teal" />
         <StatCard title="Staff" value={roleCount('WAREHOUSE_STAFF')} color="amber" />
-        <StatCard title="Inactive" value={users.filter(u => u.companyId === companyId && !u.isActive).length} color="gray" />
+        <StatCard title="Inactive" value={users.filter(u => !u.isActive).length} color="gray" />
       </div>
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Team Members</h3>
           <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={whFilter} onChange={e => setWhFilter(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
-            >
-              <option value="">All Warehouses</option>
-              {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
             <SearchBar value={search} onChange={setSearch} placeholder="Search members…" />
             <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">
               <AddIcon /> Add User
@@ -1178,52 +1179,58 @@ function UsersPanel() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Name', 'Email', 'Role', 'Joined', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {companyUsers.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
-                        {u.name[0]}
-                      </div>
-                      <span className="font-medium text-gray-900">{u.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-gray-600">{u.email}</td>
-                  <td className="px-5 py-3"><StatusBadge status={u.role} /></td>
-                  <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{u.createdAt ? fmtDate(u.createdAt) : '—'}</td>
-                  <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
-                  <td className="px-5 py-3">
-                    {u.id !== me.id ? (
-                      <button
-                        onClick={() => setManageUser(u)}
-                        className="px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-semibold rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors"
-                      >
-                        Manage
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">You</span>
-                    )}
-                  </td>
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Name', 'Email', 'Role', 'Joined', 'Status', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map(u => {
+                  const displayName = u.email.split('@')[0]
+                  return (
+                    <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
+                            {displayName[0].toUpperCase()}
+                          </div>
+                          <span className="font-medium text-gray-900">{displayName}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">{u.email}</td>
+                      <td className="px-5 py-3"><StatusBadge status={u.role} /></td>
+                      <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{u.createdAt ? fmtDate(u.createdAt) : '—'}</td>
+                      <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
+                      <td className="px-5 py-3">
+                        {u.id !== me?.id ? (
+                          <button
+                            onClick={() => setManageUser(u)}
+                            className="px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-semibold rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors"
+                          >
+                            Manage
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">You</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
       {showAdd && (
         <Modal title="Add Team Member" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleAdd} className="space-y-3">
-            <Field label="Full Name" name="name" value={form.name} onChange={ch} placeholder="Jane Doe" required />
             <Field label="Email" name="email" type="email" value={form.email} onChange={ch} placeholder="jane@company.com" required />
             <Field label="Role">
               <select name="role" value={form.role} onChange={ch} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
@@ -1261,7 +1268,7 @@ function UsersPanel() {
               </div>
               <p className="text-xs text-gray-400 mt-1">The user will be prompted to change this on first login.</p>
             </div>
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel="Add User" />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add User'} />
           </form>
         </Modal>
       )}
@@ -1286,7 +1293,7 @@ function FeedbackPanel() {
     if (!form.subject || !form.message) return
     setLoading(true)
     setTimeout(() => {
-      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.name, email: me?.email, companyName, companyId }))
+      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
       setLoading(false)
       setSubmitted(true)
     }, 500)
@@ -1336,8 +1343,7 @@ function FeedbackPanel() {
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('warehouses')
-  const { users } = useSelector(s => s.users)
-  const { companyId } = useSelector(s => s.auth)
+  const { data: users = [] } = useGetUsersQuery()
 
   const navItems = [
     {
@@ -1353,7 +1359,7 @@ export default function AdminDashboard() {
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
     },
     {
-      id: 'users', label: 'Users', badge: users.filter(u => u.companyId === companyId).length,
+      id: 'users', label: 'Users', badge: users.length,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
     },
     {
