@@ -58,11 +58,14 @@ function Field({ label, children, ...props }) {
   )
 }
 
-function BtnRow({ onClose, submitLabel }) {
+function BtnRow({ onClose, submitLabel, loading = false }) {
   return (
     <div className="flex gap-2 pt-2">
       <button type="button" onClick={onClose} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-      <button type="submit" className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">{submitLabel}</button>
+      <button type="submit" disabled={loading} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70 flex items-center justify-center gap-2">
+        {loading && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+        {submitLabel}
+      </button>
     </div>
   )
 }
@@ -255,6 +258,7 @@ function CompanyPanel() {
   const [updateMyCompany] = useUpdateMyCompanyMutation()
   const fileRef = useRef()
   const [uploading, setUploading] = useState(false)
+  const [isRemovingLogo, setIsRemovingLogo] = useState(false)
   const [nameValue, setNameValue] = useState(companyName || '')
   const [nameSaving, setNameSaving] = useState(false)
 
@@ -311,8 +315,9 @@ function CompanyPanel() {
             <button
               type="submit"
               disabled={nameSaving || !nameValue.trim() || nameValue.trim() === companyName}
-              className="px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
+              {nameSaving && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
               {nameSaving ? 'Saving…' : 'Save'}
             </button>
           </div>
@@ -343,13 +348,23 @@ function CompanyPanel() {
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
+                {uploading && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
                 {uploading ? 'Uploading…' : companyLogo ? 'Change Logo' : 'Upload Logo'}
               </button>
               {companyLogo && !uploading && (
-                <button onClick={async () => { await updateMyCompany({ logoUrl: null }); dispatch(setCompanyLogo(null)); toast.info('Logo removed') }} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50">
-                  Remove
+                <button
+                  onClick={async () => {
+                    setIsRemovingLogo(true)
+                    try { await updateMyCompany({ logoUrl: null }); dispatch(setCompanyLogo(null)); toast.info('Logo removed') }
+                    finally { setIsRemovingLogo(false) }
+                  }}
+                  disabled={isRemovingLogo}
+                  className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isRemovingLogo && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+                  {isRemovingLogo ? 'Removing…' : 'Remove'}
                 </button>
               )}
             </div>
@@ -399,7 +414,8 @@ function ManageWarehouseModal({ wh, onClose }) {
                   required
                 />
               </Field>
-              <button type="submit" disabled={isSaving} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70">
+              <button type="submit" disabled={isSaving} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70 flex items-center justify-center gap-2">
+                {isSaving && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
                 {isSaving ? 'Saving…' : 'Save Changes'}
               </button>
             </form>
@@ -566,7 +582,7 @@ function WarehousesPanel() {
                 <p className="text-xs text-amber-600 mt-1">Select an address from the dropdown to capture coordinates.</p>
               )}
             </Field>
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Warehouse'} />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Warehouse'} loading={isCreating} />
           </form>
         </Modal>
       )}
@@ -747,7 +763,7 @@ function ProductsPanel() {
             <Field label="SKU" name="sku" value={form.sku} onChange={ch} placeholder="LAP-001" required />
             <Field label="Unit of Measure" name="unitOfMeasure" value={form.unitOfMeasure} onChange={ch} placeholder="units / boxes / kg" required />
             <Field label="Default Threshold" name="defaultThreshold" type="number" min="0" value={form.defaultThreshold} onChange={ch} required />
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel="Update Product" />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isUpdating ? 'Updating…' : 'Update Product'} loading={isUpdating} />
           </form>
         </Modal>
       )}
@@ -855,7 +871,7 @@ function ProductsPanel() {
               </>
             )}
 
-            <BtnRow onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards') }} submitLabel={`Add ${rows.filter(r => r.name).length > 1 ? `${rows.filter(r => r.name).length} Products` : 'Product'}`} />
+            <BtnRow onClose={() => { setShowAdd(false); setRows([{ ...EMPTY_ROW }]); setAddViewMode('cards') }} submitLabel={isCreating ? 'Adding…' : `Add ${rows.filter(r => r.name).length > 1 ? `${rows.filter(r => r.name).length} Products` : 'Product'}`} loading={isCreating} />
           </form>
         </Modal>
       )}
@@ -911,8 +927,9 @@ function ProductsPanel() {
                 type="button"
                 onClick={handleBatchImport}
                 disabled={!csvFile || isImporting}
-                className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
+                {isImporting && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
                 {isImporting ? 'Importing…' : csvPreview.length > 0 ? `Import ${csvPreview.length} Products` : 'Import Products'}
               </button>
             </div>
@@ -1028,8 +1045,8 @@ function SetupChecklist({ warehouses, users, onGoToWarehouses, onGoToUsers }) {
 function ManageUserModal({ user: u, onClose }) {
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const { data: assignments = [] } = useGetUserAssignmentsQuery(u.id)
-  const [updateUserRoleMutation] = useUpdateUserRoleMutation()
-  const [assignToWarehouse] = useAssignToWarehouseMutation()
+  const [updateUserRoleMutation, { isLoading: isSavingRole }] = useUpdateUserRoleMutation()
+  const [assignToWarehouse, { isLoading: isAssigning }] = useAssignToWarehouseMutation()
   const [deactivateUserMutation] = useDeactivateUserMutation()
   const [reactivateUserMutation] = useReactivateUserMutation()
   const [forgotPassword, { isLoading: isSendingReset }] = useForgotPasswordMutation()
@@ -1076,10 +1093,11 @@ function ManageUserModal({ user: u, onClose }) {
               </select>
               <button
                 onClick={saveRole}
-                disabled={role === u.role}
-                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                disabled={role === u.role || isSavingRole}
+                className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Save Role
+                {isSavingRole && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+                {isSavingRole ? 'Saving…' : 'Save Role'}
               </button>
             </div>
           </div>
@@ -1097,8 +1115,9 @@ function ManageUserModal({ user: u, onClose }) {
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
               </select>
-              <button type="submit" disabled={!addWh} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                Save
+              <button type="submit" disabled={!addWh || isAssigning} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
+                {isAssigning && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+                {isAssigning ? 'Saving…' : 'Save'}
               </button>
             </form>
           </div>
@@ -1120,9 +1139,10 @@ function ManageUserModal({ user: u, onClose }) {
               }}
               className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 text-sm font-semibold rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
+              {isSendingReset
+                ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              }
               {isSendingReset ? 'Sending…' : 'Send Password Reset Link'}
             </button>
           </div>
@@ -1319,7 +1339,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
               </div>
               <p className="text-xs text-gray-400 mt-1">The user will be prompted to change this on first login.</p>
             </div>
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Member'} />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Member'} loading={isCreating} />
           </form>
         </Modal>
       )}
