@@ -145,7 +145,8 @@ docker compose --profile app up -d
 
 # To rebuild services after code changes:
 docker compose --profile app up -d --build
-docker compose --profile app up -d --build identity-service
+docker compose --profile app up -d --build identity-service # rebuild just one service if needed
+docker compose --profile app up --build identity-service inventory-service notification-service # rebuild multiple services
 
 # 3. Start the frontend (not included in Docker)
 cd inventAlert-frontend

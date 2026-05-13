@@ -1,16 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Client } from '@stomp/stompjs'
-import SockJS from 'sockjs-client'
 import { setWsConnected } from '../store/slices/notificationsSlice'
 import { inventAlertApi } from '../apis/inventAlertApi'
 
-function getSockUrl() {
+function getWsUrl() {
   const apiBase = import.meta.env.VITE_API_BASE_URL
-  // When VITE_API_BASE_URL is set (Docker/production), route directly to nginx.
-  // Otherwise fall back to window.location.origin so the Vite dev-server proxy
-  // handles /ws → ws://localhost:8080 (nginx) → notification service.
-  return apiBase ? `${apiBase}/ws` : `${window.location.origin}/ws`
+  const base = apiBase || window.location.origin
+  return base.replace(/^http/, 'ws') + '/ws'
 }
 
 export function useNotificationSocket() {
@@ -22,7 +19,7 @@ export function useNotificationSocket() {
     if (!token || !user?.id || !companyId) return
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(getSockUrl()),
+      webSocketFactory: () => new WebSocket(getWsUrl()),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 5000,
       onConnect: () => {

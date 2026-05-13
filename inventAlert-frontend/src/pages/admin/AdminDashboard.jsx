@@ -1114,9 +1114,13 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
 
   const handleAdd = async e => {
     e.preventDefault()
+    if (form.password.length < 8) {
+      toast.error('Temporary password must be at least 8 characters')
+      return
+    }
     try {
       await createUser({ email: form.email, role: form.role, password: form.password, warehouseId: form.warehouseId || null }).unwrap()
-      toast.success('User created — they must set a new password on first login')
+      toast.success('Team member added — they must set a new password on first login')
       setShowAdd(false)
       setShowTempPass(false)
       setForm({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
@@ -1155,7 +1159,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={users.length} color="blue" />
+        <StatCard title="Total Members" value={users.length} color="blue" />
         <StatCard title="Active" value={users.filter(u => u.isActive).length} color="teal" />
         <StatCard title="Staff" value={roleCount('WAREHOUSE_STAFF')} color="amber" />
         <StatCard title="Inactive" value={users.filter(u => !u.isActive).length} color="gray" />
@@ -1166,7 +1170,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
           <div className="flex items-center gap-2 flex-wrap">
             <SearchBar value={search} onChange={setSearch} placeholder="Search members…" />
             <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">
-              <AddIcon /> Add User
+              <AddIcon /> Add Member
             </button>
           </div>
         </div>
@@ -1260,7 +1264,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
               </div>
               <p className="text-xs text-gray-400 mt-1">The user will be prompted to change this on first login.</p>
             </div>
-            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add User'} />
+            <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Member'} />
           </form>
         </Modal>
       )}
@@ -1357,7 +1361,7 @@ export default function AdminDashboard() {
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
     },
     {
-      id: 'users', label: 'Users', badge: users.length,
+      id: 'users', label: 'Team Members', badge: users.length,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
     },
     {
