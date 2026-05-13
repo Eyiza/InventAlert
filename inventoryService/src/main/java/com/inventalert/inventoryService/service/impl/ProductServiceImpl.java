@@ -60,6 +60,10 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ProductNotFoundException(id));
 
         if (request.getName() != null)             product.setName(request.getName());
+        if (request.getSku() != null && !request.getSku().equals(product.getSku())) {
+            if (productRepository.existsBySku(request.getSku())) throw new DuplicateSkuException(request.getSku());
+            product.setSku(request.getSku());
+        }
         if (request.getUnitOfMeasure() != null)    product.setUnitOfMeasure(request.getUnitOfMeasure());
         if (request.getDefaultThreshold() != null) product.setDefaultThreshold(request.getDefaultThreshold());
 

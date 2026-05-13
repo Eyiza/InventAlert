@@ -644,7 +644,7 @@ function ProductsPanel() {
     if (edit) {
       try {
         await Promise.all([
-          updateProductMutation({ id: edit.id, name: form.name, unitOfMeasure: form.unitOfMeasure }).unwrap(),
+          updateProductMutation({ id: edit.id, name: form.name, sku: form.sku, unitOfMeasure: form.unitOfMeasure }).unwrap(),
           setProductDefaultThreshold({ id: edit.id, threshold: +form.defaultThreshold }).unwrap(),
         ])
         toast.success('Product updated')
