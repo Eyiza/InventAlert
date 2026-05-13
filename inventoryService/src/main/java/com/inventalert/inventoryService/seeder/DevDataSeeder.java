@@ -66,9 +66,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedPharmaplus() {
         log.info("[Seeder] Seeding Pharmaplus Nigeria Ltd...");
-        Warehouse lagos = warehouse("20000000-0000-0000-0000-000000000001", "Pharmaplus Lagos Central",
+        Warehouse lagos = warehouse("Pharmaplus Lagos Central",
                 "10 Apapa Road, Lagos Island, Lagos", "6.4531", "3.3958");
-        Warehouse abuja = warehouse("20000000-0000-0000-0000-000000000002", "Pharmaplus Abuja Hub",
+        Warehouse abuja = warehouse("Pharmaplus Abuja Hub",
                 "Plot 22 Wuse Zone 5, Abuja FCT", "9.0679", "7.4951");
 
         Product paracetamol = product("Paracetamol 500mg Tablets",        "PHARM-001", "Boxes",   50);
@@ -130,9 +130,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedEkoFresh() {
         log.info("[Seeder] Seeding Eko Fresh Market...");
-        Warehouse lagos  = warehouse("20000000-0000-0000-0000-000000000003", "Eko Fresh Lagos Main",
+        Warehouse lagos  = warehouse("Eko Fresh Lagos Main",
                 "Km 15 Ikorodu Road, Ketu, Lagos", "6.4698", "3.5852");
-        Warehouse ibadan = warehouse("20000000-0000-0000-0000-000000000004", "Eko Fresh Ibadan Depot",
+        Warehouse ibadan = warehouse("Eko Fresh Ibadan Depot",
                 "12 Ring Road, Ibadan, Oyo State", "7.3775", "3.9470");
 
         Product rice      = product("Rice 50kg Bag",                     "EKO-001", "Bags",    15);
@@ -192,9 +192,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedLagosLiving() {
         log.info("[Seeder] Seeding Lagos Living Furniture...");
-        Warehouse island = warehouse("20000000-0000-0000-0000-000000000005", "Lagos Living Island Showroom",
+        Warehouse island = warehouse("Lagos Living Island Showroom",
                 "45 Broad Street, Lagos Island, Lagos", "6.4536", "3.3966");
-        Warehouse lekki  = warehouse("20000000-0000-0000-0000-000000000006", "Lagos Living Lekki Distribution",
+        Warehouse lekki  = warehouse("Lagos Living Lekki Distribution",
                 "Km 21 Lekki-Epe Expressway, Lekki, Lagos", "6.4281", "3.5418");
 
         Product sofa3      = product("3-Seater Sofa (Fabric)",          "FURN-001", "Units", 3);
@@ -249,9 +249,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedTechZone() {
         log.info("[Seeder] Seeding TechZone Gadgets...");
-        Warehouse ikeja = warehouse("20000000-0000-0000-0000-000000000007", "TechZone Ikeja Computer Village",
+        Warehouse ikeja = warehouse("TechZone Ikeja Computer Village",
                 "Computer Village, Obafemi Awolowo Way, Ikeja, Lagos", "6.5954", "3.3434");
-        Warehouse abuja = warehouse("20000000-0000-0000-0000-000000000008", "TechZone Abuja Annex",
+        Warehouse abuja = warehouse("TechZone Abuja Annex",
                 "Plot 44 Garki Area 11, Abuja FCT", "9.0165", "7.4892");
 
         Product galaxyA55  = product("Samsung Galaxy A55 128GB",          "TECH-001", "Units",  5);
@@ -308,7 +308,7 @@ public class DevDataSeeder implements ApplicationRunner {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private Warehouse warehouse(String id, String name, String address, String lat, String lon) {
+    private Warehouse warehouse(String name, String address, String lat, String lon) {
         return warehouseRepository.save(Warehouse.builder()
                 .name(name).address(address)
                 .latitude(new BigDecimal(lat)).longitude(new BigDecimal(lon))

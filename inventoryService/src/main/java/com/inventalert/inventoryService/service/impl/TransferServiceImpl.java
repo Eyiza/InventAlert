@@ -117,7 +117,7 @@ public class TransferServiceImpl implements TransferService {
 
     @Override
     public Page<TransferSuggestionResponse> list(String role, String warehouseId, Pageable pageable) {
-        if ("WAREHOUSE_STAFF".equals(role)) {
+        if ("WAREHOUSE_STAFF".equals(role) || "MANAGER".equals(role)) {
             return transferRepository.findByFromWarehouseIdOrToWarehouseId(warehouseId, warehouseId, pageable)
                     .map(this::toResponse);
         }

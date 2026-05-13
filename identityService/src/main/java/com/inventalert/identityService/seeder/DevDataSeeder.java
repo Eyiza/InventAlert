@@ -1,5 +1,6 @@
 package com.inventalert.identityService.seeder;
 
+import com.inventalert.identityService.kafka.CompanyEventProducer;
 import com.inventalert.identityService.model.*;
 import com.inventalert.identityService.repository.CompanyRepository;
 import com.inventalert.identityService.repository.UserRepository;
@@ -23,6 +24,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final UserRepository userRepository;
     private final WarehouseAssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CompanyEventProducer companyEventProducer;
 
     // Fixed warehouse IDs — must match inventoryService DevDataSeeder
     private static final String WH_PHARMAPLUS_LAGOS  = "20000000-0000-0000-0000-000000000001";
@@ -61,6 +63,7 @@ public class DevDataSeeder implements ApplicationRunner {
                 .adminEmail("admin@" + domain)
                 .status(CompanyStatus.ACTIVE)
                 .build());
+        companyEventProducer.publishCompanyCreated(id, name, "admin@" + domain);
 
         user(id, "admin@"   + domain, Role.ADMIN,               pw, null,          null);
         user(id, "manager@" + domain, Role.MANAGER,             pw, id, primaryWhId);
