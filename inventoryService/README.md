@@ -78,6 +78,23 @@ Swagger UI: `http://localhost:8082/swagger-ui.html`
 
 ---
 
+## Dev seed data
+
+On first startup, the service provisions schemas for all 4 seeded companies and fills each with warehouses, products, stock levels, movements, transfer suggestions, and restock alerts. This is controlled by `app.seed-data=true` in `src/main/resources/env.properties`.
+
+The seeder implements `ApplicationRunner` — Spring calls it automatically after the context loads. It provisions each company's schema first (idempotent: `CREATE DATABASE IF NOT EXISTS`), then checks `warehouseRepository.count() > 0` per company before inserting anything.
+
+| Company | Warehouses | Products | Open alerts | Pending transfers |
+|---|---|---|---|---|
+| Pharmaplus Nigeria Ltd | Lagos, Abuja | 17 | 4 | 2 |
+| Eko Fresh Market | Lagos, Ibadan | 16 | 3 | 3 |
+| Lagos Living Furniture | Lagos Island, Lekki | 15 | 2 | 2 |
+| TechZone Gadgets | Ikeja, Abuja | 17 | 2 | 2 |
+
+To reseed from scratch, drop the `company_*` databases and restart. To disable seeding, set `app.seed-data=false` in `env.properties`.
+
+---
+
 ## Testing
 
 ```bash

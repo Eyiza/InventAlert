@@ -1,5 +1,4 @@
-import { useDispatch } from 'react-redux'
-import { markAsRead } from '../../store/slices/notificationsSlice'
+import { useMarkNotificationReadMutation } from '../../apis/inventAlertApi'
 
 const TYPE_ICONS = {
   RESTOCK_ALERT: { bg: 'bg-amber-100', text: 'text-amber-600', icon: '⚠' },
@@ -19,7 +18,7 @@ function timeAgo(dateStr) {
 }
 
 export default function NotificationDrawer({ open, onClose, notifications, onMarkAll }) {
-  const dispatch = useDispatch()
+  const [markNotificationRead] = useMarkNotificationReadMutation()
   const unreadCount = notifications.filter(n => !n.isRead).length
 
   if (!open) return null
@@ -74,7 +73,7 @@ export default function NotificationDrawer({ open, onClose, notifications, onMar
                   <div
                     key={n.id}
                     className={`flex gap-3 px-5 py-4 cursor-pointer hover:bg-gray-50 transition-colors ${!n.isRead ? 'bg-green-50/40' : ''}`}
-                    onClick={() => !n.isRead && dispatch(markAsRead(n.id))}
+                    onClick={() => !n.isRead && markNotificationRead(n.id)}
                   >
                     <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${meta.bg} ${meta.text}`}>
                       {meta.icon}

@@ -18,7 +18,7 @@ public class CompanyController {
     private final CompanyService companyService;
 
     @GetMapping("/me")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<CompanyResponse> getMyCompany(@AuthenticationPrincipal JwtUser principal) {
         return ResponseEntity.ok(companyService.getMyCompany(principal.getCompanyId()));
     }

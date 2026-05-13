@@ -20,4 +20,6 @@ public class SignupRequest {
     @NotBlank
     @Size(min = 8)
     private String password;
+
+    private String logoUrl;
 }

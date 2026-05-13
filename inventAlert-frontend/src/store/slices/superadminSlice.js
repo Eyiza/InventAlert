@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { companies, complaints } from '../../data/mockData'
 
 const superadminSlice = createSlice({
   name: 'superadmin',
-  initialState: { companies, complaints },
+  initialState: { companies: [], complaints: [] },
   reducers: {
     suspendCompany: (state, action) => {
       const c = state.companies.find(x => x.id === action.payload)
