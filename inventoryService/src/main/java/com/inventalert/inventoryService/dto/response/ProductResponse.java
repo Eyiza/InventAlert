@@ -1,5 +1,6 @@
 package com.inventalert.inventoryService.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +15,7 @@ public class ProductResponse {
     private String sku;
     private String unitOfMeasure;
     private int defaultThreshold;
+    @JsonProperty("isActive")
     private boolean isActive;
     private String createdBy;
     private LocalDateTime createdAt;
