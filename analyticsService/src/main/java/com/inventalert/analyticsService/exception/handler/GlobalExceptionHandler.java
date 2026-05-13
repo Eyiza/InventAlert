@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.time.format.DateTimeParseException;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -28,6 +29,11 @@ public class GlobalExceptionHandler {
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
                 .collect(Collectors.joining(", "));
         return ResponseEntity.status(400).body(new ErrorResponse(message));
+    }
+
+    @ExceptionHandler(DateTimeParseException.class)
+    public ResponseEntity<ErrorResponse> handleDateTimeParse(DateTimeParseException ex) {
+        return ResponseEntity.status(400).body(new ErrorResponse("Invalid date format — use ISO-8601 (e.g. 2026-05-06T00:00:00Z)"));
     }
 
     @ExceptionHandler(Exception.class)

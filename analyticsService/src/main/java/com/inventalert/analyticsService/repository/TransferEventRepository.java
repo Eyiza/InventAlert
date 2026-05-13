@@ -5,8 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +31,7 @@ public class TransferEventRepository {
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 e.eventId(), e.companyId(), e.suggestionId(), e.productId(),
                 e.fromWarehouseId(), e.toWarehouseId(), e.quantity(), e.distanceKm(),
-                e.status(), Timestamp.from(eventTime));
+                e.status(), LocalDateTime.ofInstant(eventTime, ZoneOffset.UTC));
     }
 
     public List<Map<String, Object>> transferCountByStatus(String companyId) {
@@ -53,6 +54,6 @@ public class TransferEventRepository {
                 "SELECT productId, sum(quantity) AS totalQty FROM transfer_events " +
                 "WHERE companyId = ? AND status = 'SUGGESTED' AND eventTime BETWEEN ? AND ? " +
                 "GROUP BY productId ORDER BY totalQty DESC",
-                companyId, Timestamp.from(from), Timestamp.from(to));
+                companyId, LocalDateTime.ofInstant(from, ZoneOffset.UTC), LocalDateTime.ofInstant(to, ZoneOffset.UTC));
     }
 }

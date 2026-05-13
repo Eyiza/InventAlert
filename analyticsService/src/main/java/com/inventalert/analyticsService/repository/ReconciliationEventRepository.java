@@ -5,8 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public class ReconciliationEventRepository {
                 "(eventId, companyId, reconciliationId, warehouseId, eventTime) " +
                 "VALUES (?, ?, ?, ?, ?)",
                 e.eventId(), e.companyId(), e.reconciliationId(), e.warehouseId(),
-                Timestamp.from(eventTime));
+                LocalDateTime.ofInstant(eventTime, ZoneOffset.UTC));
     }
 
     public List<Map<String, Object>> reconciliationCountByWarehouse(String companyId) {
