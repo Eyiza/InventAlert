@@ -7,10 +7,10 @@ import { inventAlertApi } from '../apis/inventAlertApi'
 
 function getSockUrl() {
   const apiBase = import.meta.env.VITE_API_BASE_URL
-  if (apiBase === 'http://localhost' || apiBase === 'https://localhost') {
-    return `${apiBase}/ws`
-  }
-  return 'http://localhost:8083/ws'
+  // When VITE_API_BASE_URL is set (Docker/production), route directly to nginx.
+  // Otherwise fall back to window.location.origin so the Vite dev-server proxy
+  // handles /ws → ws://localhost:8080 (nginx) → notification service.
+  return apiBase ? `${apiBase}/ws` : `${window.location.origin}/ws`
 }
 
 export function useNotificationSocket() {
