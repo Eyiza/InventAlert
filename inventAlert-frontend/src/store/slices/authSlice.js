@@ -6,9 +6,9 @@ const loadFromStorage = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const { token, user, role, companyId, companyName, companyLogo, warehouseId } = JSON.parse(raw)
+    const { token, user, role, companyId, companyName, companyLogo, warehouseId, mustChangePassword } = JSON.parse(raw)
     if (!token) return null
-    return { token, user, role, companyId, companyName, companyLogo, warehouseId, isAuthenticated: true, mustChangePassword: false }
+    return { token, user, role, companyId, companyName, companyLogo, warehouseId, isAuthenticated: true, mustChangePassword: mustChangePassword ?? false }
   } catch {
     return null
   }
@@ -20,6 +20,7 @@ const saveToStorage = (state) => {
       token: state.token, user: state.user, role: state.role,
       companyId: state.companyId, companyName: state.companyName,
       companyLogo: state.companyLogo, warehouseId: state.warehouseId,
+      mustChangePassword: state.mustChangePassword,
     }))
   } catch {}
 }
@@ -49,7 +50,7 @@ const authSlice = createSlice({
       state.companyLogo = payload.companyLogo || null
       state.warehouseId = payload.warehouseId || null
       state.isAuthenticated = true
-      state.mustChangePassword = false
+      state.mustChangePassword = payload.mustChangePassword ?? false
       saveToStorage(state)
     },
     logout: () => {

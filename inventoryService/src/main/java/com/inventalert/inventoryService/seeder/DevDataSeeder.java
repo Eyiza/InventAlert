@@ -6,10 +6,13 @@ import com.inventalert.inventoryService.multicompany.CompanySchemaService;
 import com.inventalert.inventoryService.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
@@ -18,6 +21,9 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.seed-data", havingValue = "true")
 public class DevDataSeeder implements ApplicationRunner {
+
+    @Autowired @Lazy
+    private DevDataSeeder self;
 
     private final CompanySchemaService companySchemaService;
     private final WarehouseRepository warehouseRepository;
@@ -30,34 +36,39 @@ public class DevDataSeeder implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         log.info("[Seeder] Starting inventory seed for 4 companies...");
-        seedCompany("10000000-0000-0000-0000-000000000001", this::seedPharmaplus);
-        seedCompany("10000000-0000-0000-0000-000000000002", this::seedEkoFresh);
-        seedCompany("10000000-0000-0000-0000-000000000003", this::seedLagosLiving);
-        seedCompany("10000000-0000-0000-0000-000000000004", this::seedTechZone);
+        self.seedCompany("10000000-0000-0000-0000-000000000001", this::seedPharmaplus);
+        self.seedCompany("10000000-0000-0000-0000-000000000002", this::seedEkoFresh);
+        self.seedCompany("10000000-0000-0000-0000-000000000003", this::seedLagosLiving);
+        self.seedCompany("10000000-0000-0000-0000-000000000004", this::seedTechZone);
         log.info("[Seeder] Inventory seed complete");
     }
 
-    private void seedCompany(String companyId, Runnable seeder) {
+    public void seedCompany(String companyId, Runnable seeder) {
         companySchemaService.provisionSchema(companyId);
         CompanyContext.set(companyId);
         try {
-            if (warehouseRepository.count() > 0) {
-                log.info("[Seeder] Company {} already has inventory data — skipping", companyId);
-                return;
-            }
-            seeder.run();
+            self.doSeedCompany(seeder, companyId);
         } finally {
             CompanyContext.clear();
         }
+    }
+
+    @Transactional
+    public void doSeedCompany(Runnable seeder, String companyId) {
+        if (warehouseRepository.count() > 0) {
+            log.info("[Seeder] Company {} already has inventory data — skipping", companyId);
+            return;
+        }
+        seeder.run();
     }
 
     // ─── Pharmaplus Nigeria Ltd ───────────────────────────────────────────────
 
     private void seedPharmaplus() {
         log.info("[Seeder] Seeding Pharmaplus Nigeria Ltd...");
-        Warehouse lagos = warehouse("Pharmaplus Lagos Central",
+        Warehouse lagos = warehouse("20000000-0000-0000-0000-000000000001", "Pharmaplus Lagos Central",
                 "10 Apapa Road, Lagos Island, Lagos", "6.4531", "3.3958");
-        Warehouse abuja = warehouse("Pharmaplus Abuja Hub",
+        Warehouse abuja = warehouse("20000000-0000-0000-0000-000000000002", "Pharmaplus Abuja Hub",
                 "Plot 22 Wuse Zone 5, Abuja FCT", "9.0679", "7.4951");
 
         Product paracetamol = product("Paracetamol 500mg Tablets",        "PHARM-001", "Boxes",   50);
@@ -119,9 +130,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedEkoFresh() {
         log.info("[Seeder] Seeding Eko Fresh Market...");
-        Warehouse lagos  = warehouse("Eko Fresh Lagos Main",
+        Warehouse lagos  = warehouse("20000000-0000-0000-0000-000000000003", "Eko Fresh Lagos Main",
                 "Km 15 Ikorodu Road, Ketu, Lagos", "6.4698", "3.5852");
-        Warehouse ibadan = warehouse("Eko Fresh Ibadan Depot",
+        Warehouse ibadan = warehouse("20000000-0000-0000-0000-000000000004", "Eko Fresh Ibadan Depot",
                 "12 Ring Road, Ibadan, Oyo State", "7.3775", "3.9470");
 
         Product rice      = product("Rice 50kg Bag",                     "EKO-001", "Bags",    15);
@@ -181,9 +192,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedLagosLiving() {
         log.info("[Seeder] Seeding Lagos Living Furniture...");
-        Warehouse island = warehouse("Lagos Living Island Showroom",
+        Warehouse island = warehouse("20000000-0000-0000-0000-000000000005", "Lagos Living Island Showroom",
                 "45 Broad Street, Lagos Island, Lagos", "6.4536", "3.3966");
-        Warehouse lekki  = warehouse("Lagos Living Lekki Distribution",
+        Warehouse lekki  = warehouse("20000000-0000-0000-0000-000000000006", "Lagos Living Lekki Distribution",
                 "Km 21 Lekki-Epe Expressway, Lekki, Lagos", "6.4281", "3.5418");
 
         Product sofa3      = product("3-Seater Sofa (Fabric)",          "FURN-001", "Units", 3);
@@ -238,9 +249,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedTechZone() {
         log.info("[Seeder] Seeding TechZone Gadgets...");
-        Warehouse ikeja = warehouse("TechZone Ikeja Computer Village",
+        Warehouse ikeja = warehouse("20000000-0000-0000-0000-000000000007", "TechZone Ikeja Computer Village",
                 "Computer Village, Obafemi Awolowo Way, Ikeja, Lagos", "6.5954", "3.3434");
-        Warehouse abuja = warehouse("TechZone Abuja Annex",
+        Warehouse abuja = warehouse("20000000-0000-0000-0000-000000000008", "TechZone Abuja Annex",
                 "Plot 44 Garki Area 11, Abuja FCT", "9.0165", "7.4892");
 
         Product galaxyA55  = product("Samsung Galaxy A55 128GB",          "TECH-001", "Units",  5);
@@ -297,7 +308,7 @@ public class DevDataSeeder implements ApplicationRunner {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private Warehouse warehouse(String name, String address, String lat, String lon) {
+    private Warehouse warehouse(String id, String name, String address, String lat, String lon) {
         return warehouseRepository.save(Warehouse.builder()
                 .name(name).address(address)
                 .latitude(new BigDecimal(lat)).longitude(new BigDecimal(lon))

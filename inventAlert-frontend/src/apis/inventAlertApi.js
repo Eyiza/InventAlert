@@ -12,7 +12,7 @@ const baseQuery = fetchBaseQuery({
   },
 })
 
-const AUTH_ENDPOINTS = ['login', 'superAdminLogin', 'signup', 'forgotPassword', 'resetPassword']
+const AUTH_ENDPOINTS = ['login', 'superAdminLogin', 'signup', 'forgotPassword', 'resetPassword', 'changePassword']
 
 const baseQueryWithAuthRedirect = async (args, api, extraOptions) => {
   const result = await baseQuery(args, api, extraOptions)
@@ -47,6 +47,9 @@ export const inventAlertApi = createApi({
     }),
     resetPassword: build.mutation({
       query: body => ({ url: '/api/auth/reset-password', method: 'POST', body }),
+    }),
+    changePassword: build.mutation({
+      query: body => ({ url: '/api/auth/change-password', method: 'POST', body }),
     }),
 
     // ── Company ───────────────────────────────────────────────────────────────
@@ -245,6 +248,7 @@ export const {
   useSignupMutation,
   useForgotPasswordMutation,
   useResetPasswordMutation,
+  useChangePasswordMutation,
   useGetMyCompanyQuery,
   useUpdateMyCompanyMutation,
   useGetUsersQuery,
