@@ -222,6 +222,16 @@ export const inventAlertApi = createApi({
       invalidatesTags: ['Reconciliation'],
     }),
 
+    // ── Threshold overrides ───────────────────────────────────────────────────
+    setProductDefaultThreshold: build.mutation({
+      query: ({ id, threshold }) => ({ url: `/api/products/${id}/threshold`, method: 'PATCH', body: { threshold } }),
+      invalidatesTags: ['Product', 'Stock'],
+    }),
+    setStockLevelThreshold: build.mutation({
+      query: ({ productId, warehouseId, threshold }) => ({ url: `/api/stock-levels/${productId}/${warehouseId}/threshold`, method: 'PATCH', body: { threshold } }),
+      invalidatesTags: ['Stock', 'Product'],
+    }),
+
     // ── Analytics ─────────────────────────────────────────────────────────────
     getStockSummary: build.query({
       query: ({ from, to }) => ({ url: '/api/analytics/stock/summary', params: { from, to } }),
@@ -243,12 +253,24 @@ export const inventAlertApi = createApi({
       query: ({ from, to }) => ({ url: '/api/analytics/alerts/by-warehouse', params: { from, to } }),
       providesTags: ['Analytics'],
     }),
+    getTopProducts: build.query({
+      query: ({ type = 'OUTBOUND_SALE', limit = 10 } = {}) => ({ url: '/api/analytics/stock/top-products', params: { type, limit } }),
+      providesTags: ['Analytics'],
+    }),
+    getMovementsByWarehouse: build.query({
+      query: ({ from, to } = {}) => ({ url: '/api/analytics/stock/movements/by-warehouse', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
 
   }),
 })
 
 export const {
   useGetMySessionQuery,
+  useSetProductDefaultThresholdMutation,
+  useSetStockLevelThresholdMutation,
+  useGetTopProductsQuery,
+  useGetMovementsByWarehouseQuery,
   useLoginMutation,
   useSuperAdminLoginMutation,
   useSignupMutation,
