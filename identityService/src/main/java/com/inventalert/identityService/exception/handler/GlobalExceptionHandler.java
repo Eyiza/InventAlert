@@ -15,6 +15,7 @@ import com.inventalert.identityService.security.exception.DeactivatedUserExcepti
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
 import com.inventalert.identityService.security.exception.SuspendedCompanyException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -92,8 +93,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(e -> e.getField() + ": " + e.getDefaultMessage())
-                .collect(Collectors.joining(", "));
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(" "));
         return ResponseEntity.status(400).body(new ErrorResponse(message));
     }
 }

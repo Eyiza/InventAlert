@@ -4,5 +4,5 @@ import com.inventalert.identityService.model.Role;
 import jakarta.validation.constraints.NotNull;
 
 public record UpdateRoleRequest(
-        @NotNull Role role
+        @NotNull(message = "A role must be selected.") Role role
 ) {}
