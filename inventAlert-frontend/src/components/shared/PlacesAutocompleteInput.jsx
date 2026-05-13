@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// Google's official bootstrap for programmatic loading
-// https://developers.google.com/maps/documentation/javascript/load-maps-js-api
 function bootstrapMaps(apiKey) {
   if (typeof window.google?.maps?.importLibrary === 'function') return
   // prettier-ignore
@@ -12,6 +10,7 @@ function bootstrapMaps(apiKey) {
 export default function PlacesAutocompleteInput({
   value,
   onChange,
+  onPlaceSelect,
   placeholder = '15 Awolowo Road, Ikoyi, Lagos',
   required,
   className,
@@ -45,9 +44,12 @@ export default function PlacesAutocompleteInput({
       const { suggestions: sugs } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
         input,
         sessionToken: tokenRef.current,
-        // includedRegionCodes: ['ng'], // Uncomment to restrict to specific country
       })
-      setSuggestions(sugs.map((s) => s.placePrediction?.text?.text).filter(Boolean))
+      setSuggestions(
+        sugs
+          .filter(s => s.placePrediction?.text?.text)
+          .map(s => ({ text: s.placePrediction.text.text, prediction: s.placePrediction }))
+      )
     } catch {
       setSuggestions([])
     }
@@ -55,13 +57,37 @@ export default function PlacesAutocompleteInput({
 
   const handleChange = (e) => {
     onChange(e.target.value)
+    // Clear any previously resolved coordinates when the user edits manually
+    if (onPlaceSelect) onPlaceSelect({ address: e.target.value, latitude: null, longitude: null })
     fetchSuggestions(e.target.value)
   }
 
-  const handleSelect = (text) => {
+  const handleSelect = async ({ text, prediction }) => {
     onChange(text)
     setSuggestions([])
     tokenRef.current = null
+
+    if (!onPlaceSelect) return
+
+    if (!prediction) {
+      onPlaceSelect({ address: text, latitude: null, longitude: null })
+      return
+    }
+
+    try {
+      const place = prediction.toPlace()
+      await place.fetchFields({ fields: ['location', 'formattedAddress'] })
+      const lat = place.location?.lat() ?? null
+      const lng = place.location?.lng() ?? null
+      onPlaceSelect({
+        address: place.formattedAddress || text,
+        latitude: lat,
+        longitude: lng,
+      })
+    } catch (err) {
+      console.warn('[Places] Could not fetch coordinates:', err.message)
+      onPlaceSelect({ address: text, latitude: null, longitude: null })
+    }
   }
 
   return (
@@ -84,7 +110,7 @@ export default function PlacesAutocompleteInput({
               onMouseDown={() => handleSelect(s)}
               className="px-3 py-2.5 text-sm text-gray-700 hover:bg-teal-50 cursor-pointer border-b border-gray-100 last:border-b-0"
             >
-              {s}
+              {s.text}
             </li>
           ))}
         </ul>

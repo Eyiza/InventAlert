@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { notifications } from '../../data/mockData'
 
 const notificationsSlice = createSlice({
   name: 'notifications',
-  initialState: { notifications, wsConnected: false },
+  initialState: { notifications: [], wsConnected: false },
   reducers: {
     markAsRead: (state, action) => {
       const n = state.notifications.find(x => x.id === action.payload)

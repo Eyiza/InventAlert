@@ -28,7 +28,7 @@ public class StockLevelController {
     }
 
     @GetMapping("/api/stock/{warehouseId}")
-    @PreAuthorize("hasAnyRole('MANAGER','WAREHOUSE_STAFF','PROCUREMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','WAREHOUSE_STAFF','PROCUREMENT_OFFICER')")
     public ResponseEntity<List<StockLevelResponse>> getStockForWarehouse(@PathVariable String warehouseId) {
         return ResponseEntity.ok(stockLevelService.getStockForWarehouse(warehouseId));
     }
