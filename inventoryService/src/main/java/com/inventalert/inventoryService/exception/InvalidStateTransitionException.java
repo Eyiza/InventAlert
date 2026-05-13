@@ -2,6 +2,7 @@ package com.inventalert.inventoryService.exception;
 
 public class InvalidStateTransitionException extends RuntimeException {
     public InvalidStateTransitionException(String entity, String currentState, String action) {
-        super("Cannot " + action + " a " + entity + " in state: " + currentState);
+        super("Unable to " + action.toLowerCase() + " — this " + entity.toLowerCase()
+                + " is currently " + currentState.toLowerCase().replace("_", " ") + ".");
     }
 }
