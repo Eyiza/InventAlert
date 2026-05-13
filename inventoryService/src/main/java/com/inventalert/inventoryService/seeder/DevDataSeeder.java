@@ -41,8 +41,8 @@ public class DevDataSeeder implements ApplicationRunner {
         companySchemaService.provisionSchema(companyId);
         CompanyContext.set(companyId);
         try {
-            if (warehouseRepository.count() > 0) {
-                log.info("[Seeder] Company {} already has inventory data — skipping", companyId);
+            if (stockLevelRepository.count() > 0) {
+                log.info("[Seeder] Company {} already has stock data — skipping", companyId);
                 return;
             }
             seeder.run();
@@ -298,18 +298,20 @@ public class DevDataSeeder implements ApplicationRunner {
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Warehouse warehouse(String name, String address, String lat, String lon) {
-        return warehouseRepository.save(Warehouse.builder()
-                .name(name).address(address)
-                .latitude(new BigDecimal(lat)).longitude(new BigDecimal(lon))
-                .isActive(true).createdBy("seeder")
-                .build());
+        return warehouseRepository.findByName(name).orElseGet(() ->
+                warehouseRepository.save(Warehouse.builder()
+                        .name(name).address(address)
+                        .latitude(new BigDecimal(lat)).longitude(new BigDecimal(lon))
+                        .isActive(true).createdBy("seeder")
+                        .build()));
     }
 
     private Product product(String name, String sku, String unit, int threshold) {
-        return productRepository.save(Product.builder()
-                .name(name).sku(sku).unitOfMeasure(unit)
-                .defaultThreshold(threshold).isActive(true).createdBy("seeder")
-                .build());
+        return productRepository.findBySkuAndIsActiveTrue(sku).orElseGet(() ->
+                productRepository.save(Product.builder()
+                        .name(name).sku(sku).unitOfMeasure(unit)
+                        .defaultThreshold(threshold).isActive(true).createdBy("seeder")
+                        .build()));
     }
 
     private void sl(Product p, Warehouse w, int current, int threshold) {

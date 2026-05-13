@@ -32,6 +32,7 @@ public class StockLevel {
     private int threshold = 0;
 
     @Column(nullable = false, precision = 10, scale = 4)
+    @Builder.Default
     private BigDecimal velocityPerDay = BigDecimal.ZERO;
 
     @Column

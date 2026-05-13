@@ -19,7 +19,7 @@ public class AlertController {
     private final RestockAlertService alertService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('PROCUREMENT_OFFICER','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROCUREMENT_OFFICER','MANAGER')")
     public ResponseEntity<List<RestockAlertResponse>> list() {
         return ResponseEntity.ok(alertService.list());
     }

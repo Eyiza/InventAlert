@@ -32,7 +32,7 @@ public class TransferController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('MANAGER','WAREHOUSE_STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','WAREHOUSE_STAFF')")
     public ResponseEntity<Page<TransferSuggestionResponse>> list(
             @PageableDefault(size = 20) Pageable pageable) {
         JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

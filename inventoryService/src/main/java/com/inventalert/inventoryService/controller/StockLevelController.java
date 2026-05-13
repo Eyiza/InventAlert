@@ -21,7 +21,7 @@ public class StockLevelController {
     private final StockLevelService stockLevelService;
 
     @GetMapping("/api/stock")
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Page<StockLevelResponse>> getAllStock(
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(stockLevelService.getAllStockLevels(pageable));

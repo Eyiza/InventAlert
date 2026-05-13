@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface WarehouseRepository extends JpaRepository<Warehouse, String> {
     List<Warehouse> findByIsActiveTrue();
     Optional<Warehouse> findByIdAndIsActiveTrue(String id);
+    Optional<Warehouse> findByName(String name);
 }

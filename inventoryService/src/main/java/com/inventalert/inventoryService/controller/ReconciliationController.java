@@ -32,7 +32,7 @@ public class ReconciliationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Page<ReconciliationResponse>> list(
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(reconciliationService.list(pageable));

@@ -43,7 +43,7 @@ public class MovementController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<List<StockMovementResponse>> listMovements(
             @RequestParam(required = false) String productId,
             @RequestParam(required = false) String warehouseId,
