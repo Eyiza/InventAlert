@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate, Link } from 'react-router'
-import { useLoginMutation, useSuperAdminLoginMutation } from '../../apis/inventAlertApi'
+import { useLoginMutation, useSuperAdminLoginMutation, inventAlertApi } from '../../apis/inventAlertApi'
 import { setCredentials, clearError } from '../../store/slices/authSlice'
 
 const ROLE_ROUTES = {
@@ -63,6 +63,7 @@ export default function Login() {
       }
 
       if (result.data) {
+        dispatch(inventAlertApi.util.resetApiState())
         dispatch(setCredentials(result.data))
       } else {
         setError('Invalid email or password')
