@@ -5,8 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public class AlertEventRepository {
                 "(eventId, companyId, alertId, productId, warehouseId, stockAtAlert, threshold, eventTime) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 e.eventId(), e.companyId(), e.alertId(), e.productId(),
-                e.warehouseId(), e.stockAtAlert(), e.threshold(), Timestamp.from(eventTime));
+                e.warehouseId(), e.stockAtAlert(), e.threshold(), LocalDateTime.ofInstant(eventTime, ZoneOffset.UTC));
     }
 
     public long countAll(String companyId) {
@@ -44,7 +45,7 @@ public class AlertEventRepository {
                 "SELECT warehouseId, count() AS total FROM alert_events " +
                 "WHERE companyId = ? AND eventTime BETWEEN ? AND ? " +
                 "GROUP BY warehouseId ORDER BY total DESC",
-                companyId, Timestamp.from(from), Timestamp.from(to));
+                companyId, LocalDateTime.ofInstant(from, ZoneOffset.UTC), LocalDateTime.ofInstant(to, ZoneOffset.UTC));
     }
 
     public List<Map<String, Object>> alertCountByMonth(String companyId) {

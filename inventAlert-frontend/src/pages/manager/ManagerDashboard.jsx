@@ -407,9 +407,12 @@ function AnalyticsPanel() {
   const [section, setSection] = useState('velocity')
   const [rangeDays, setRangeDays] = useState(30)
 
-  const to = new Date().toISOString().split('T')[0]
-  const from = new Date(Date.now() - rangeDays * 86400000).toISOString().split('T')[0]
-  const dateParams = { from, to }
+  const toDate = new Date().toISOString().split('T')[0]
+  const fromDate = new Date(Date.now() - rangeDays * 86400000).toISOString().split('T')[0]
+  const dateParams = {
+    from: new Date(fromDate).toISOString(),
+    to: new Date(toDate + 'T23:59:59.999Z').toISOString(),
+  }
 
   const { data: stockSummary } = useGetStockSummaryQuery(dateParams)
   const { data: movementTrend = [] } = useGetMovementTrendQuery(dateParams)
