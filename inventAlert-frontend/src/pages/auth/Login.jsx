@@ -57,6 +57,12 @@ export default function Login() {
     try {
       let result = await loginMutation({ email, password })
 
+      // Deactivated user — show specific message, skip superadmin fallback
+      if (result.error?.data?.message?.toLowerCase().includes('deactivated')) {
+        setError(result.error.data.message)
+        return
+      }
+
       // 401/403 from regular login → try superadmin endpoint
       if (result.error?.status === 401 || result.error?.status === 403) {
         result = await superAdminLoginMutation({ email, password })
