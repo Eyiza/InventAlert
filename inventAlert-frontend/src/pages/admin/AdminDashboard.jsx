@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
@@ -1096,12 +1096,12 @@ function ManageUserModal({ user: u, onClose }) {
   )
 }
 
-function UsersPanel({ onGoToWarehouses }) {
+function UsersPanel({ onGoToWarehouses, openAdd = false }) {
   const { data: users = [], isLoading } = useGetUsersQuery()
   const { data: warehouses = [], isLoading: isLoadingWarehouses, isFetching: isFetchingWarehouses } = useGetWarehousesQuery()
   const { user: me } = useSelector(s => s.auth)
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
-  const [showAdd, setShowAdd] = useState(false)
+  const [showAdd, setShowAdd] = useState(openAdd)
   const [showTempPass, setShowTempPass] = useState(false)
   const [manageUser, setManageUser] = useState(null)
   const [form, setForm] = useState({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
@@ -1335,7 +1335,12 @@ function FeedbackPanel() {
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('warehouses')
+  const [usersAutoAdd, setUsersAutoAdd] = useState(false)
   const { data: users = [] } = useGetUsersQuery()
+
+  useEffect(() => {
+    if (activeTab === 'users' && usersAutoAdd) setUsersAutoAdd(false)
+  }, [activeTab, usersAutoAdd])
   const { data: warehouses = [] } = useGetWarehousesQuery()
 
   const navItems = [
@@ -1367,12 +1372,12 @@ export default function AdminDashboard() {
         warehouses={warehouses}
         users={users}
         onGoToWarehouses={() => setActiveTab('warehouses')}
-        onGoToUsers={() => setActiveTab('users')}
+        onGoToUsers={() => { setActiveTab('users'); setUsersAutoAdd(true) }}
       />
       {activeTab === 'company' && <CompanyPanel />}
       {activeTab === 'warehouses' && <WarehousesPanel />}
       {activeTab === 'products' && <ProductsPanel />}
-      {activeTab === 'users' && <UsersPanel onGoToWarehouses={() => setActiveTab('warehouses')} />}
+      {activeTab === 'users' && <UsersPanel onGoToWarehouses={() => setActiveTab('warehouses')} openAdd={usersAutoAdd} />}
       {activeTab === 'feedback' && <FeedbackPanel />}
     </Layout>
   )
