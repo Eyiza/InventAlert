@@ -63,6 +63,7 @@ public class AuthServiceImpl implements AuthService {
         Company company = Company.builder()
                 .companyName(request.getCompanyName())
                 .adminEmail(request.getAdminEmail())
+                .logoUrl(request.getLogoUrl())
                 .build();
         Company savedCompany = companyRepository.save(company);
 
@@ -76,7 +77,7 @@ public class AuthServiceImpl implements AuthService {
 
         eventProducer.publishCompanyCreated(savedCompany.getId(), request.getCompanyName(), request.getAdminEmail());
 
-        return buildLoginResponse(savedAdmin);
+        return buildLoginResponse(savedAdmin, savedCompany);
     }
 
     @Override
@@ -99,7 +100,7 @@ public class AuthServiceImpl implements AuthService {
             throw new SuspendedCompanyException();
         }
 
-        return buildLoginResponse(user);
+        return buildLoginResponse(user, company);
     }
 
     @Override
@@ -156,13 +157,14 @@ public class AuthServiceImpl implements AuthService {
         if (!user.isActive()) throw new InvalidResetTokenException();
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setMustChangePassword(false);
         userRepository.save(user);
 
         resetToken.setUsed(true);
         passwordResetTokenRepository.save(resetToken);
     }
 
-    private LoginResponse buildLoginResponse(User user) {
+    private LoginResponse buildLoginResponse(User user, Company company) {
         // ADMIN is company-scoped; warehouse roles carry their primary warehouse in the token
         String warehouseId = null;
         if (user.getRole() != Role.ADMIN) {
@@ -176,9 +178,22 @@ public class AuthServiceImpl implements AuthService {
         LoginResponse response = new LoginResponse();
         response.setToken(jwtUtil.generateToken(user, warehouseId));
         response.setUserId(user.getId());
+        response.setEmail(user.getEmail());
         response.setCompanyId(user.getCompanyId());
+        response.setCompanyName(company.getCompanyName());
+        response.setCompanyLogo(company.getLogoUrl());
         response.setRole(user.getRole().name());
         response.setWarehouseId(warehouseId);
+        response.setMustChangePassword(user.isMustChangePassword());
         return response;
+    }
+
+    @Override
+    public void changePassword(String userId, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
     }
 }

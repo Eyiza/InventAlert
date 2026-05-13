@@ -1,9 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { reconciliations } from '../../data/mockData'
 
 const reconciliationsSlice = createSlice({
   name: 'reconciliations',
-  initialState: { reconciliations },
+  initialState: { reconciliations: [] },
   reducers: {
     submitReconciliation: (state, action) => {
       state.reconciliations.unshift({

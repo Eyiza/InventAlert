@@ -67,6 +67,7 @@ public class UserServiceImpl implements UserService {
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .role(request.role())
                 .isActive(true)
+                .mustChangePassword(true)
                 .build();
         user = userRepository.saveAndFlush(user);
 

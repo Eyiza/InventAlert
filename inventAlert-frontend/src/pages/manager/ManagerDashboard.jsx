@@ -4,12 +4,18 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { approveTransfer, rejectTransfer } from '../../store/slices/transfersSlice'
 import { submitComplaint } from '../../store/slices/superadminSlice'
-import { approveReconciliation, rejectReconciliation } from '../../store/slices/reconciliationsSlice'
-import { addUser, updateUserRole, assignWarehouse, deactivateUser, reactivateUser } from '../../store/slices/usersSlice'
-import { registerLocalUser } from '../../store/slices/authSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
+import {
+  useGetUsersQuery, useCreateUserMutation,
+  useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
+  useGetWarehousesQuery, useGetProductsQuery, useGetStockByWarehouseQuery,
+  useGetMovementsQuery,
+  useGetTransfersQuery, useApproveTransferMutation, useRejectTransferMutation,
+  useGetReconciliationsQuery, useApproveReconciliationMutation, useRejectReconciliationMutation,
+  useGetStockSummaryQuery, useGetMovementTrendQuery, useGetTransferSummaryQuery,
+  useGetAlertSummaryQuery, useGetAlertsByWarehouseQuery,
+} from '../../apis/inventAlertApi'
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -26,16 +32,13 @@ function SectionHeader({ title, subtitle }) {
 // ── Stock Overview ────────────────────────────────────────────────────────────
 
 function StockPanel() {
-  const { stockLevels, products } = useSelector(s => s.stock)
-  const { user: me } = useSelector(s => s.auth)
-  const { warehouseAssignments } = useSelector(s => s.users)
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [], isLoading } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: products = [] } = useGetProductsQuery()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
-  const myWarehouseIds = warehouseAssignments.filter(a => a.userId === me.id).map(a => a.warehouseId)
-
   const rows = stockLevels
-    .filter(sl => myWarehouseIds.includes(sl.warehouseId))
     .map(sl => ({
       ...sl,
       productName: products.find(p => p.id === sl.productId)?.name || sl.productId,
@@ -87,7 +90,7 @@ function StockPanel() {
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  {myWarehouseIds.length === 0 ? 'You are not assigned to a warehouse.' : 'No stock items match.'}
+                  {!myWarehouseId ? 'You are not assigned to a warehouse.' : isLoading ? 'Loading…' : 'No stock items match.'}
                 </td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50/60">
@@ -133,8 +136,14 @@ function SearchBar({ value, onChange, placeholder }) {
 }
 
 function MovementsPanel() {
-  const { movements, products, warehouses } = useSelector(s => s.stock)
-  const { users } = useSelector(s => s.users)
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: movements = [], isLoading } = useGetMovementsQuery(
+    myWarehouseId ? { warehouseId: myWarehouseId } : {},
+    { skip: !myWarehouseId },
+  )
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: users = [] } = useGetUsersQuery()
   const [typeFilter, setTypeFilter] = useState('ALL')
   const [search, setSearch] = useState('')
 
@@ -143,7 +152,7 @@ function MovementsPanel() {
       ...m,
       productName: products.find(p => p.id === m.productId)?.name || m.productId,
       warehouseName: warehouses.find(w => w.id === m.warehouseId)?.name || m.warehouseId,
-      createdByName: users.find(u => u.id === m.createdBy)?.name || m.createdBy,
+      createdByName: users.find(u => u.id === m.createdBy)?.email?.split('@')[0] || m.createdBy,
     }))
     .filter(m => typeFilter === 'ALL' || m.type === typeFilter)
     .filter(m => !search || m.productName.toLowerCase().includes(search.toLowerCase()) || m.warehouseName.toLowerCase().includes(search.toLowerCase()))
@@ -195,10 +204,11 @@ function MovementsPanel() {
 // ── Transfers Panel ───────────────────────────────────────────────────────────
 
 function TransfersPanel() {
-  const { transfers } = useSelector(s => s.transfers)
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { data: transfers = [], isLoading } = useGetTransfersQuery()
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const [approveTransfer] = useApproveTransferMutation()
+  const [rejectTransfer] = useRejectTransferMutation()
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
@@ -257,11 +267,11 @@ function TransfersPanel() {
                     {t.status === 'SUGGESTED' ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setConfirm({ action: () => { dispatch(approveTransfer({ id: t.id, userId: user.id })); toast.success('Transfer approved') }, title: 'Approve Transfer', message: `Approve transfer of ${t.quantity} units of ${t.productName} from ${t.fromName} to ${t.toName}?`, label: 'Approve' })}
+                          onClick={() => setConfirm({ action: async () => { try { await approveTransfer(t.id).unwrap(); toast.success('Transfer approved') } catch { toast.error('Failed to approve') } }, title: 'Approve Transfer', message: `Approve transfer of ${t.quantity} units of ${t.productName} from ${t.fromName} to ${t.toName}?`, label: 'Approve' })}
                           className="px-2 py-1 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium"
                         >Approve</button>
                         <button
-                          onClick={() => setConfirm({ action: () => { dispatch(rejectTransfer(t.id)); toast.info('Transfer rejected') }, title: 'Reject Transfer', message: `Reject the transfer request for ${t.quantity} units of ${t.productName}?`, label: 'Reject', danger: true })}
+                          onClick={() => setConfirm({ action: async () => { try { await rejectTransfer(t.id).unwrap(); toast.info('Transfer rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Transfer', message: `Reject the transfer request for ${t.quantity} units of ${t.productName}?`, label: 'Reject', danger: true })}
                           className="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium"
                         >Reject</button>
                       </div>
@@ -283,11 +293,13 @@ function TransfersPanel() {
 // ── Reconciliations Panel ─────────────────────────────────────────────────────
 
 function ReconciliationsPanel() {
-  const { reconciliations } = useSelector(s => s.reconciliations)
-  const { products, warehouses } = useSelector(s => s.stock)
-  const { users } = useSelector(s => s.users)
+  const { data: reconciliations = [], isLoading } = useGetReconciliationsQuery()
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: users = [] } = useGetUsersQuery()
   const { user } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const [approveReconciliation] = useApproveReconciliationMutation()
+  const [rejectReconciliation] = useRejectReconciliationMutation()
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
@@ -297,7 +309,7 @@ function ReconciliationsPanel() {
       ...r,
       productName: products.find(p => p.id === r.productId)?.name || r.productId,
       warehouseName: warehouses.find(w => w.id === r.warehouseId)?.name || r.warehouseId,
-      createdByName: users.find(u => u.id === r.createdBy)?.name || r.createdBy,
+      createdByName: users.find(u => u.id === r.createdBy)?.email?.split('@')[0] || r.createdBy,
     }))
     .filter(r => statusFilter === 'ALL' || r.status === statusFilter)
     .filter(r => !search || r.productName.toLowerCase().includes(search.toLowerCase()) || r.warehouseName.toLowerCase().includes(search.toLowerCase()) || r.reason?.toLowerCase().includes(search.toLowerCase()))
@@ -359,11 +371,11 @@ function ReconciliationsPanel() {
                           ) : (
                             <>
                               <button
-                                onClick={() => setConfirm({ action: () => { dispatch(approveReconciliation({ id: r.id, userId: user.id })); toast.success('Reconciliation approved') }, title: 'Approve Reconciliation', message: `Approve the stock count discrepancy of ${r.discrepancy > 0 ? '+' : ''}${r.discrepancy} for ${r.productName} at ${r.warehouseName}?`, label: 'Approve' })}
+                                onClick={() => setConfirm({ action: async () => { try { await approveReconciliation(r.id).unwrap(); toast.success('Reconciliation approved') } catch { toast.error('Failed to approve') } }, title: 'Approve Reconciliation', message: `Approve the stock count discrepancy of ${r.discrepancy > 0 ? '+' : ''}${r.discrepancy} for ${r.productName} at ${r.warehouseName}?`, label: 'Approve' })}
                                 className="px-2 py-1 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium"
                               >Approve</button>
                               <button
-                                onClick={() => setConfirm({ action: () => { dispatch(rejectReconciliation(r.id)); toast.info('Reconciliation rejected') }, title: 'Reject Reconciliation', message: `Reject this reconciliation request for ${r.productName}?`, label: 'Reject', danger: true })}
+                                onClick={() => setConfirm({ action: async () => { try { await rejectReconciliation(r.id).unwrap(); toast.info('Reconciliation rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Reconciliation', message: `Reject this reconciliation request for ${r.productName}?`, label: 'Reject', danger: true })}
                                 className="px-2 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium"
                               >Reject</button>
                             </>
@@ -388,56 +400,237 @@ function ReconciliationsPanel() {
 // ── Analytics Panel ───────────────────────────────────────────────────────────
 
 function AnalyticsPanel() {
-  const { stockVelocity, lowStockForecast, reorderRecommendations, transferEfficiency, alertFrequency, movementSummary } = useSelector(s => s.analytics)
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
   const [section, setSection] = useState('velocity')
+  const [rangeDays, setRangeDays] = useState(30)
 
-  const maxVelocity = Math.max(...stockVelocity.map(s => s.velocityPerDay))
-  const maxAlertCount = Math.max(...alertFrequency.map(a => a.alertCount))
-  const maxMovement = Math.max(...movementSummary.map(d => Math.max(d.totalIntake, d.totalOutboundSales)))
+  const to = new Date().toISOString().split('T')[0]
+  const from = new Date(Date.now() - rangeDays * 86400000).toISOString().split('T')[0]
+  const dateParams = { from, to }
+
+  const { data: stockSummary } = useGetStockSummaryQuery(dateParams)
+  const { data: movementTrend = [] } = useGetMovementTrendQuery(dateParams)
+  const { data: transferSummary } = useGetTransferSummaryQuery(dateParams)
+  const { data: alertSummary } = useGetAlertSummaryQuery(dateParams)
+  const { data: alertsByWarehouse = [] } = useGetAlertsByWarehouseQuery(dateParams)
+
+  const prodName = id => products.find(p => p.id === String(id))?.name || String(id)
+  const whName = id => warehouses.find(w => w.id === String(id))?.name || String(id)
+
+  // Derived from live stockLevels — real-time, not historical
+  const lowStockForecast = stockLevels
+    .filter(sl => sl.currentStock < sl.threshold * 1.25)
+    .map(sl => ({
+      productName: prodName(sl.productId),
+      warehouseName: whName(sl.warehouseId),
+      currentStock: sl.currentStock,
+      threshold: sl.threshold,
+      daysUntilEmpty: sl.daysUntilEmpty,
+      urgency: sl.currentStock < sl.threshold ? 'CRITICAL' : 'WARNING',
+    }))
+    .sort((a, b) => (a.daysUntilEmpty ?? 999) - (b.daysUntilEmpty ?? 999))
+
+  const reorderRecommendations = stockLevels
+    .filter(sl => sl.currentStock < sl.threshold)
+    .map(sl => ({
+      productName: prodName(sl.productId),
+      warehouseName: whName(sl.warehouseId),
+      avgVelocity: sl.velocityPerDay?.toFixed(1) ?? '—',
+      suggestedQuantity: Math.max(sl.threshold * 2 - sl.currentStock, sl.threshold),
+      recommendedOrderDate: sl.daysUntilEmpty != null
+        ? new Date(Date.now() + sl.daysUntilEmpty * 0.5 * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : 'ASAP',
+    }))
+
+  // Top moving products from analytics
+  const topProducts = stockSummary?.topMovingProducts ?? []
+  const maxTopQty = Math.max(...topProducts.map(p => Number(p.totalQty)), 1)
+
+  // Movement trend — pivot rows by day (one row per day+movementType from backend)
+  const trendDays = (() => {
+    const map = {}
+    movementTrend.forEach(row => {
+      const key = String(row.day)
+      if (!map[key]) map[key] = { day: key, INTAKE: 0, OUTBOUND_SALE: 0, TRANSFER_OUT: 0 }
+      map[key][row.movementType] = (map[key][row.movementType] || 0) + Number(row.total)
+    })
+    return Object.values(map).sort((a, b) => a.day.localeCompare(b.day))
+  })()
+  const maxTrend = Math.max(...trendDays.map(d => Math.max(d.INTAKE, d.OUTBOUND_SALE)), 1)
+
+  // Alerts by warehouse with name lookup
+  const alertWarehouses = alertsByWarehouse
+    .map(r => ({ warehouseName: whName(r.warehouseId), total: Number(r.total) }))
+    .sort((a, b) => b.total - a.total)
+  const maxAlertWh = Math.max(...alertWarehouses.map(r => r.total), 1)
 
   const SECTIONS = [
-    { id: 'velocity', label: 'Stock Velocity' },
+    { id: 'velocity', label: 'Top Products' },
+    { id: 'trend', label: 'Movement Trend' },
+    { id: 'transfers', label: 'Transfer Summary' },
+    { id: 'alerts', label: 'Alert Summary' },
     { id: 'forecast', label: 'Low-Stock Forecast' },
     { id: 'reorder', label: 'Reorder Recommendations' },
-    { id: 'transfers', label: 'Transfer Efficiency' },
-    { id: 'alerts', label: 'Alert Frequency' },
-    { id: 'movements', label: 'Movement Summary' },
   ]
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-1 bg-white rounded-xl border border-gray-200 p-2">
-        {SECTIONS.map(s => (
-          <button key={s.id} onClick={() => setSection(s.id)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${section === s.id ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-            {s.label}
-          </button>
-        ))}
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard title="Total Movements" value={stockSummary?.totalMovements ?? '—'} color="blue" />
+        <StatCard title="Intake" value={stockSummary?.totalIntake ?? '—'} color="green" />
+        <StatCard title="Outbound" value={stockSummary?.totalOutbound ?? '—'} color="amber" />
+        <StatCard title="Alerts" value={alertSummary?.totalAlerts ?? '—'} color={alertSummary?.totalAlerts > 0 ? 'red' : 'green'} />
+      </div>
+
+      {/* Section tabs + date range */}
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-white rounded-xl border border-gray-200 p-2">
+        <div className="flex flex-wrap gap-1">
+          {SECTIONS.map(s => (
+            <button key={s.id} onClick={() => setSection(s.id)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${section === s.id ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 shrink-0">
+          {[7, 30, 90].map(d => (
+            <button key={d} onClick={() => setRangeDays(d)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${rangeDays === d ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{d}d</button>
+          ))}
+        </div>
       </div>
 
       {section === 'velocity' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Stock Velocity Rankings</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Products ranked by fastest depletion (units/day)</p>
+            <h3 className="font-semibold text-gray-900">Top Moving Products</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Ranked by total quantity moved in the selected period</p>
           </div>
           <div className="p-5 space-y-3">
-            {stockVelocity.map((s, i) => (
-              <div key={i} className="flex items-center gap-3">
+            {topProducts.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No movement data for this period.</p>
+            ) : topProducts.map((p, i) => (
+              <div key={String(p.productId) + i} className="flex items-center gap-3">
                 <span className="w-4 text-xs text-gray-400 font-medium">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 truncate">{s.productName} <span className="text-gray-400 font-normal">· {s.warehouseName}</span></span>
-                    <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{s.velocityPerDay}/day</span>
+                    <span className="text-sm font-medium text-gray-900 truncate">{prodName(p.productId)}</span>
+                    <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{Number(p.totalQty).toLocaleString()} units</span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-teal-600 h-2 rounded-full transition-all" style={{ width: `${(s.velocityPerDay / maxVelocity) * 100}%` }} />
+                    <div className="bg-teal-600 h-2 rounded-full transition-all" style={{ width: `${(Number(p.totalQty) / maxTopQty) * 100}%` }} />
                   </div>
                 </div>
-                <span className={`text-xs font-medium w-16 text-right ${s.daysUntilEmpty <= 7 ? 'text-red-600' : s.daysUntilEmpty <= 14 ? 'text-amber-600' : 'text-green-600'}`}>
-                  {s.daysUntilEmpty}d left
-                </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {section === 'trend' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">Movement Trend</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Daily intake vs outbound over the selected period</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="bg-gray-50 border-b border-gray-100">
+                {['Date', 'Intake', 'Outbound Sales', 'Transfer Out', 'Visual'].map(h => (
+                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-50">
+                {trendDays.length === 0 ? (
+                  <tr><td colSpan={5} className="px-5 py-6 text-center text-gray-400 text-sm">No data for this period.</td></tr>
+                ) : trendDays.map(d => (
+                  <tr key={d.day} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(d.day)}</td>
+                    <td className="px-5 py-3 text-green-700 font-medium">{d.INTAKE || '—'}</td>
+                    <td className="px-5 py-3 text-orange-700 font-medium">{d.OUTBOUND_SALE || '—'}</td>
+                    <td className="px-5 py-3 text-purple-700">{d.TRANSFER_OUT || '—'}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex gap-1 items-end h-6">
+                        {d.INTAKE > 0 && <div className="bg-teal-400 rounded-sm w-3" style={{ height: `${(d.INTAKE / maxTrend) * 24}px` }} title={`Intake: ${d.INTAKE}`} />}
+                        {d.OUTBOUND_SALE > 0 && <div className="bg-orange-400 rounded-sm w-3" style={{ height: `${(d.OUTBOUND_SALE / maxTrend) * 24}px` }} title={`Sales: ${d.OUTBOUND_SALE}`} />}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {section === 'transfers' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="blue" />
+            <StatCard title="Approved" value={transferSummary?.totalApproved ?? '—'} color="green" />
+            <StatCard title="Rejected" value={transferSummary?.totalRejected ?? '—'} color="red" />
+            <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="teal" />
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Transfer Volume by Product</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              {(() => {
+                const vbp = transferSummary?.volumeByProduct ?? []
+                const maxQty = Math.max(...vbp.map(p => Number(p.totalQty)), 1)
+                return vbp.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">No transfer data for this period.</p>
+                ) : vbp.map((p, i) => (
+                  <div key={String(p.productId) + i} className="flex items-center gap-3">
+                    <span className="w-4 text-xs text-gray-400">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-gray-900 truncate">{prodName(p.productId)}</span>
+                        <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{Number(p.totalQty).toLocaleString()} units</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(Number(p.totalQty) / maxQty) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {section === 'alerts' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:max-w-xs">
+            <StatCard title="Total Alerts" value={alertSummary?.totalAlerts ?? '—'} color={alertSummary?.totalAlerts > 0 ? 'red' : 'green'} />
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Alerts by Warehouse</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Warehouses with the most restock alerts in this period</p>
+            </div>
+            <div className="p-5 space-y-3">
+              {alertWarehouses.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">No alert data for this period.</p>
+              ) : alertWarehouses.map((a, i) => (
+                <div key={a.warehouseName + i} className="flex items-center gap-3">
+                  <span className="w-4 text-xs text-gray-400">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-900">{a.warehouseName}</span>
+                      <span className="text-sm font-semibold text-amber-700 ml-2">{a.total} alerts</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${(a.total / maxAlertWh) * 100}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -446,7 +639,7 @@ function AnalyticsPanel() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-semibold text-gray-900">Low-Stock Forecast</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Products ranked by urgency</p>
+            <p className="text-xs text-gray-500 mt-0.5">Current stock levels approaching or below threshold</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -456,14 +649,16 @@ function AnalyticsPanel() {
                 ))}
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {lowStockForecast.map((r, i) => (
+                {lowStockForecast.length === 0 ? (
+                  <tr><td colSpan={6} className="px-5 py-6 text-center text-gray-400 text-sm">All stock levels are healthy.</td></tr>
+                ) : lowStockForecast.map((r, i) => (
                   <tr key={i} className="hover:bg-gray-50/60">
                     <td className="px-5 py-3 font-medium text-gray-900">{r.productName}</td>
                     <td className="px-5 py-3 text-gray-600">{r.warehouseName}</td>
                     <td className="px-5 py-3 font-semibold text-gray-900">{r.currentStock}</td>
                     <td className="px-5 py-3 text-gray-600">{r.threshold}</td>
                     <td className="px-5 py-3">
-                      <span className={`font-semibold ${r.daysUntilEmpty <= 7 ? 'text-red-600' : 'text-amber-600'}`}>{r.daysUntilEmpty}d</span>
+                      <span className={`font-semibold ${r.daysUntilEmpty <= 7 ? 'text-red-600' : 'text-amber-600'}`}>{r.daysUntilEmpty ?? '—'}d</span>
                     </td>
                     <td className="px-5 py-3"><StatusBadge status={r.urgency} /></td>
                   </tr>
@@ -478,7 +673,7 @@ function AnalyticsPanel() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-semibold text-gray-900">Reorder Recommendations</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Smart reorder quantities and dates based on 7-day velocity</p>
+            <p className="text-xs text-gray-500 mt-0.5">Smart reorder quantities and dates based on stock velocity</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -488,7 +683,9 @@ function AnalyticsPanel() {
                 ))}
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
-                {reorderRecommendations.map((r, i) => (
+                {reorderRecommendations.length === 0 ? (
+                  <tr><td colSpan={5} className="px-5 py-6 text-center text-gray-400 text-sm">No reorder recommendations at this time.</td></tr>
+                ) : reorderRecommendations.map((r, i) => (
                   <tr key={i} className="hover:bg-gray-50/60">
                     <td className="px-5 py-3 font-medium text-gray-900">{r.productName}</td>
                     <td className="px-5 py-3 text-gray-600">{r.warehouseName}</td>
@@ -504,92 +701,6 @@ function AnalyticsPanel() {
           </div>
         </div>
       )}
-
-      {section === 'transfers' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Transfer Efficiency</h3>
-          </div>
-          <div className="p-5 space-y-4">
-            {transferEfficiency.map((t, i) => (
-              <div key={i} className="border border-gray-100 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-900">{t.fromWarehouseName} → {t.toWarehouseName}</span>
-                  <span className={`text-sm font-bold ${t.acceptanceRate >= 60 ? 'text-green-600' : 'text-amber-600'}`}>{t.acceptanceRate.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-                  <div className={`h-2 rounded-full ${t.acceptanceRate >= 60 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${t.acceptanceRate}%` }} />
-                </div>
-                <div className="flex gap-4 text-xs text-gray-500">
-                  <span>Suggested: <strong className="text-gray-700">{t.totalSuggested}</strong></span>
-                  <span>Accepted: <strong className="text-green-700">{t.totalAccepted}</strong></span>
-                  <span>Rejected: <strong className="text-red-700">{t.totalRejected}</strong></span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {section === 'alerts' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Alert Frequency</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Products that trigger restocking alerts most often</p>
-          </div>
-          <div className="p-5 space-y-3">
-            {alertFrequency.map((a, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="w-4 text-xs text-gray-400">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">{a.productName} <span className="text-gray-400 font-normal">· {a.warehouseName}</span></span>
-                    <span className="text-sm font-semibold text-amber-700 ml-2">{a.alertCount} alerts</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${(a.alertCount / maxAlertCount) * 100}%` }} />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-0.5">Avg {a.avgDaysBetweenAlerts} days between alerts</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {section === 'movements' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Movement Summary (Last 7 Days)</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 border-b border-gray-100">
-                {['Date', 'Intake', 'Outbound Sales', 'Transfers In', 'Transfers Out', 'Visual'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr></thead>
-              <tbody className="divide-y divide-gray-50">
-                {movementSummary.map((d, i) => (
-                  <tr key={i} className="hover:bg-gray-50/60">
-                    <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(d.summaryDate)}</td>
-                    <td className="px-5 py-3 text-green-700 font-medium">{d.totalIntake || '—'}</td>
-                    <td className="px-5 py-3 text-orange-700 font-medium">{d.totalOutboundSales || '—'}</td>
-                    <td className="px-5 py-3 text-blue-700">{d.transfersIn || '—'}</td>
-                    <td className="px-5 py-3 text-purple-700">{d.transfersOut || '—'}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-1 items-end h-6">
-                        {d.totalIntake > 0 && <div className="bg-teal-400 rounded-sm w-3" style={{ height: `${(d.totalIntake / maxMovement) * 24}px` }} title={`Intake: ${d.totalIntake}`} />}
-                        {d.totalOutboundSales > 0 && <div className="bg-orange-400 rounded-sm w-3" style={{ height: `${(d.totalOutboundSales / maxMovement) * 24}px` }} title={`Sales: ${d.totalOutboundSales}`} />}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -597,53 +708,49 @@ function AnalyticsPanel() {
 // ── Team Panel ────────────────────────────────────────────────────────────────
 
 function TeamPanel() {
-  const { users, warehouseAssignments } = useSelector(s => s.users)
-  const { user: me, companyId } = useSelector(s => s.auth)
-  const { warehouses } = useSelector(s => s.stock)
-  const dispatch = useDispatch()
+  const { data: users = [], isLoading } = useGetUsersQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const [updateUserRole] = useUpdateUserRoleMutation()
+  const [deactivateUser] = useDeactivateUserMutation()
+  const [reactivateUser] = useReactivateUserMutation()
+  const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
   const [pendingRole, setPendingRole] = useState({})
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
   const [showAddUser, setShowAddUser] = useState(false)
   const [showTempPass, setShowTempPass] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
+  const [addForm, setAddForm] = useState({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
   const chAdd = e => setAddForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const myWarehouseIds = warehouseAssignments
-    .filter(a => a.userId === me.id)
-    .map(a => a.warehouseId)
-
-  const myWarehouseId = myWarehouseIds[0] || null
   const myWarehouseName = warehouses.find(w => w.id === myWarehouseId)?.name || null
 
-  const myWarehouseUserIds = warehouseAssignments
-    .filter(a => myWarehouseIds.includes(a.warehouseId))
-    .map(a => a.userId)
-
   const teamUsers = users.filter(u =>
-    u.companyId === companyId &&
-    myWarehouseUserIds.includes(u.id) &&
     u.role !== 'ADMIN' &&
-    (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
+    u.email.toLowerCase().includes(search.toLowerCase())
   )
 
-  const saveRole = (userId, role) => {
-    dispatch(updateUserRole({ id: userId, role }))
-    toast.success('Role updated')
-    setPendingRole(r => { const n = { ...r }; delete n[userId]; return n })
+  const saveRole = async (userId, role) => {
+    try {
+      await updateUserRole({ id: userId, role }).unwrap()
+      toast.success('Role updated')
+      setPendingRole(r => { const n = { ...r }; delete n[userId]; return n })
+    } catch {
+      toast.error('Failed to update role')
+    }
   }
 
-  const handleAddUser = e => {
+  const handleAddUser = async e => {
     e.preventDefault()
-    if (!myWarehouseId) { toast.error('You are not assigned to a warehouse'); return }
-    const newId = `user-${Date.now()}`
-    dispatch(addUser({ ...addForm, companyId, id: newId }))
-    dispatch(registerLocalUser({ id: newId, name: addForm.name, email: addForm.email, password: addForm.password, role: addForm.role, companyId, companyName: null, warehouseId: myWarehouseId }))
-    dispatch(assignWarehouse({ userId: newId, warehouseId: myWarehouseId, companyId }))
-    toast.success(`${addForm.name} added to ${myWarehouseName}`)
-    setShowAddUser(false)
-    setShowTempPass(false)
-    setAddForm({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
+    try {
+      await createUser({ email: addForm.email, role: addForm.role, password: addForm.password, warehouseId: myWarehouseId || null }).unwrap()
+      toast.success(`User added${myWarehouseName ? ` to ${myWarehouseName}` : ''}`)
+      setShowAddUser(false)
+      setShowTempPass(false)
+      setAddForm({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
+    } catch (err) {
+      toast.error(err?.data?.message || 'Failed to add user')
+    }
   }
 
   return (
@@ -656,100 +763,109 @@ function TeamPanel() {
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <div>
             <h3 className="font-semibold text-gray-900">Team Members</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Staff assigned to your warehouse. You can update their roles.</p>
+            <p className="text-xs text-gray-500 mt-0.5">Company staff. You can update their roles.</p>
           </div>
           <div className="flex items-center gap-2">
             <SearchBar value={search} onChange={setSearch} placeholder="Search members…" />
-            {myWarehouseId && (
-              <button
-                onClick={() => setShowAddUser(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                Add Member
-              </button>
-            )}
+            <button
+              onClick={() => setShowAddUser(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add Member
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Member', 'Email', 'Status', 'Role', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {teamUsers.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">
-                  {myWarehouseIds.length === 0 ? 'You are not assigned to any warehouses.' : 'No team members found.'}
-                </td></tr>
-              ) : teamUsers.map(u => {
-                const isAdmin = u.role === 'ADMIN'
-                const isMe = u.id === me.id
-                const pending = pendingRole[u.id]
-                return (
-                  <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
-                          {u.name[0]}
+          {isLoading ? (
+            <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Member', 'Email', 'Status', 'Role', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {teamUsers.length === 0 ? (
+                  <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">No team members found.</td></tr>
+                ) : teamUsers.map(u => {
+                  const displayName = u.email.split('@')[0]
+                  const isAdmin = u.role === 'ADMIN'
+                  const isMe = u.id === me?.id
+                  const pending = pendingRole[u.id]
+                  return (
+                    <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-semibold text-sm shrink-0">
+                            {displayName[0].toUpperCase()}
+                          </div>
+                          <span className="font-medium text-gray-900">{displayName}</span>
                         </div>
-                        <span className="font-medium text-gray-900">{u.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-gray-600">{u.email}</td>
-                    <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
-                    <td className="px-5 py-3">
-                      {isAdmin || isMe ? (
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={u.role} />
-                          {isMe && <span className="text-xs text-gray-400">(you)</span>}
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={pending ?? u.role}
-                            onChange={e => setPendingRole(r => ({ ...r, [u.id]: e.target.value }))}
-                            className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-teal-600"
-                          >
-                            <option value="MANAGER">Manager</option>
-                            <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
-                            <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
-                          </select>
-                          {pending && pending !== u.role && (
-                            <button
-                              onClick={() => saveRole(u.id, pending)}
-                              className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700"
+                      </td>
+                      <td className="px-5 py-3 text-gray-600">{u.email}</td>
+                      <td className="px-5 py-3"><StatusBadge status={u.isActive ? 'ACTIVE' : 'SUSPENDED'} /></td>
+                      <td className="px-5 py-3">
+                        {isAdmin || isMe ? (
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status={u.role} />
+                            {isMe && <span className="text-xs text-gray-400">(you)</span>}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={pending ?? u.role}
+                              onChange={e => setPendingRole(r => ({ ...r, [u.id]: e.target.value }))}
+                              className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-teal-600"
                             >
-                              Save
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      {!isAdmin && !isMe && (
-                        <button
-                          onClick={() => setConfirm({
-                            action: () => { u.isActive ? dispatch(deactivateUser(u.id)) : dispatch(reactivateUser(u.id)); toast.success(u.isActive ? `${u.name} deactivated` : `${u.name} reactivated`) },
-                            title: u.isActive ? 'Deactivate Member' : 'Reactivate Member',
-                            message: u.isActive ? `Deactivate ${u.name}? They will lose access to the system.` : `Reactivate ${u.name}? They will regain access to the system.`,
-                            label: u.isActive ? 'Deactivate' : 'Reactivate',
-                            danger: u.isActive,
-                          })}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${u.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}
-                        >
-                          {u.isActive ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                              <option value="MANAGER">Manager</option>
+                              <option value="WAREHOUSE_STAFF">Warehouse Staff</option>
+                              <option value="PROCUREMENT_OFFICER">Procurement Officer</option>
+                            </select>
+                            {pending && pending !== u.role && (
+                              <button
+                                onClick={() => saveRole(u.id, pending)}
+                                className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700"
+                              >
+                                Save
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {!isAdmin && !isMe && (
+                          <button
+                            onClick={() => setConfirm({
+                              action: async () => {
+                                try {
+                                  if (u.isActive) await deactivateUser(u.id).unwrap()
+                                  else await reactivateUser(u.id).unwrap()
+                                  toast.success(u.isActive ? `${displayName} deactivated` : `${displayName} reactivated`)
+                                } catch {
+                                  toast.error('Action failed')
+                                }
+                              },
+                              title: u.isActive ? 'Deactivate Member' : 'Reactivate Member',
+                              message: u.isActive ? `Deactivate ${displayName}? They will lose access to the system.` : `Reactivate ${displayName}? They will regain access to the system.`,
+                              label: u.isActive ? 'Deactivate' : 'Reactivate',
+                              danger: u.isActive,
+                            })}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${u.isActive ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}
+                          >
+                            {u.isActive ? 'Deactivate' : 'Reactivate'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -766,10 +882,6 @@ function TeamPanel() {
               </button>
             </div>
             <form onSubmit={handleAddUser} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input name="name" value={addForm.name} onChange={chAdd} placeholder="Jane Doe" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input name="email" type="email" value={addForm.email} onChange={chAdd} placeholder="jane@company.com" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
@@ -798,7 +910,7 @@ function TeamPanel() {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setShowAddUser(false)} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-                <button type="submit" className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Add Member</button>
+                <button type="submit" disabled={isCreating} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70">{isCreating ? 'Adding…' : 'Add Member'}</button>
               </div>
             </form>
           </div>
@@ -820,7 +932,7 @@ function ComplaintsPanel() {
 
   const handleSubmit = e => {
     e.preventDefault()
-    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me.name, email: me.email, companyName, companyId }))
+    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
     setSubmitted(true)
     setForm({ subject: '', priority: 'MEDIUM', message: '' })
   }
@@ -880,23 +992,18 @@ function ComplaintsPanel() {
 
 export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
-  const { transfers } = useSelector(s => s.transfers)
-  const { reconciliations } = useSelector(s => s.reconciliations)
-  const { stockLevels, warehouses } = useSelector(s => s.stock)
-  const { user: me } = useSelector(s => s.auth)
-  const { warehouseAssignments } = useSelector(s => s.users)
+  const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId, pollingInterval: 30000 })
+  const { data: transfers = [] } = useGetTransfersQuery(undefined, { pollingInterval: 30000 })
+  const { data: reconciliations = [] } = useGetReconciliationsQuery(undefined, { pollingInterval: 30000 })
 
-  const myWarehouseId = warehouseAssignments.find(a => a.userId === me?.id)?.warehouseId || null
   const myWarehouse = warehouses.find(w => w.id === myWarehouseId) || null
-
-  const myWarehouseStockLevels = myWarehouseId
-    ? stockLevels.filter(sl => sl.warehouseId === myWarehouseId)
-    : []
 
   const navItems = [
     {
       id: 'stock', label: 'Stock Overview',
-      badge: myWarehouseStockLevels.filter(sl => sl.currentStock < sl.threshold).length,
+      badge: stockLevels.filter(sl => sl.currentStock < sl.threshold).length,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 6v12M14 6v12M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z" /></svg>,
     },
     {
