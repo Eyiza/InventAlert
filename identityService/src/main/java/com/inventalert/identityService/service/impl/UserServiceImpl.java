@@ -136,17 +136,12 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByIdAndCompanyId(userId, companyId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        if (assignmentRepository.existsByUserIdAndWarehouseId(userId, request.warehouseId())) {
-            return AssignmentResponse.from(
-                    assignmentRepository.findAllByUserId(userId).stream()
-                            .filter(a -> a.getWarehouseId().equals(request.warehouseId()))
-                            .findFirst().orElseThrow()
-            );
-        }
-
         if (user.getRole() == Role.MANAGER) {
             assertNoManagerForWarehouse(request.warehouseId(), companyId, userId);
         }
+
+        // One warehouse per non-admin user — replace any existing assignment
+        assignmentRepository.deleteAllByUserId(userId);
 
         WarehouseAssignment assignment = new WarehouseAssignment();
         assignment.setUserId(userId);

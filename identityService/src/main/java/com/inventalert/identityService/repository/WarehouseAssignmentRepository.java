@@ -10,4 +10,5 @@ public interface WarehouseAssignmentRepository extends JpaRepository<WarehouseAs
     boolean existsByUserIdAndWarehouseId(String userId, String warehouseId);
     List<WarehouseAssignment> findAllByWarehouseIdAndCompanyId(String warehouseId, String companyId);
     void deleteAllByCompanyId(String companyId);
+    void deleteAllByUserId(String userId);
 }
