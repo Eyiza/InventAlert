@@ -7,10 +7,8 @@ import { inventAlertApi } from '../apis/inventAlertApi'
 
 function getSockUrl() {
   const apiBase = import.meta.env.VITE_API_BASE_URL
-  if (apiBase === 'http://localhost' || apiBase === 'https://localhost') {
-    return `${apiBase}/ws`
-  }
-  return 'http://localhost:8083/ws'
+  if (!apiBase || apiBase === '/') return '/ws'
+  return `${apiBase}/ws`
 }
 
 export function useNotificationSocket() {

@@ -34,13 +34,13 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { isAuthenticated, role } = useSelector(s => s.auth)
 
-  const [loginMutation, { isLoading: loginLoading }] = useLoginMutation()
-  const [superAdminLoginMutation, { isLoading: superAdminLoading }] = useSuperAdminLoginMutation()
-  const isLoading = loginLoading || superAdminLoading
+  const [loginMutation] = useLoginMutation()
+  const [superAdminLoginMutation] = useSuperAdminLoginMutation()
 
   useEffect(() => {
     if (isAuthenticated && role) {
@@ -53,18 +53,22 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setIsSubmitting(true)
+    try {
+      let result = await loginMutation({ email, password })
 
-    let result = await loginMutation({ email, password })
+      // 401/403 from regular login → try superadmin endpoint
+      if (result.error?.status === 401 || result.error?.status === 403) {
+        result = await superAdminLoginMutation({ email, password })
+      }
 
-    // 401/403 from regular login → try superadmin endpoint
-    if (result.error?.status === 401 || result.error?.status === 403) {
-      result = await superAdminLoginMutation({ email, password })
-    }
-
-    if (result.data) {
-      dispatch(setCredentials(result.data))
-    } else {
-      setError('Invalid email or password')
+      if (result.data) {
+        dispatch(setCredentials(result.data))
+      } else {
+        setError('Invalid email or password')
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -138,16 +142,16 @@ export default function Login() {
             </div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-semibold rounded-lg transition-colors duration-150 mt-2 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading && (
+              {isSubmitting && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {isLoading ? 'Signing in…' : 'Sign In'}
+              {isSubmitting ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
           <p className="text-center text-sm text-gray-500 mt-6">

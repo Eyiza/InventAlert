@@ -899,7 +899,7 @@ function SetupChecklist({ warehouses, users, onGoToWarehouses, onGoToUsers }) {
     : { label: 'Add Team Member', fn: onGoToUsers }
 
   return (
-    <div className="relative bg-gradient-to-br from-teal-600 to-teal-700 rounded-2xl p-6 mb-5 overflow-hidden">
+    <div className="relative bg-linear-to-br from-teal-600 to-teal-700 rounded-2xl p-6 mb-5 overflow-hidden">
       <div className="absolute top-0 right-0 w-56 h-56 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
       <div className="absolute bottom-0 right-20 w-28 h-28 bg-white/5 rounded-full translate-y-1/2 pointer-events-none" />
 
@@ -1098,7 +1098,7 @@ function ManageUserModal({ user: u, onClose }) {
 
 function UsersPanel({ onGoToWarehouses }) {
   const { data: users = [], isLoading } = useGetUsersQuery()
-  const { data: warehouses = [], isLoading: isLoadingWarehouses } = useGetWarehousesQuery()
+  const { data: warehouses = [], isLoading: isLoadingWarehouses, isFetching: isFetchingWarehouses } = useGetWarehousesQuery()
   const { user: me } = useSelector(s => s.auth)
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
   const [showAdd, setShowAdd] = useState(false)
@@ -1127,7 +1127,7 @@ function UsersPanel({ onGoToWarehouses }) {
 
   const roleCount = r => users.filter(u => u.role === r).length
 
-  if (!isLoadingWarehouses && warehouses.length === 0) {
+  if (!isLoadingWarehouses && !isFetchingWarehouses && warehouses.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 flex flex-col items-center justify-center text-center py-20 px-8">
         <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
@@ -1233,7 +1233,7 @@ function UsersPanel({ onGoToWarehouses }) {
             </Field>
             <Field label="Assign to Warehouse">
               <select name="warehouseId" value={form.warehouseId} onChange={ch} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
-                <option value="">No warehouse (assign later)</option>
+                <option value="">{isFetchingWarehouses ? 'Loading warehouses…' : 'No warehouse (assign later)'}</option>
                 {warehouses.filter(w => w.isActive).map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
