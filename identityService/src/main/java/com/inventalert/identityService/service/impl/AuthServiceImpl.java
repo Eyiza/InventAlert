@@ -157,6 +157,7 @@ public class AuthServiceImpl implements AuthService {
         if (!user.isActive()) throw new InvalidResetTokenException();
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setMustChangePassword(false);
         userRepository.save(user);
 
         resetToken.setUsed(true);
@@ -182,6 +183,16 @@ public class AuthServiceImpl implements AuthService {
         response.setCompanyName(company.getCompanyName());
         response.setRole(user.getRole().name());
         response.setWarehouseId(warehouseId);
+        response.setMustChangePassword(user.isMustChangePassword());
         return response;
+    }
+
+    @Override
+    public void changePassword(String userId, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        userRepository.save(user);
     }
 }

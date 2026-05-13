@@ -1,9 +1,13 @@
 package com.inventalert.identityService.controller;
 
+import com.inventalert.identityService.dto.request.ChangePasswordRequest;
 import com.inventalert.identityService.dto.request.ForgotPasswordRequest;
 import com.inventalert.identityService.dto.request.LoginRequest;
 import com.inventalert.identityService.dto.request.ResetPasswordRequest;
 import com.inventalert.identityService.dto.request.SignupRequest;
+import com.inventalert.identityService.security.model.JwtUser;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.inventalert.identityService.dto.response.LoginResponse;
 import com.inventalert.identityService.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -99,6 +103,24 @@ public class AuthController {
     @PostMapping("/reset-password")
     public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(
+        summary = "Change password (authenticated)",
+        description = "Allows an authenticated user to set a new password and clears the mustChangePassword flag.",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "Password changed", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Validation failed", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Not authenticated", content = @Content)
+        }
+    )
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal JwtUser principal,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(principal.getUserId(), request.newPassword());
         return ResponseEntity.ok().build();
     }
 }

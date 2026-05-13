@@ -16,6 +16,7 @@ import {
   useDeactivateWarehouseMutation, useActivateWarehouseMutation,
   useGetProductsQuery, useCreateProductMutation, useUpdateProductMutation, useImportProductsMutation,
   useGetStockByWarehouseQuery,
+  useForgotPasswordMutation,
 } from '../../apis/inventAlertApi'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
@@ -983,6 +984,7 @@ function ManageUserModal({ user: u, onClose }) {
   const [removeAssignmentMutation] = useRemoveAssignmentMutation()
   const [deactivateUserMutation] = useDeactivateUserMutation()
   const [reactivateUserMutation] = useReactivateUserMutation()
+  const [forgotPassword, { isLoading: isSendingReset }] = useForgotPasswordMutation()
   const [role, setRole] = useState(u.role)
   const [addWh, setAddWh] = useState('')
   const [confirm, setConfirm] = useState(null)
@@ -1076,6 +1078,30 @@ function ManageUserModal({ user: u, onClose }) {
             </div>
           </div>
 
+          {/* Reset credentials */}
+          <div className="pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Lost Credentials</p>
+            <p className="text-xs text-gray-400 mb-3">If this member lost their login details, send them a password reset link via email.</p>
+            <button
+              type="button"
+              disabled={isSendingReset}
+              onClick={async () => {
+                try {
+                  await forgotPassword({ email: u.email }).unwrap()
+                  toast.success(`Password reset link sent to ${u.email}`)
+                } catch {
+                  toast.error('Failed to send reset link — please try again')
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 text-sm font-semibold rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              {isSendingReset ? 'Sending…' : 'Send Password Reset Link'}
+            </button>
+          </div>
+
           {/* Account status */}
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
             <div>
@@ -1114,6 +1140,10 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
 
   const handleAdd = async e => {
     e.preventDefault()
+    if (!form.warehouseId) {
+      toast.error('Please assign the team member to a warehouse')
+      return
+    }
     if (form.password.length < 8) {
       toast.error('Temporary password must be at least 8 characters')
       return
@@ -1236,8 +1266,8 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
               </select>
             </Field>
             <Field label="Assign to Warehouse">
-              <select name="warehouseId" value={form.warehouseId} onChange={ch} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
-                <option value="">{isFetchingWarehouses ? 'Loading warehouses…' : 'No warehouse (assign later)'}</option>
+              <select name="warehouseId" value={form.warehouseId} onChange={ch} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
+                <option value="" disabled>{isFetchingWarehouses ? 'Loading warehouses…' : 'Select a warehouse'}</option>
                 {warehouses.filter(w => w.isActive).map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}

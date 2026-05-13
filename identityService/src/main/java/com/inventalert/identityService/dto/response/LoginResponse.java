@@ -15,4 +15,5 @@ public class LoginResponse {
     private String companyName;
     private String role;
     private String warehouseId;
+    private boolean mustChangePassword;
 }
