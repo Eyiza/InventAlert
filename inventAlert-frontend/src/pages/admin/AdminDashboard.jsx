@@ -322,14 +322,14 @@ function ManageWarehouseModal({ wh, onClose }) {
   const [updateWarehouseMutation, { isLoading: isSaving }] = useUpdateWarehouseMutation()
   const [deactivateWarehouse] = useDeactivateWarehouseMutation()
   const [activateWarehouse] = useActivateWarehouseMutation()
-  const [form, setForm] = useState({ name: wh.name, address: wh.address })
+  const [form, setForm] = useState({ name: wh.name, address: wh.address, latitude: wh.latitude ?? null, longitude: wh.longitude ?? null })
   const [confirm, setConfirm] = useState(null)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const handleEdit = async e => {
     e.preventDefault()
     try {
-      await updateWarehouseMutation({ id: wh.id, name: form.name, address: form.address }).unwrap()
+      await updateWarehouseMutation({ id: wh.id, name: form.name, address: form.address, latitude: form.latitude, longitude: form.longitude }).unwrap()
       toast.success('Warehouse updated')
     } catch (err) {
       toast.error(err?.data?.message || 'Update failed')
@@ -348,6 +348,7 @@ function ManageWarehouseModal({ wh, onClose }) {
                 <PlacesAutocompleteInput
                   value={form.address}
                   onChange={addr => setForm(f => ({ ...f, address: addr }))}
+                  onPlaceSelect={({ address, latitude, longitude }) => setForm(f => ({ ...f, address, latitude, longitude }))}
                   placeholder="123 Street, City, State"
                   required
                 />
@@ -394,7 +395,7 @@ function ManageWarehouseModal({ wh, onClose }) {
 function WarehousesPanel() {
   const { data: warehouses = [], isLoading } = useGetWarehousesQuery()
   const [createWarehouse, { isLoading: isCreating }] = useCreateWarehouseMutation()
-  const [form, setForm] = useState({ name: '', address: '' })
+  const [form, setForm] = useState({ name: '', address: '', latitude: null, longitude: null })
   const [search, setSearch] = useState('')
   const [selectedWh, setSelectedWh] = useState(null)
   const [manageWh, setManageWh] = useState(null)
@@ -411,12 +412,16 @@ function WarehousesPanel() {
     w.address.toLowerCase().includes(search.toLowerCase())
   )
 
-  const openAdd = () => { setForm({ name: '', address: '' }); setShowAdd(true) }
+  const openAdd = () => { setForm({ name: '', address: '', latitude: null, longitude: null }); setShowAdd(true) }
 
   const handleSubmit = async e => {
     e.preventDefault()
+    if (form.latitude === null || form.longitude === null) {
+      toast.error('Please select an address from the dropdown to set the location coordinates.')
+      return
+    }
     try {
-      await createWarehouse({ name: form.name, address: form.address }).unwrap()
+      await createWarehouse({ name: form.name, address: form.address, latitude: form.latitude, longitude: form.longitude }).unwrap()
       toast.success('Warehouse added')
       setShowAdd(false)
     } catch (err) {
@@ -426,11 +431,13 @@ function WarehousesPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Warehouses" value={warehouses.length} color="teal" />
-        <StatCard title="Active" value={warehouses.filter(w => w.isActive).length} color="teal" />
-        <StatCard title="Inactive" value={warehouses.filter(w => !w.isActive).length} color="gray" />
-      </div>
+      {warehouses.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <StatCard title="Total Warehouses" value={warehouses.length} color="teal" />
+          <StatCard title="Active" value={warehouses.filter(w => w.isActive).length} color="teal" />
+          <StatCard title="Inactive" value={warehouses.filter(w => !w.isActive).length} color="gray" />
+        </div>
+      )}
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Warehouses</h3>
@@ -444,6 +451,24 @@ function WarehousesPanel() {
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="py-12 text-center text-sm text-gray-400">Loading…</div>
+          ) : !isLoading && warehouses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center px-8">
+              <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-3">
+                <svg className="w-6 h-6 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-semibold text-gray-800 mb-1">No warehouses yet</h3>
+              <p className="text-xs text-gray-400 mb-4 max-w-xs leading-relaxed">
+                Create your first warehouse to start tracking inventory, assigning staff, and monitoring stock levels.
+              </p>
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors"
+              >
+                <AddIcon /> Create Warehouse
+              </button>
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -455,7 +480,7 @@ function WarehousesPanel() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">No warehouses found</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400 text-sm">No warehouses match your search</td></tr>
                 ) : filtered.map(wh => (
                   <tr key={wh.id} className="hover:bg-gray-50/60">
                     <td className="px-5 py-3 font-medium text-gray-900">{wh.name}</td>
@@ -486,10 +511,14 @@ function WarehousesPanel() {
             <Field label="Address">
               <PlacesAutocompleteInput
                 value={form.address}
-                onChange={addr => setForm(f => ({ ...f, address: addr }))}
+                onChange={addr => setForm(f => ({ ...f, address: addr, latitude: null, longitude: null }))}
+                onPlaceSelect={({ address, latitude, longitude }) => setForm(f => ({ ...f, address, latitude, longitude }))}
                 placeholder="15 Awolowo Road, Ikoyi, Lagos"
                 required
               />
+              {form.address && form.latitude === null && (
+                <p className="text-xs text-amber-600 mt-1">Select an address from the dropdown to capture coordinates.</p>
+              )}
             </Field>
             <BtnRow onClose={() => setShowAdd(false)} submitLabel={isCreating ? 'Adding…' : 'Add Warehouse'} />
           </form>
@@ -845,6 +874,105 @@ function ProductsPanel() {
   )
 }
 
+// ── Setup Checklist ───────────────────────────────────────────────────────────
+
+function SetupChecklist({ warehouses, users, onGoToWarehouses, onGoToUsers }) {
+  const { companyName } = useSelector(s => s.auth)
+  const [dismissed, setDismissed] = useState(() =>
+    localStorage.getItem('inventalert_setup_dismissed') === 'true'
+  )
+
+  const hasWarehouse = warehouses.length > 0
+  const hasNonAdminUser = users.some(u => u.role !== 'ADMIN')
+  const allDone = hasWarehouse && hasNonAdminUser
+
+  if (dismissed || allDone) return null
+
+  const steps = [
+    { label: 'Create your first warehouse', done: hasWarehouse },
+    { label: 'Invite your first team member', done: hasNonAdminUser, blocked: !hasWarehouse },
+  ]
+  const doneCount = steps.filter(s => s.done).length
+  const pct = Math.round((doneCount / steps.length) * 100)
+  const nextAction = !hasWarehouse
+    ? { label: 'Create Warehouse', fn: onGoToWarehouses }
+    : { label: 'Add Team Member', fn: onGoToUsers }
+
+  return (
+    <div className="relative bg-gradient-to-br from-teal-600 to-teal-700 rounded-2xl p-6 mb-5 overflow-hidden">
+      <div className="absolute top-0 right-0 w-56 h-56 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+      <div className="absolute bottom-0 right-20 w-28 h-28 bg-white/5 rounded-full translate-y-1/2 pointer-events-none" />
+
+      <div className="relative flex items-start justify-between gap-6">
+        <div className="flex-1 min-w-0">
+          <p className="text-teal-200 text-xs font-semibold uppercase tracking-widest mb-1">Getting Started</p>
+          <h2 className="text-xl font-bold text-white mb-1">
+            Welcome{companyName ? ` to ${companyName}` : ''}
+          </h2>
+          <p className="text-teal-100 text-sm mb-5">
+            {doneCount === 0
+              ? "Complete 2 quick steps to activate your workspace."
+              : "You're almost there — one step left."}
+          </p>
+
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-teal-200 font-medium">Setup progress</span>
+              <span className="text-xs text-white font-bold">{pct}%</span>
+            </div>
+            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 mb-5">
+            {steps.map((step, i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${step.done ? 'bg-white text-teal-600' : 'border-2 border-white/40'}`}>
+                  {step.done ? (
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/50 block" />
+                  )}
+                </div>
+                <span className={`text-sm ${step.done ? 'text-teal-200 line-through' : step.blocked ? 'text-teal-300/60' : 'text-white font-medium'}`}>
+                  {step.label}
+                  {step.blocked && <span className="ml-2 text-xs text-teal-300/50 font-normal">complete step 1 first</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={nextAction.fn}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-teal-700 text-sm font-bold rounded-xl hover:bg-teal-50 transition-colors shadow-md"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {nextAction.label}
+          </button>
+        </div>
+
+        <button
+          onClick={() => { setDismissed(true); localStorage.setItem('inventalert_setup_dismissed', 'true') }}
+          className="text-white/30 hover:text-white/70 p-1 shrink-0 transition-colors"
+          title="Dismiss"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Users Panel ───────────────────────────────────────────────────────────────
 
 function ManageUserModal({ user: u, onClose }) {
@@ -968,9 +1096,9 @@ function ManageUserModal({ user: u, onClose }) {
   )
 }
 
-function UsersPanel() {
+function UsersPanel({ onGoToWarehouses }) {
   const { data: users = [], isLoading } = useGetUsersQuery()
-  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: warehouses = [], isLoading: isLoadingWarehouses } = useGetWarehousesQuery()
   const { user: me } = useSelector(s => s.auth)
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
   const [showAdd, setShowAdd] = useState(false)
@@ -998,6 +1126,31 @@ function UsersPanel() {
   }
 
   const roleCount = r => users.filter(u => u.role === r).length
+
+  if (!isLoadingWarehouses && warehouses.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 flex flex-col items-center justify-center text-center py-20 px-8">
+        <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+          <svg className="w-7 h-7 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        </div>
+        <h3 className="text-base font-semibold text-gray-900 mb-1">No warehouses yet</h3>
+        <p className="text-sm text-gray-500 mb-5 max-w-xs">
+          You need at least one warehouse before adding managers or staff. Create a warehouse first, then come back to add your team.
+        </p>
+        <button
+          onClick={onGoToWarehouses}
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Create a Warehouse
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -1183,6 +1336,7 @@ function FeedbackPanel() {
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('warehouses')
   const { data: users = [] } = useGetUsersQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
 
   const navItems = [
     {
@@ -1209,10 +1363,16 @@ export default function AdminDashboard() {
 
   return (
     <Layout title="Admin Dashboard" navItems={navItems} activeTab={activeTab} onTabChange={setActiveTab}>
+      <SetupChecklist
+        warehouses={warehouses}
+        users={users}
+        onGoToWarehouses={() => setActiveTab('warehouses')}
+        onGoToUsers={() => setActiveTab('users')}
+      />
       {activeTab === 'company' && <CompanyPanel />}
       {activeTab === 'warehouses' && <WarehousesPanel />}
       {activeTab === 'products' && <ProductsPanel />}
-      {activeTab === 'users' && <UsersPanel />}
+      {activeTab === 'users' && <UsersPanel onGoToWarehouses={() => setActiveTab('warehouses')} />}
       {activeTab === 'feedback' && <FeedbackPanel />}
     </Layout>
   )
