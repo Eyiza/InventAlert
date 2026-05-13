@@ -4,7 +4,7 @@ import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { setCompanyLogo } from '../../store/slices/authSlice'
+import { setCompanyLogo, setCompanyName } from '../../store/slices/authSlice'
 import { uploadToCloudinary } from '../../services/cloudinary'
 import { submitComplaint } from '../../store/slices/superadminSlice'
 import {
@@ -15,8 +15,12 @@ import {
   useGetWarehousesQuery, useCreateWarehouseMutation, useUpdateWarehouseMutation,
   useDeactivateWarehouseMutation, useActivateWarehouseMutation,
   useGetProductsQuery, useCreateProductMutation, useUpdateProductMutation, useImportProductsMutation,
+  useSetProductDefaultThresholdMutation,
   useGetStockByWarehouseQuery,
   useForgotPasswordMutation,
+  useGetStockSummaryQuery, useGetTransferSummaryQuery,
+  useGetAlertSummaryQuery,
+  useGetTopProductsQuery, useGetMovementsByWarehouseQuery,
 } from '../../apis/inventAlertApi'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
@@ -251,6 +255,8 @@ function CompanyPanel() {
   const [updateMyCompany] = useUpdateMyCompanyMutation()
   const fileRef = useRef()
   const [uploading, setUploading] = useState(false)
+  const [nameValue, setNameValue] = useState(companyName || '')
+  const [nameSaving, setNameSaving] = useState(false)
 
   const handleLogoChange = async (e) => {
     const file = e.target.files[0]
@@ -270,8 +276,48 @@ function CompanyPanel() {
     }
   }
 
+  const handleNameSave = async (e) => {
+    e.preventDefault()
+    const trimmed = nameValue.trim()
+    if (!trimmed) { toast.error('Company name cannot be empty'); return }
+    if (trimmed === companyName) return
+    setNameSaving(true)
+    try {
+      await updateMyCompany({ companyName: trimmed }).unwrap()
+      dispatch(setCompanyName(trimmed))
+      toast.success('Company name updated')
+    } catch {
+      toast.error('Failed to update company name')
+    } finally {
+      setNameSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-4 max-w-xl">
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-4">Company Details</h3>
+        <form onSubmit={handleNameSave}>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Company Name</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={nameValue}
+              onChange={e => setNameValue(e.target.value)}
+              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              placeholder="Enter company name"
+              disabled={nameSaving}
+            />
+            <button
+              type="submit"
+              disabled={nameSaving || !nameValue.trim() || nameValue.trim() === companyName}
+              className="px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {nameSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h3 className="font-semibold text-gray-900 mb-4">Company Branding</h3>
         <div className="flex items-center gap-6">
@@ -292,7 +338,6 @@ function CompanyPanel() {
             )}
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-900 mb-1">{companyName}</p>
             <p className="text-xs text-gray-500 mb-3">Upload your company logo to personalise your dashboard. It appears in the sidebar for all team members.</p>
             <div className="flex gap-2">
               <button
@@ -541,6 +586,7 @@ function ProductsPanel() {
   const { data: products = [], isLoading } = useGetProductsQuery()
   const [createProduct, { isLoading: isCreating }] = useCreateProductMutation()
   const [updateProductMutation, { isLoading: isUpdating }] = useUpdateProductMutation()
+  const [setProductDefaultThreshold] = useSetProductDefaultThresholdMutation()
   const [importProducts, { isLoading: isImporting }] = useImportProductsMutation()
   const [showAdd, setShowAdd] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
@@ -581,7 +627,10 @@ function ProductsPanel() {
     e.preventDefault()
     if (edit) {
       try {
-        await updateProductMutation({ id: edit.id, name: form.name, unitOfMeasure: form.unitOfMeasure, defaultThreshold: +form.defaultThreshold }).unwrap()
+        await Promise.all([
+          updateProductMutation({ id: edit.id, name: form.name, unitOfMeasure: form.unitOfMeasure }).unwrap(),
+          setProductDefaultThreshold({ id: edit.id, threshold: +form.defaultThreshold }).unwrap(),
+        ])
         toast.success('Product updated')
         setShowAdd(false)
       } catch (err) {
@@ -1280,6 +1329,165 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
   )
 }
 
+// ── Analytics Panel ───────────────────────────────────────────────────────────
+
+function AnalyticsPanel() {
+  const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const fromIso = new Date(from).toISOString()
+  const toIso = new Date(to + 'T23:59:59.999Z').toISOString()
+
+  const { data: stockSummary } = useGetStockSummaryQuery({ from: fromIso, to: toIso })
+  const { data: transferSummary } = useGetTransferSummaryQuery({ from: fromIso, to: toIso })
+  const { data: alertSummary } = useGetAlertSummaryQuery({ from: fromIso, to: toIso })
+  const { data: topProducts = [] } = useGetTopProductsQuery({ limit: 10 })
+  const { data: byWarehouse = [] } = useGetMovementsByWarehouseQuery({ from: fromIso, to: toIso })
+  const { data: products = [] } = useGetProductsQuery()
+  const { data: warehouses = [] } = useGetWarehousesQuery()
+
+  const productName = id => products.find(p => p.id === id)?.name || id.slice(0, 8) + '…'
+  const warehouseName = id => warehouses.find(w => w.id === id)?.name || id.slice(0, 8) + '…'
+
+  const byWhGrouped = byWarehouse.reduce((acc, row) => {
+    const wh = row.warehouseId
+    if (!acc[wh]) acc[wh] = 0
+    acc[wh] += Number(row.total)
+    return acc
+  }, {})
+  const maxByWh = Math.max(...Object.values(byWhGrouped), 1)
+  const maxTopQty = Math.max(...topProducts.map(p => Number(p.totalQty)), 1)
+
+  return (
+    <div className="space-y-6">
+      {/* Date range picker */}
+      <div className="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <p className="text-sm font-semibold text-gray-700">Date Range</p>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500">From</label>
+            <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500">To</label>
+            <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
+          </div>
+        </div>
+      </div>
+
+      {/* Stock activity */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Stock Activity</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard title="Total Movements" value={stockSummary?.totalMovements ?? '—'} color="blue" />
+          <StatCard title="Intake" value={stockSummary?.totalIntake ?? '—'} color="teal" />
+          <StatCard title="Outbound" value={stockSummary?.totalOutbound ?? '—'} color="amber" />
+          <StatCard title="Transfers" value={stockSummary?.totalTransfers ?? '—'} color="purple" />
+        </div>
+      </div>
+
+      {/* Transfer summary */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Transfer Summary</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="gray" />
+          <StatCard title="Approved" value={transferSummary?.totalApproved ?? '—'} color="teal" />
+          <StatCard title="Rejected" value={transferSummary?.totalRejected ?? '—'} color="red" />
+          <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="blue" />
+        </div>
+        {transferSummary?.avgDistanceKm != null && (
+          <p className="text-xs text-gray-500 mt-2">
+            Avg transfer distance: <strong>{Number(transferSummary.avgDistanceKm).toFixed(1)} km</strong>
+          </p>
+        )}
+      </div>
+
+      {/* Alert summary */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Restock Alerts</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
+          <StatCard title="Total Alerts" value={alertSummary?.totalAlerts ?? '—'} color="red" />
+        </div>
+        {alertSummary?.alertsByWarehouse?.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-100">
+                <tr>
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Warehouse</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Alerts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {alertSummary.alertsByWarehouse.map((r, i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-4 py-2.5 text-gray-800">{warehouseName(r.warehouseId)}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-red-600">{r.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top moving products */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Moving Products</p>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {topProducts.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {topProducts.map((p, i) => (
+                  <div key={i} className="px-5 py-3 flex items-center gap-3">
+                    <span className="text-xs font-bold text-gray-300 w-4 text-right tabular-nums">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{productName(p.productId)}</p>
+                      <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="h-full bg-teal-500 rounded-full transition-all"
+                          style={{ width: `${(Number(p.totalQty) / maxTopQty) * 100}%` }} />
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700 tabular-nums shrink-0">{p.totalQty}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Movements by warehouse */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movements by Warehouse</p>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {Object.keys(byWhGrouped).length === 0 ? (
+              <p className="px-5 py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {Object.entries(byWhGrouped).sort((a, b) => b[1] - a[1]).map(([whId, total]) => (
+                  <div key={whId} className="px-5 py-3 flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{warehouseName(whId)}</p>
+                      <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full transition-all"
+                          style={{ width: `${(total / maxByWh) * 100}%` }} />
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700 tabular-nums shrink-0">{total}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Feedback & Support Panel ──────────────────────────────────────────────────
 
 function FeedbackPanel() {
@@ -1371,6 +1579,10 @@ export default function AdminDashboard() {
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>,
     },
     {
+      id: 'analytics', label: 'Analytics', badge: 0,
+      icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+    },
+    {
       id: 'feedback', label: 'Feedback & Support', badge: 0,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
     },
@@ -1388,6 +1600,7 @@ export default function AdminDashboard() {
       {activeTab === 'warehouses' && <WarehousesPanel />}
       {activeTab === 'products' && <ProductsPanel />}
       {activeTab === 'users' && <UsersPanel onGoToWarehouses={() => setActiveTab('warehouses')} openAdd={usersAutoAdd} />}
+      {activeTab === 'analytics' && <AnalyticsPanel />}
       {activeTab === 'feedback' && <FeedbackPanel />}
     </Layout>
   )
