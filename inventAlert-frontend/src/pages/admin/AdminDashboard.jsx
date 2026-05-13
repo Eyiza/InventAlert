@@ -11,7 +11,7 @@ import {
   useGetMyCompanyQuery, useUpdateMyCompanyMutation,
   useGetUsersQuery, useCreateUserMutation,
   useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
-  useGetUserAssignmentsQuery, useAssignToWarehouseMutation, useRemoveAssignmentMutation,
+  useGetUserAssignmentsQuery, useAssignToWarehouseMutation,
   useGetWarehousesQuery, useCreateWarehouseMutation, useUpdateWarehouseMutation,
   useDeactivateWarehouseMutation, useActivateWarehouseMutation,
   useGetProductsQuery, useCreateProductMutation, useUpdateProductMutation, useImportProductsMutation,
@@ -981,7 +981,6 @@ function ManageUserModal({ user: u, onClose }) {
   const { data: assignments = [] } = useGetUserAssignmentsQuery(u.id)
   const [updateUserRoleMutation] = useUpdateUserRoleMutation()
   const [assignToWarehouse] = useAssignToWarehouseMutation()
-  const [removeAssignmentMutation] = useRemoveAssignmentMutation()
   const [deactivateUserMutation] = useDeactivateUserMutation()
   const [reactivateUserMutation] = useReactivateUserMutation()
   const [forgotPassword, { isLoading: isSendingReset }] = useForgotPasswordMutation()
@@ -990,11 +989,11 @@ function ManageUserModal({ user: u, onClose }) {
   const [confirm, setConfirm] = useState(null)
 
   const displayName = u.email.split('@')[0]
-  const assignmentsWithName = assignments.map(a => ({
-    ...a,
-    warehouseName: warehouses.find(w => w.id === a.warehouseId)?.name || a.warehouseId,
-  }))
-  const alreadyAssigned = assignments.length > 0
+
+  const currentWarehouseId = assignments[0]?.warehouseId
+  useEffect(() => {
+    if (currentWarehouseId) setAddWh(currentWarehouseId)
+  }, [currentWarehouseId])
 
   const saveRole = async () => {
     const result = await updateUserRoleMutation({ id: u.id, role })
@@ -1006,7 +1005,7 @@ function ManageUserModal({ user: u, onClose }) {
     e.preventDefault()
     if (!addWh) return
     const result = await assignToWarehouse({ id: u.id, warehouseId: addWh })
-    if (result.data) { toast.success('Warehouse assigned'); setAddWh('') }
+    if (result.data) toast.success('Warehouse saved')
     else toast.error(result.error?.data?.message || 'Assignment failed')
   }
 
@@ -1036,46 +1035,23 @@ function ManageUserModal({ user: u, onClose }) {
             </div>
           </div>
 
-          {/* Warehouse Assignments */}
+          {/* Warehouse */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Warehouse Assignments</p>
-            <div className="space-y-2">
-              {assignmentsWithName.length === 0 ? (
-                <p className="text-sm text-gray-400 italic">No warehouses assigned yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {assignmentsWithName.map(a => (
-                    <span key={a.id} className="inline-flex items-center gap-1.5 bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-full border border-teal-200 font-medium">
-                      {a.warehouseName}
-                      <button
-                        onClick={() => setConfirm({ action: async () => { await removeAssignmentMutation({ userId: u.id, assignmentId: a.id }); toast.info('Assignment removed') }, title: 'Remove Assignment', message: `Remove ${displayName} from ${a.warehouseName}?`, label: 'Remove', danger: true })}
-                        className="text-teal-400 hover:text-red-500 leading-none font-bold"
-                      >×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              {alreadyAssigned ? (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
-                  Remove the current warehouse assignment before assigning a new one.
-                </p>
-              ) : (
-                <form onSubmit={doAssign} className="flex gap-2 mt-2">
-                  <select
-                    value={addWh} onChange={e => setAddWh(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
-                  >
-                    <option value="">Add warehouse…</option>
-                    {warehouses.filter(w => w.isActive && !assignments.find(a => a.warehouseId === w.id)).map(w => (
-                      <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                  </select>
-                  <button type="submit" disabled={!addWh} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                    Assign
-                  </button>
-                </form>
-              )}
-            </div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Warehouse</p>
+            <form onSubmit={doAssign} className="flex gap-2">
+              <select
+                value={addWh} onChange={e => setAddWh(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+                required
+              >
+                {warehouses.filter(w => w.isActive).map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
+                ))}
+              </select>
+              <button type="submit" disabled={!addWh} className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                Save
+              </button>
+            </form>
           </div>
 
           {/* Reset credentials */}
