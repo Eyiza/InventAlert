@@ -189,6 +189,16 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public LoginResponse refreshToken(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Company company = companyRepository.findById(user.getCompanyId())
+                .orElseThrow(() -> new RuntimeException("Company not found"));
+        return buildLoginResponse(user, company);
+    }
+
+    @Override
     public void changePassword(String userId, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));

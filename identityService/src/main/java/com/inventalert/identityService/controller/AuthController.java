@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -104,6 +105,21 @@ public class AuthController {
     public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok().build();
+    }
+
+    @Operation(
+        summary = "Get current session",
+        description = "Returns a fresh JWT and all session fields for the authenticated user. Used by the frontend to sync warehouse assignment changes without re-login.",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "Session refreshed",
+                content = @Content(schema = @Schema(implementation = LoginResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Not authenticated", content = @Content)
+        }
+    )
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<LoginResponse> me(@AuthenticationPrincipal JwtUser principal) {
+        return ResponseEntity.ok(authService.refreshToken(principal.getUserId()));
     }
 
     @Operation(

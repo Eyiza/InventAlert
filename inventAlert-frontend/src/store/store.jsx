@@ -1,4 +1,4 @@
-import { configureStore } from '@reduxjs/toolkit'
+import { configureStore, combineReducers } from '@reduxjs/toolkit'
 import { setupListeners } from '@reduxjs/toolkit/query'
 import { inventAlertApi } from '../apis/inventAlertApi'
 import authReducer from './slices/authSlice'
@@ -12,20 +12,32 @@ import analyticsReducer from './slices/analyticsSlice'
 import superadminReducer from './slices/superadminSlice'
 import purchaseOrdersReducer from './slices/purchaseOrdersSlice'
 
+const appReducer = combineReducers({
+  auth: authReducer,
+  stock: stockReducer,
+  users: usersReducer,
+  alerts: alertsReducer,
+  transfers: transfersReducer,
+  reconciliations: reconciliationsReducer,
+  notifications: notificationsReducer,
+  analytics: analyticsReducer,
+  superadmin: superadminReducer,
+  purchaseOrders: purchaseOrdersReducer,
+  [inventAlertApi.reducerPath]: inventAlertApi.reducer,
+})
+
+// On logout, pass undefined so every slice — including the RTK Query cache —
+// resets to its own initialState. This prevents any tenant's data leaking into
+// the next session.
+const rootReducer = (state, action) => {
+  if (action.type === 'auth/logout') {
+    return appReducer(undefined, action)
+  }
+  return appReducer(state, action)
+}
+
 const store = configureStore({
-  reducer: {
-    auth: authReducer,
-    stock: stockReducer,
-    users: usersReducer,
-    alerts: alertsReducer,
-    transfers: transfersReducer,
-    reconciliations: reconciliationsReducer,
-    notifications: notificationsReducer,
-    analytics: analyticsReducer,
-    superadmin: superadminReducer,
-    purchaseOrders: purchaseOrdersReducer,
-    [inventAlertApi.reducerPath]: inventAlertApi.reducer,
-  },
+  reducer: rootReducer,
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware().concat(inventAlertApi.middleware),
 })

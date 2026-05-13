@@ -1,4 +1,3 @@
--- Grant inventory_user permission to create and access company_* schemas
-GRANT ALL PRIVILEGES ON `company_%`.* TO 'inventory_user'@'%';
-GRANT CREATE ON *.* TO 'inventory_user'@'%';
-FLUSH PRIVILEGES;
+-- inventory_user is reserved for a future dedicated service account.
+-- Both services currently connect as root (see .env), so no extra grants are needed.
+-- When you switch to a dedicated user, add CREATE USER + GRANT statements here.

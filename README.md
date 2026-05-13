@@ -160,6 +160,7 @@ To stop everything:
 
 ```bash
 docker compose --profile app down
+# also stop infrastructure if you want: docker compose down -v
 ```
 
 ---
