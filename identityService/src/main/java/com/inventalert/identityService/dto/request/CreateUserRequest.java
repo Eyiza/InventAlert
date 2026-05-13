@@ -6,8 +6,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateUserRequest(
-        @NotBlank String email,
-        @NotBlank @Size(min = 8) String password,
-        @NotNull Role role,
+        @NotBlank(message = "Email address is required.") String email,
+        @NotBlank(message = "Password is required.") @Size(min = 8, message = "Password must be at least 8 characters.") String password,
+        @NotNull(message = "A role must be selected.") Role role,
         String warehouseId
 ) {}

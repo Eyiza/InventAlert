@@ -10,15 +10,15 @@ import lombok.Setter;
 @Setter
 public class SignupRequest {
 
-    @NotBlank
+    @NotBlank(message = "Company name is required.")
     private String companyName;
 
-    @NotBlank
-    @Email
+    @NotBlank(message = "Email address is required.")
+    @Email(message = "Please enter a valid email address.")
     private String adminEmail;
 
-    @NotBlank
-    @Size(min = 8)
+    @NotBlank(message = "Password is required.")
+    @Size(min = 8, message = "Password must be at least 8 characters.")
     private String password;
 
     private String logoUrl;

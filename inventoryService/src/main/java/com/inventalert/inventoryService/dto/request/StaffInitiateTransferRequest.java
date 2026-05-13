@@ -7,15 +7,15 @@ import lombok.Data;
 @Data
 public class StaffInitiateTransferRequest {
 
-    @NotBlank
+    @NotBlank(message = "Product is required.")
     private String productId;
 
-    @NotBlank
+    @NotBlank(message = "Source warehouse is required.")
     private String fromWarehouseId;
 
-    @NotBlank
+    @NotBlank(message = "Destination warehouse is required.")
     private String toWarehouseId;
 
-    @Min(1)
+    @Min(value = 1, message = "Quantity must be at least 1.")
     private int quantity;
 }
