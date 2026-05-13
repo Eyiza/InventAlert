@@ -15,7 +15,7 @@ const ROLE_HOME = {
 function SessionSync() {
   const dispatch = useDispatch()
   const { token } = useSelector(s => s.auth)
-  const { data } = useGetMySessionQuery(undefined, { skip: !token, refetchOnMountOrArgChange: true })
+  const { data } = useGetMySessionQuery(undefined, { skip: !token, refetchOnMountOrArgChange: true, pollingInterval: 30000 })
 
   useEffect(() => {
     if (data) dispatch(setCredentials(data))
