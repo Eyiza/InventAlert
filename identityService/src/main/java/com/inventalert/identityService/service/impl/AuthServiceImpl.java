@@ -181,6 +181,7 @@ public class AuthServiceImpl implements AuthService {
         response.setEmail(user.getEmail());
         response.setCompanyId(user.getCompanyId());
         response.setCompanyName(company.getCompanyName());
+        response.setCompanyLogo(company.getLogoUrl());
         response.setRole(user.getRole().name());
         response.setWarehouseId(warehouseId);
         response.setMustChangePassword(user.isMustChangePassword());
