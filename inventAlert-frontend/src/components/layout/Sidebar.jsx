@@ -12,7 +12,7 @@ export default function Sidebar({ navItems = [], activeTab, onTabChange }) {
   const isCompanyUser = !!companyName
 
   return (
-    <aside className="w-52 bg-white flex flex-col h-full shrink-0 border-r border-gray-200">
+    <aside className="w-64 bg-white flex flex-col h-full shrink-0 border-r border-gray-200">
       {/* Header */}
       <div className="bg-teal-600 px-4 py-3.5 shrink-0">
         {isCompanyUser ? (
