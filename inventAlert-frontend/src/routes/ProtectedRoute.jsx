@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { Navigate } from 'react-router'
 import { useSelector, useDispatch } from 'react-redux'
-import { useGetMyCompanyQuery } from '../apis/inventAlertApi'
-import { setCompanyLogo } from '../store/slices/authSlice'
+import { useGetMyCompanyQuery, useGetMySessionQuery } from '../apis/inventAlertApi'
+import { setCompanyLogo, setCredentials } from '../store/slices/authSlice'
 
 const ROLE_HOME = {
   ADMIN: '/admin',
@@ -10,6 +10,18 @@ const ROLE_HOME = {
   WAREHOUSE_STAFF: '/staff',
   PROCUREMENT_OFFICER: '/procurement',
   SUPERADMIN: '/superadmin',
+}
+
+function SessionSync() {
+  const dispatch = useDispatch()
+  const { token } = useSelector(s => s.auth)
+  const { data } = useGetMySessionQuery(undefined, { skip: !token, refetchOnMountOrArgChange: true })
+
+  useEffect(() => {
+    if (data) dispatch(setCredentials(data))
+  }, [data, dispatch])
+
+  return null
 }
 
 function CompanyLogoSync() {
@@ -37,6 +49,7 @@ export function ProtectedRoute({ children, allowedRoles }) {
   return (
     <>
       {isCompanyUser && <CompanyLogoSync />}
+      {isCompanyUser && <SessionSync />}
       {children}
     </>
   )

@@ -52,6 +52,11 @@ export const inventAlertApi = createApi({
       query: body => ({ url: '/api/auth/change-password', method: 'POST', body }),
     }),
 
+    // ── Session ───────────────────────────────────────────────────────────────
+    getMySession: build.query({
+      query: () => '/api/auth/me',
+    }),
+
     // ── Company ───────────────────────────────────────────────────────────────
     getMyCompany: build.query({
       query: () => '/api/companies/me',
@@ -243,6 +248,7 @@ export const inventAlertApi = createApi({
 })
 
 export const {
+  useGetMySessionQuery,
   useLoginMutation,
   useSuperAdminLoginMutation,
   useSignupMutation,
