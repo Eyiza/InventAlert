@@ -12,4 +12,5 @@ public interface AuthService {
     LoginResponse superAdminLogin(LoginRequest request);
     void forgotPassword(ForgotPasswordRequest request);
     void resetPassword(ResetPasswordRequest request);
+    void changePassword(String userId, String newPassword);
 }

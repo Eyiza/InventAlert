@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router'
 import { changePassword } from '../../store/slices/authSlice'
+import { useChangePasswordMutation } from '../../apis/inventAlertApi'
 import { toast } from 'react-toastify'
 
 const ROLE_HOME = {
@@ -30,22 +31,24 @@ export default function ChangePassword() {
   const [form, setForm] = useState({ newPassword: '', confirm: '' })
   const [show, setShow] = useState({ new: false, confirm: false })
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const { user, role } = useSelector(s => s.auth)
+  const [changePasswordMutation, { isLoading }] = useChangePasswordMutation()
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     setError('')
     if (form.newPassword.length < 8) { setError('Password must be at least 8 characters'); return }
     if (form.newPassword !== form.confirm) { setError('Passwords do not match'); return }
-    setIsLoading(true)
-    setTimeout(() => {
-      dispatch(changePassword({ newPassword: form.newPassword }))
+    try {
+      await changePasswordMutation({ newPassword: form.newPassword }).unwrap()
+      dispatch(changePassword())
       toast.success('Password updated successfully — welcome!')
       navigate(ROLE_HOME[role] || '/login', { replace: true })
-    }, 600)
+    } catch (err) {
+      setError(err?.data?.message || 'Failed to update password — please try again')
+    }
   }
 
   return (
