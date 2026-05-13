@@ -9,6 +9,9 @@ public class UpdateProductRequest {
     @Size(min = 1, message = "Product name cannot be empty.")
     private String name;
 
+    @Size(min = 1, message = "SKU cannot be empty.")
+    private String sku;
+
     @Size(min = 1, message = "Unit of measure cannot be empty.")
     private String unitOfMeasure;
 
