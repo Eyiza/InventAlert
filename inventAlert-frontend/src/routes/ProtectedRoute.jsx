@@ -14,8 +14,8 @@ const ROLE_HOME = {
 
 function CompanyLogoSync() {
   const dispatch = useDispatch()
-  const companyLogo = useSelector(s => s.auth.companyLogo)
-  const { data } = useGetMyCompanyQuery()
+  const { token, companyLogo } = useSelector(s => s.auth)
+  const { data } = useGetMyCompanyQuery(undefined, { skip: !token })
 
   useEffect(() => {
     if (data?.logoUrl && data.logoUrl !== companyLogo) {
