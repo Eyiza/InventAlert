@@ -31,7 +31,7 @@ public class WarehouseController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','WAREHOUSE_STAFF','PROCUREMENT_OFFICER')")
     public ResponseEntity<List<WarehouseResponse>> list() {
         return ResponseEntity.ok(warehouseService.list());
     }

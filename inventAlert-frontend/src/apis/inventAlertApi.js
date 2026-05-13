@@ -94,7 +94,7 @@ export const inventAlertApi = createApi({
     }),
     assignToWarehouse: build.mutation({
       query: ({ id, warehouseId }) => ({ url: `/api/users/${id}/assign`, method: 'POST', body: { warehouseId } }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'User', id: `${id}-assignments` }],
+      invalidatesTags: (result, error, { id }) => ['User', { type: 'User', id: `${id}-assignments` }],
     }),
     removeAssignment: build.mutation({
       query: ({ userId, assignmentId }) => ({ url: `/api/users/${userId}/assignments/${assignmentId}`, method: 'DELETE' }),
