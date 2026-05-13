@@ -5,8 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public class StockMovementEventRepository {
                 "(eventId, companyId, movementId, productId, warehouseId, movementType, quantity, eventTime) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 e.eventId(), e.companyId(), e.movementId(), e.productId(),
-                e.warehouseId(), e.type(), e.quantity(), Timestamp.from(eventTime));
+                e.warehouseId(), e.type(), e.quantity(), LocalDateTime.ofInstant(eventTime, ZoneOffset.UTC));
     }
 
     public long countAll(String companyId) {
@@ -61,7 +62,7 @@ public class StockMovementEventRepository {
                 "FROM stock_movement_events " +
                 "WHERE companyId = ? AND eventTime BETWEEN ? AND ? " +
                 "GROUP BY day, movementType ORDER BY day",
-                companyId, Timestamp.from(from), Timestamp.from(to));
+                companyId, LocalDateTime.ofInstant(from, ZoneOffset.UTC), LocalDateTime.ofInstant(to, ZoneOffset.UTC));
     }
 
     public List<Map<String, Object>> movementTrendByWarehouse(String companyId, Instant from, Instant to) {
@@ -70,6 +71,6 @@ public class StockMovementEventRepository {
                 "FROM stock_movement_events " +
                 "WHERE companyId = ? AND eventTime BETWEEN ? AND ? " +
                 "GROUP BY warehouseId, movementType ORDER BY total DESC",
-                companyId, Timestamp.from(from), Timestamp.from(to));
+                companyId, LocalDateTime.ofInstant(from, ZoneOffset.UTC), LocalDateTime.ofInstant(to, ZoneOffset.UTC));
     }
 }
