@@ -61,6 +61,10 @@ const authSlice = createSlice({
       state.companyLogo = payload
       saveToStorage(state)
     },
+    setCompanyName: (state, { payload }) => {
+      state.companyName = payload
+      saveToStorage(state)
+    },
     // Stubs — kept so existing imports in other components don't break
     changePassword: state => { state.mustChangePassword = false },
     registerLocalUser: () => {},
@@ -68,5 +72,5 @@ const authSlice = createSlice({
   },
 })
 
-export const { setCredentials, logout, setCompanyLogo, changePassword, registerLocalUser, clearError } = authSlice.actions
+export const { setCredentials, logout, setCompanyLogo, setCompanyName, changePassword, registerLocalUser, clearError } = authSlice.actions
 export default authSlice.reducer
