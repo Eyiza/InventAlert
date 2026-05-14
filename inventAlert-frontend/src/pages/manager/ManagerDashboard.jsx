@@ -20,6 +20,7 @@ import {
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const resolveUser = (users, id) => { const u = users.find(u => u.id === id); return u?.name || u?.email?.split('@')[0] || id }
 
 function SectionHeader({ title, subtitle }) {
   return (
@@ -153,7 +154,7 @@ function MovementsPanel() {
       ...m,
       productName: products.find(p => p.id === m.productId)?.name || m.productId,
       warehouseName: warehouses.find(w => w.id === m.warehouseId)?.name || m.warehouseId,
-      createdByName: users.find(u => u.id === m.createdBy)?.email?.split('@')[0] || m.createdBy,
+      createdByName: resolveUser(users, m.createdBy),
     }))
     .filter(m => typeFilter === 'ALL' || m.type === typeFilter)
     .filter(m => !search || m.productName.toLowerCase().includes(search.toLowerCase()) || m.warehouseName.toLowerCase().includes(search.toLowerCase()))
@@ -310,7 +311,7 @@ function ReconciliationsPanel() {
       ...r,
       productName: products.find(p => p.id === r.productId)?.name || r.productId,
       warehouseName: warehouses.find(w => w.id === r.warehouseId)?.name || r.warehouseId,
-      createdByName: users.find(u => u.id === r.createdBy)?.email?.split('@')[0] || r.createdBy,
+      createdByName: resolveUser(users, r.createdBy),
     }))
     .filter(r => statusFilter === 'ALL' || r.status === statusFilter)
     .filter(r => !search || r.productName.toLowerCase().includes(search.toLowerCase()) || r.warehouseName.toLowerCase().includes(search.toLowerCase()) || r.reason?.toLowerCase().includes(search.toLowerCase()))
@@ -787,14 +788,14 @@ function TeamPanel() {
   const [confirm, setConfirm] = useState(null)
   const [showAddUser, setShowAddUser] = useState(false)
   const [showTempPass, setShowTempPass] = useState(false)
-  const [addForm, setAddForm] = useState({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
+  const [addForm, setAddForm] = useState({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
   const chAdd = e => setAddForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const myWarehouseName = warehouses.find(w => w.id === myWarehouseId)?.name || null
 
   const teamUsers = users.filter(u =>
     u.role !== 'ADMIN' &&
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u.name?.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
   )
 
   const saveRole = async (userId, role) => {
@@ -813,11 +814,11 @@ function TeamPanel() {
   const handleAddUser = async e => {
     e.preventDefault()
     try {
-      await createUser({ email: addForm.email, role: addForm.role, password: addForm.password, warehouseId: myWarehouseId || null }).unwrap()
+      await createUser({ name: addForm.name, email: addForm.email, role: addForm.role, password: addForm.password, warehouseId: myWarehouseId || null }).unwrap()
       toast.success(`User added${myWarehouseName ? ` to ${myWarehouseName}` : ''}`)
       setShowAddUser(false)
       setShowTempPass(false)
-      setAddForm({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
+      setAddForm({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
     } catch (err) {
       toast.error(err?.data?.message || 'Failed to add user')
     }
@@ -862,7 +863,7 @@ function TeamPanel() {
                 {teamUsers.length === 0 ? (
                   <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">No team members found.</td></tr>
                 ) : teamUsers.map(u => {
-                  const displayName = u.email.split('@')[0]
+                  const displayName = u.name || u.email.split('@')[0]
                   const isAdmin = u.role === 'ADMIN'
                   const isMe = u.id === me?.id
                   const pending = pendingRole[u.id]
@@ -954,6 +955,10 @@ function TeamPanel() {
               </button>
             </div>
             <form onSubmit={handleAddUser} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input name="name" type="text" value={addForm.name} onChange={chAdd} placeholder="Jane Doe" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input name="email" type="email" value={addForm.email} onChange={chAdd} placeholder="jane@company.com" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />

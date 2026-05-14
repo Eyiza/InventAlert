@@ -43,7 +43,7 @@ const authSlice = createSlice({
   reducers: {
     setCredentials: (state, { payload }) => {
       state.token = payload.token
-      state.user = { id: payload.userId, email: payload.email || null }
+      state.user = { id: payload.userId, name: payload.name || null, email: payload.email || null }
       state.role = payload.role
       state.companyId = payload.companyId || null
       state.companyName = payload.companyName || null
