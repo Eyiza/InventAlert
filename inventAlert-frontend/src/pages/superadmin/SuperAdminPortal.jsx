@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import { toast } from 'react-toastify'
+import {
+  AreaChart, Area, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
@@ -372,39 +376,65 @@ function AnalyticsPanel() {
   }
 
   const months = data.growthByMonth ?? []
+  const growthChartData = months.map((m, i) => ({
+    month: m.month ?? m.label ?? `M${i + 1}`,
+    'New Companies': m.count ?? m.value ?? 0,
+  }))
+
+  const donutData = [
+    { name: 'Active',      value: data.activeCompanies     ?? 0, color: '#0d9488' },
+    { name: 'Offboarded',  value: data.offboardedCompanies ?? 0, color: '#ef4444' },
+  ].filter(d => d.value > 0)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Companies" value={data.totalCompanies ?? '—'} color="blue" />
-        <StatCard title="Active Companies" value={data.activeCompanies ?? '—'} color="teal" />
-        <StatCard title="Offboarded" value={data.offboardedCompanies ?? '—'} color="red" />
+        <StatCard title="Total Companies"  value={data.totalCompanies     ?? '—'} color="blue" />
+        <StatCard title="Active Companies" value={data.activeCompanies    ?? '—'} color="teal" />
+        <StatCard title="Offboarded"       value={data.offboardedCompanies ?? '—'} color="red" />
       </div>
 
-      {months.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 text-sm">Monthly Company Growth</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {['Month', 'New Companies'].map(h => (
-                    <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {months.map((m, i) => (
-                  <tr key={i} className="hover:bg-gray-50/60">
-                    <td className="px-4 py-3 text-gray-700">{m.month ?? m.label ?? `Month ${i + 1}`}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{m.count ?? m.value ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Monthly growth area chart */}
+        {growthChartData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Monthly Company Growth</h3>
+            <p className="text-xs text-gray-500 mb-4">New companies onboarded per month (last 12 months)</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={growthChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="saGrowth" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip formatter={v => [v, 'New Companies']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                <Area type="monotone" dataKey="New Companies" stroke="#6366f1" strokeWidth={2} fill="url(#saGrowth)" dot={{ r: 3, fill: '#6366f1' }} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Active vs Offboarded donut */}
+        {donutData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Company Status Breakdown</h3>
+            <p className="text-xs text-gray-500 mb-4">Active vs offboarded companies</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={62} outerRadius={90} paddingAngle={4}>
+                  {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Pie>
+                <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { toast } from 'react-toastify'
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
@@ -1415,17 +1419,43 @@ function AnalyticsPanel() {
       {/* Transfer summary */}
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Transfer Summary</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="gray" />
-          <StatCard title="Approved" value={transferSummary?.totalApproved ?? '—'} color="teal" />
-          <StatCard title="Rejected" value={transferSummary?.totalRejected ?? '—'} color="red" />
-          <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="blue" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="gray" />
+              <StatCard title="Approved"  value={transferSummary?.totalApproved  ?? '—'} color="teal" />
+              <StatCard title="Rejected"  value={transferSummary?.totalRejected  ?? '—'} color="red" />
+              <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="blue" />
+            </div>
+            {transferSummary?.avgDistanceKm != null && (
+              <p className="text-xs text-gray-500">
+                Avg transfer distance: <strong>{Number(transferSummary.avgDistanceKm).toFixed(1)} km</strong>
+              </p>
+            )}
+          </div>
+          {(() => {
+            const donutData = [
+              { name: 'Suggested', value: transferSummary?.totalSuggested ?? 0, color: '#6b7280' },
+              { name: 'Approved',  value: transferSummary?.totalApproved  ?? 0, color: '#0d9488' },
+              { name: 'Rejected',  value: transferSummary?.totalRejected  ?? 0, color: '#ef4444' },
+              { name: 'Completed', value: transferSummary?.totalCompleted ?? 0, color: '#3b82f6' },
+            ].filter(d => d.value > 0)
+            return donutData.length > 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status Distribution</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>
+                      {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : null
+          })()}
         </div>
-        {transferSummary?.avgDistanceKm != null && (
-          <p className="text-xs text-gray-500 mt-2">
-            Avg transfer distance: <strong>{Number(transferSummary.avgDistanceKm).toFixed(1)} km</strong>
-          </p>
-        )}
       </div>
 
       {/* Alert summary */}
@@ -1460,25 +1490,23 @@ function AnalyticsPanel() {
         {/* Top moving products */}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Moving Products</p>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
             {topProducts.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
+              <p className="py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
             ) : (
-              <div className="divide-y divide-gray-50">
-                {topProducts.map((p, i) => (
-                  <div key={i} className="px-5 py-3 flex items-center gap-3">
-                    <span className="text-xs font-bold text-gray-300 w-4 text-right tabular-nums">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{productName(p.productId)}</p>
-                      <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full bg-teal-500 rounded-full transition-all"
-                          style={{ width: `${(Number(p.totalQty) / maxTopQty) * 100}%` }} />
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700 tabular-nums shrink-0">{p.totalQty}</span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={Math.max(240, topProducts.length * 40)}>
+                <BarChart
+                  layout="vertical"
+                  data={topProducts.map(p => ({ name: productName(p.productId), Units: Number(p.totalQty) }))}
+                  margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: '#374151' }} tickLine={false} axisLine={false} />
+                  <Tooltip formatter={v => [v.toLocaleString(), 'Units Moved']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Bar dataKey="Units" fill="#0d9488" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
@@ -1486,25 +1514,23 @@ function AnalyticsPanel() {
         {/* Movements by warehouse */}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movements by Warehouse</p>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
             {Object.keys(byWhGrouped).length === 0 ? (
-              <p className="px-5 py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {Object.entries(byWhGrouped).sort((a, b) => b[1] - a[1]).map(([whId, total]) => (
-                  <div key={whId} className="px-5 py-3 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{warehouseName(whId)}</p>
-                      <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full transition-all"
-                          style={{ width: `${(total / maxByWh) * 100}%` }} />
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700 tabular-nums shrink-0">{total}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+              <p className="py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
+            ) : (() => {
+              const whData = Object.entries(byWhGrouped).sort((a, b) => b[1] - a[1]).map(([whId, total]) => ({ name: warehouseName(whId), Movements: total }))
+              return (
+                <ResponsiveContainer width="100%" height={Math.max(240, whData.length * 40)}>
+                  <BarChart layout="vertical" data={whData} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: '#374151' }} tickLine={false} axisLine={false} />
+                    <Tooltip formatter={v => [v.toLocaleString(), 'Movements']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                    <Bar dataKey="Movements" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )
+            })()}
           </div>
         </div>
       </div>

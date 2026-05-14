@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
+import {
+  AreaChart, Area, BarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
@@ -516,23 +521,27 @@ function AnalyticsPanel() {
             <h3 className="font-semibold text-gray-900">Top Moving Products</h3>
             <p className="text-xs text-gray-500 mt-0.5">Ranked by total quantity moved in the selected period</p>
           </div>
-          <div className="p-5 space-y-3">
+          <div className="p-5">
             {topProducts.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No movement data for this period.</p>
-            ) : topProducts.map((p, i) => (
-              <div key={String(p.productId) + i} className="flex items-center gap-3">
-                <span className="w-4 text-xs text-gray-400 font-medium">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 truncate">{prodName(p.productId)}</span>
-                    <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{Number(p.totalQty).toLocaleString()} units</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-teal-600 h-2 rounded-full transition-all" style={{ width: `${(Number(p.totalQty) / maxTopQty) * 100}%` }} />
-                  </div>
-                </div>
-              </div>
-            ))}
+              <p className="text-sm text-gray-400 text-center py-10">No movement data for this period.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(260, topProducts.length * 42)}>
+                <BarChart
+                  layout="vertical"
+                  data={topProducts.map(p => ({ name: prodName(p.productId), Units: Number(p.totalQty) }))}
+                  margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12, fill: '#374151' }} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    formatter={v => [v.toLocaleString() + ' units', 'Quantity']}
+                    contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                  />
+                  <Bar dataKey="Units" fill="#0d9488" radius={[0, 4, 4, 0]} maxBarSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       )}
@@ -543,73 +552,115 @@ function AnalyticsPanel() {
             <h3 className="font-semibold text-gray-900">Movement Trend</h3>
             <p className="text-xs text-gray-500 mt-0.5">Daily intake vs outbound over the selected period</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 border-b border-gray-100">
-                {['Date', 'Intake', 'Outbound Sales', 'Transfer Out', 'Visual'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr></thead>
-              <tbody className="divide-y divide-gray-50">
-                {trendDays.length === 0 ? (
-                  <tr><td colSpan={5} className="px-5 py-6 text-center text-gray-400 text-sm">No data for this period.</td></tr>
-                ) : trendDays.map(d => (
-                  <tr key={d.day} className="hover:bg-gray-50/60">
-                    <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(d.day)}</td>
-                    <td className="px-5 py-3 text-green-700 font-medium">{d.INTAKE || '—'}</td>
-                    <td className="px-5 py-3 text-orange-700 font-medium">{d.OUTBOUND_SALE || '—'}</td>
-                    <td className="px-5 py-3 text-purple-700">{d.TRANSFER_OUT || '—'}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-1 items-end h-6">
-                        {d.INTAKE > 0 && <div className="bg-teal-400 rounded-sm w-3" style={{ height: `${(d.INTAKE / maxTrend) * 24}px` }} title={`Intake: ${d.INTAKE}`} />}
-                        {d.OUTBOUND_SALE > 0 && <div className="bg-orange-400 rounded-sm w-3" style={{ height: `${(d.OUTBOUND_SALE / maxTrend) * 24}px` }} title={`Sales: ${d.OUTBOUND_SALE}`} />}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-5">
+            {trendDays.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-10">No data for this period.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart
+                  data={trendDays.map(d => ({
+                    date: new Date(toUTC(d.day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    Intake: d.INTAKE || 0,
+                    Outbound: d.OUTBOUND_SALE || 0,
+                    'Transfer Out': d.TRANSFER_OUT || 0,
+                  }))}
+                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+                >
+                  <defs>
+                    <linearGradient id="mgIntake" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0d9488" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="mgOutbound" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="mgTransfer" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+                  <Area type="monotone" dataKey="Intake" stroke="#0d9488" strokeWidth={2} fill="url(#mgIntake)" dot={false} />
+                  <Area type="monotone" dataKey="Outbound" stroke="#f97316" strokeWidth={2} fill="url(#mgOutbound)" dot={false} />
+                  <Area type="monotone" dataKey="Transfer Out" stroke="#8b5cf6" strokeWidth={2} fill="url(#mgTransfer)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       )}
 
-      {section === 'transfers' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="blue" />
-            <StatCard title="Approved" value={transferSummary?.totalApproved ?? '—'} color="green" />
-            <StatCard title="Rejected" value={transferSummary?.totalRejected ?? '—'} color="red" />
-            <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="teal" />
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Transfer Volume by Product</h3>
+      {section === 'transfers' && (() => {
+        const vbp = transferSummary?.volumeByProduct ?? []
+        const donutData = [
+          { name: 'Suggested', value: transferSummary?.totalSuggested ?? 0, color: '#3b82f6' },
+          { name: 'Approved',  value: transferSummary?.totalApproved  ?? 0, color: '#10b981' },
+          { name: 'Rejected',  value: transferSummary?.totalRejected  ?? 0, color: '#ef4444' },
+          { name: 'Completed', value: transferSummary?.totalCompleted ?? 0, color: '#0d9488' },
+        ].filter(d => d.value > 0)
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="blue" />
+              <StatCard title="Approved"  value={transferSummary?.totalApproved  ?? '—'} color="green" />
+              <StatCard title="Rejected"  value={transferSummary?.totalRejected  ?? '—'} color="red" />
+              <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="teal" />
             </div>
-            <div className="p-5 space-y-3">
-              {(() => {
-                const vbp = transferSummary?.volumeByProduct ?? []
-                const maxQty = Math.max(...vbp.map(p => Number(p.totalQty)), 1)
-                return vbp.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">No transfer data for this period.</p>
-                ) : vbp.map((p, i) => (
-                  <div key={String(p.productId) + i} className="flex items-center gap-3">
-                    <span className="w-4 text-xs text-gray-400">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-900 truncate">{prodName(p.productId)}</span>
-                        <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{Number(p.totalQty).toLocaleString()} units</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(Number(p.totalQty) / maxQty) * 100}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                ))
-              })()}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Status distribution donut */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Status Distribution</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Proportion of transfer outcomes</p>
+                </div>
+                <div className="p-5 flex items-center justify-center">
+                  {donutData.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-10">No transfer data for this period.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={88} paddingAngle={3}>
+                          {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* Volume by product bar chart */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Transfer Volume by Product</h3>
+                </div>
+                <div className="p-5">
+                  {vbp.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-10">No transfer data for this period.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={Math.max(200, vbp.length * 42)}>
+                      <BarChart layout="vertical" data={vbp.map(p => ({ name: prodName(p.productId), Units: Number(p.totalQty) }))} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                        <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 12, fill: '#374151' }} tickLine={false} axisLine={false} />
+                        <Tooltip formatter={v => [v.toLocaleString() + ' units', 'Transferred']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Bar dataKey="Units" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={24} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {section === 'alerts' && (
         <div className="space-y-4">
@@ -621,87 +672,128 @@ function AnalyticsPanel() {
               <h3 className="font-semibold text-gray-900">Alerts by Warehouse</h3>
               <p className="text-xs text-gray-500 mt-0.5">Warehouses with the most restock alerts in this period</p>
             </div>
-            <div className="p-5 space-y-3">
+            <div className="p-5">
               {alertWarehouses.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">No alert data for this period.</p>
-              ) : alertWarehouses.map((a, i) => (
-                <div key={a.warehouseName + i} className="flex items-center gap-3">
-                  <span className="w-4 text-xs text-gray-400">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-900">{a.warehouseName}</span>
-                      <span className="text-sm font-semibold text-amber-700 ml-2">{a.total} alerts</span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${(a.total / maxAlertWh) * 100}%` }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                <p className="text-sm text-gray-400 text-center py-10">No alert data for this period.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(240, alertWarehouses.length * 52)}>
+                  <BarChart data={alertWarehouses.map(a => ({ name: a.warehouseName, Alerts: a.total }))} margin={{ top: 4, right: 16, left: 0, bottom: 32 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip formatter={v => [v, 'Alerts']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                    <Bar dataKey="Alerts" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {section === 'notifications' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <StatCard title="Total Notifications" value={notificationAnalytics?.totalNotifications ?? '—'} color="blue" />
+      {section === 'notifications' && (() => {
+        const typeItems = notificationAnalytics?.breakdownByType ?? []
+        const dailyItems = notificationAnalytics?.volumeByDay ?? []
+        const NOTIF_COLORS = ['#8b5cf6', '#0d9488', '#3b82f6', '#f59e0b', '#ef4444']
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <StatCard title="Total Notifications" value={notificationAnalytics?.totalNotifications ?? '—'} color="blue" />
+            </div>
+
+            {!notificationAnalytics?.totalNotifications && (
+              <p className="text-sm text-gray-400 italic text-center py-8">No notification data for this period.</p>
+            )}
+
+            {typeItems.length > 0 && dailyItems.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Type breakdown donut */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
+                  </div>
+                  <div className="p-5">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={typeItems.map(r => ({ name: r.type ?? r.notificationType ?? r.eventType ?? 'Unknown', value: Number(r.total ?? r.count ?? 0) }))}
+                          dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={86} paddingAngle={3}
+                        >
+                          {typeItems.map((_, i) => <Cell key={i} fill={NOTIF_COLORS[i % NOTIF_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Daily volume bar chart */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900">Daily Volume</h3>
+                  </div>
+                  <div className="p-5">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart
+                        data={dailyItems.map(r => ({
+                          date: new Date(toUTC(r.day ?? r.date)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          Count: Number(r.total ?? r.count ?? 0),
+                        }))}
+                        margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Bar dataKey="Count" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {typeItems.length > 0 && dailyItems.length === 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
+                </div>
+                <div className="p-5">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={typeItems.map(r => ({ name: r.type ?? r.notificationType ?? r.eventType ?? 'Unknown', value: Number(r.total ?? r.count ?? 0) }))} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={86} paddingAngle={3}>
+                        {typeItems.map((_, i) => <Cell key={i} fill={NOTIF_COLORS[i % NOTIF_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {dailyItems.length > 0 && typeItems.length === 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Daily Volume</h3>
+                </div>
+                <div className="p-5">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={dailyItems.map(r => ({ date: new Date(toUTC(r.day ?? r.date)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), Count: Number(r.total ?? r.count ?? 0) }))} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                      <Bar dataKey="Count" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </div>
-          {notificationAnalytics?.breakdownByType?.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
-              </div>
-              <div className="p-5 space-y-3">
-                {(() => {
-                  const items = notificationAnalytics.breakdownByType
-                  const maxVal = Math.max(...items.map(r => Number(r.total ?? r.count ?? 0)), 1)
-                  return items.map((r, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-900">{r.type ?? r.notificationType ?? r.eventType ?? 'Unknown'}</span>
-                          <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{r.total ?? r.count}</span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${(Number(r.total ?? r.count ?? 0) / maxVal) * 100}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                })()}
-              </div>
-            </div>
-          )}
-          {notificationAnalytics?.volumeByDay?.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-900">Daily Volume</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {notificationAnalytics.volumeByDay.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50/60">
-                        <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(r.day ?? r.date)}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-gray-700">{r.total ?? r.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {!notificationAnalytics?.totalNotifications && (
-            <p className="text-sm text-gray-400 italic text-center py-8">No notification data for this period.</p>
-          )}
-        </div>
-      )}
+        )
+      })()}
 
       {section === 'forecast' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
