@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
+import {
+  BarChart, Bar, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import StatusBadge from '../../components/shared/StatusBadge'
@@ -486,24 +490,27 @@ function AlertFrequencyPanel() {
             <h3 className="font-semibold text-gray-900">Alerts by Warehouse</h3>
             <p className="text-xs text-gray-500 mt-0.5">Which warehouses trigger the most restock alerts</p>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="p-5">
             {byWarehouse.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">No alert data for this period.</p>
-            ) : byWarehouse.map((b, i) => {
-              const warehouseName = warehouses.find(w => w.id === b.warehouseId)?.name || b.warehouseId || 'Unknown'
-              const pct = Math.round((b.total / maxTotal) * 100)
-              return (
-                <div key={i} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900 truncate max-w-45">{warehouseName}</p>
-                    <p className="text-sm font-bold text-amber-700 shrink-0 ml-2">{b.total} alert{b.total !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-amber-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
+              <p className="text-sm text-gray-400 text-center py-10">No alert data for this period.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(220, byWarehouse.length * 48)}>
+                <BarChart
+                  layout="vertical"
+                  data={byWarehouse.map(b => ({
+                    name: warehouses.find(w => w.id === b.warehouseId)?.name || 'Unknown',
+                    Alerts: b.total ?? 0,
+                  }))}
+                  margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 12, fill: '#374151' }} tickLine={false} axisLine={false} />
+                  <Tooltip formatter={v => [v, 'Alerts']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Bar dataKey="Alerts" fill="#f59e0b" radius={[0, 4, 4, 0]} maxBarSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -514,30 +521,32 @@ function AlertFrequencyPanel() {
           </div>
           <div className="p-5">
             {alertsByMonth.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">No monthly data for this period.</p>
+              <p className="text-sm text-gray-400 text-center py-10">No monthly data for this period.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left pb-2 text-xs font-semibold text-gray-500 uppercase">Month</th>
-                    <th className="text-right pb-2 text-xs font-semibold text-gray-500 uppercase">Alerts</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {alertsByMonth.map((m, i) => {
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart
+                  data={alertsByMonth.map(m => {
                     const ym = String(m.month)
                     const label = ym.length === 6
-                      ? new Date(`${ym.slice(0, 4)}-${ym.slice(4, 6)}-01T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-                      : m.month
-                    return (
-                      <tr key={i} className="hover:bg-gray-50/60">
-                        <td className="py-2.5 text-gray-700">{label}</td>
-                        <td className="py-2.5 text-right font-semibold text-amber-700">{m.total}</td>
-                      </tr>
-                    )
+                      ? new Date(`${ym.slice(0, 4)}-${ym.slice(4, 6)}-01T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+                      : String(m.month)
+                    return { month: label, Alerts: m.total ?? 0 }
                   })}
-                </tbody>
-              </table>
+                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+                >
+                  <defs>
+                    <linearGradient id="procAlerts" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip formatter={v => [v, 'Alerts']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Area type="monotone" dataKey="Alerts" stroke="#f59e0b" strokeWidth={2} fill="url(#procAlerts)" dot={{ r: 3, fill: '#f59e0b' }} />
+                </AreaChart>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
