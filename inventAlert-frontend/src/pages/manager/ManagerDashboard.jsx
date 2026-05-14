@@ -9,12 +9,13 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetUsersQuery, useCreateUserMutation,
   useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
-  useGetWarehousesQuery, useGetProductsQuery, useGetStockByWarehouseQuery,
+  useGetWarehousesQuery, useGetProductsQuery, useGetStockByWarehouseQuery, useGetAllStockQuery,
   useGetMovementsQuery,
   useGetTransfersQuery, useApproveTransferMutation, useRejectTransferMutation,
   useGetReconciliationsQuery, useApproveReconciliationMutation, useRejectReconciliationMutation,
   useGetStockSummaryQuery, useGetMovementTrendQuery, useGetTransferSummaryQuery,
   useGetAlertSummaryQuery, useGetAlertsByWarehouseQuery,
+  useGetNotificationAnalyticsQuery,
 } from '../../apis/inventAlertApi'
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -32,8 +33,7 @@ function SectionHeader({ title, subtitle }) {
 // ── Stock Overview ────────────────────────────────────────────────────────────
 
 function StockPanel() {
-  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
-  const { data: stockLevels = [], isLoading } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: stockLevels = [], isLoading } = useGetAllStockQuery()
   const { data: products = [] } = useGetProductsQuery()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
@@ -90,7 +90,7 @@ function StockPanel() {
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  {!myWarehouseId ? 'You are not assigned to a warehouse.' : isLoading ? 'Loading…' : 'No stock items match.'}
+                  {isLoading ? 'Loading…' : 'No stock items match.'}
                 </td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50/60">
@@ -400,8 +400,7 @@ function ReconciliationsPanel() {
 // ── Analytics Panel ───────────────────────────────────────────────────────────
 
 function AnalyticsPanel() {
-  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
-  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
+  const { data: stockLevels = [] } = useGetAllStockQuery()
   const { data: products = [] } = useGetProductsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const [section, setSection] = useState('velocity')
@@ -419,6 +418,7 @@ function AnalyticsPanel() {
   const { data: transferSummary } = useGetTransferSummaryQuery(dateParams)
   const { data: alertSummary } = useGetAlertSummaryQuery(dateParams)
   const { data: alertsByWarehouse = [] } = useGetAlertsByWarehouseQuery(dateParams)
+  const { data: notificationAnalytics } = useGetNotificationAnalyticsQuery(dateParams)
 
   const prodName = id => products.find(p => p.id === String(id))?.name || String(id)
   const whName = id => warehouses.find(w => w.id === String(id))?.name || String(id)
@@ -475,6 +475,7 @@ function AnalyticsPanel() {
     { id: 'trend', label: 'Movement Trend' },
     { id: 'transfers', label: 'Transfer Summary' },
     { id: 'alerts', label: 'Alert Summary' },
+    { id: 'notifications', label: 'Notifications' },
     { id: 'forecast', label: 'Low-Stock Forecast' },
     { id: 'reorder', label: 'Reorder Recommendations' },
   ]
@@ -635,6 +636,66 @@ function AnalyticsPanel() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {section === 'notifications' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <StatCard title="Total Notifications" value={notificationAnalytics?.totalNotifications ?? '—'} color="blue" />
+          </div>
+          {notificationAnalytics?.breakdownByType?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
+              </div>
+              <div className="p-5 space-y-3">
+                {(() => {
+                  const items = notificationAnalytics.breakdownByType
+                  const maxVal = Math.max(...items.map(r => Number(r.total ?? r.count ?? 0)), 1)
+                  return items.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-gray-900">{r.type ?? r.notificationType ?? r.eventType ?? 'Unknown'}</span>
+                          <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{r.total ?? r.count}</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${(Number(r.total ?? r.count ?? 0) / maxVal) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                })()}
+              </div>
+            </div>
+          )}
+          {notificationAnalytics?.volumeByDay?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Daily Volume</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {notificationAnalytics.volumeByDay.map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50/60">
+                        <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(r.day ?? r.date)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-gray-700">{r.total ?? r.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {!notificationAnalytics?.totalNotifications && (
+            <p className="text-sm text-gray-400 italic text-center py-8">No notification data for this period.</p>
+          )}
         </div>
       )}
 
