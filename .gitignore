@@ -23,6 +23,9 @@
 hs_err_pid*
 replay_pid*
 
+# Seed/import data files
+*.csv
+
 # Project planning and design documents
 erd.md
 plan.md
