@@ -4,6 +4,6 @@ import com.inventalert.identityService.model.Role;
 
 public class WarehouseRequiredException extends IdentityServiceException {
     public WarehouseRequiredException(Role role) {
-        super("warehouseId is required for role: " + role);
+        super("A warehouse assignment is required for this role. Please select a warehouse before saving.");
     }
 }

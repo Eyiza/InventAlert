@@ -5,6 +5,6 @@ import lombok.Data;
 
 @Data
 public class ResolveComplaintRequest {
-    @NotBlank
+    @NotBlank(message = "Please provide a resolution note.")
     private String resolution;
 }

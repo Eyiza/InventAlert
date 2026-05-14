@@ -94,7 +94,7 @@ export const inventAlertApi = createApi({
     }),
     assignToWarehouse: build.mutation({
       query: ({ id, warehouseId }) => ({ url: `/api/users/${id}/assign`, method: 'POST', body: { warehouseId } }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'User', id: `${id}-assignments` }],
+      invalidatesTags: (result, error, { id }) => ['User', { type: 'User', id: `${id}-assignments` }],
     }),
     removeAssignment: build.mutation({
       query: ({ userId, assignmentId }) => ({ url: `/api/users/${userId}/assignments/${assignmentId}`, method: 'DELETE' }),
@@ -150,6 +150,11 @@ export const inventAlertApi = createApi({
       query: warehouseId => `/api/stock/${warehouseId}`,
       providesTags: (result, error, warehouseId) => [{ type: 'Stock', id: warehouseId }],
     }),
+    getAllStock: build.query({
+      query: (params = {}) => ({ url: '/api/stock', params: { size: 1000, ...params } }),
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Stock'],
+    }),
 
     // ── Movements ─────────────────────────────────────────────────────────────
     getMovements: build.query({
@@ -158,6 +163,14 @@ export const inventAlertApi = createApi({
     }),
     recordMovement: build.mutation({
       query: body => ({ url: '/api/movements', method: 'POST', body }),
+      invalidatesTags: (result, error, { warehouseId }) => ['Movement', { type: 'Stock', id: warehouseId }],
+    }),
+    importMovementsCsv: build.mutation({
+      query: ({ warehouseId, file }) => {
+        const fd = new FormData()
+        fd.append('file', file)
+        return { url: `/api/movements/import/${warehouseId}`, method: 'POST', body: fd }
+      },
       invalidatesTags: (result, error, { warehouseId }) => ['Movement', { type: 'Stock', id: warehouseId }],
     }),
 
@@ -193,6 +206,10 @@ export const inventAlertApi = createApi({
     }),
 
     // ── Notifications ─────────────────────────────────────────────────────────
+    getUnreadCount: build.query({
+      query: () => '/api/notifications/unread-count',
+      providesTags: ['Notification'],
+    }),
     getNotifications: build.query({
       query: () => '/api/notifications',
       transformResponse: res => res.map(n => ({ ...n, id: n.notificationId, isRead: n.read })),
@@ -222,6 +239,16 @@ export const inventAlertApi = createApi({
       invalidatesTags: ['Reconciliation'],
     }),
 
+    // ── Threshold overrides ───────────────────────────────────────────────────
+    setProductDefaultThreshold: build.mutation({
+      query: ({ id, threshold }) => ({ url: `/api/products/${id}/threshold`, method: 'PATCH', body: { threshold } }),
+      invalidatesTags: ['Product', 'Stock'],
+    }),
+    setStockLevelThreshold: build.mutation({
+      query: ({ productId, warehouseId, threshold }) => ({ url: `/api/stock-levels/${productId}/${warehouseId}/threshold`, method: 'PATCH', body: { threshold } }),
+      invalidatesTags: ['Stock', 'Product'],
+    }),
+
     // ── Analytics ─────────────────────────────────────────────────────────────
     getStockSummary: build.query({
       query: ({ from, to }) => ({ url: '/api/analytics/stock/summary', params: { from, to } }),
@@ -243,12 +270,31 @@ export const inventAlertApi = createApi({
       query: ({ from, to }) => ({ url: '/api/analytics/alerts/by-warehouse', params: { from, to } }),
       providesTags: ['Analytics'],
     }),
+    getTopProducts: build.query({
+      query: ({ type = 'OUTBOUND_SALE', limit = 10 } = {}) => ({ url: '/api/analytics/stock/top-products', params: { type, limit } }),
+      providesTags: ['Analytics'],
+    }),
+    getMovementsByWarehouse: build.query({
+      query: ({ from, to } = {}) => ({ url: '/api/analytics/stock/movements/by-warehouse', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
+    getNotificationAnalytics: build.query({
+      query: ({ from, to } = {}) => ({ url: '/api/analytics/notifications/summary', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
 
   }),
 })
 
 export const {
   useGetMySessionQuery,
+  useSetProductDefaultThresholdMutation,
+  useSetStockLevelThresholdMutation,
+  useGetTopProductsQuery,
+  useGetMovementsByWarehouseQuery,
+  useGetNotificationAnalyticsQuery,
+  useGetAllStockQuery,
+  useGetUnreadCountQuery,
   useLoginMutation,
   useSuperAdminLoginMutation,
   useSignupMutation,
@@ -279,6 +325,7 @@ export const {
   useMarkNotificationReadMutation,
   useGetMovementsQuery,
   useRecordMovementMutation,
+  useImportMovementsCsvMutation,
   useGetTransfersQuery,
   useInitiateTransferMutation,
   useApproveTransferMutation,

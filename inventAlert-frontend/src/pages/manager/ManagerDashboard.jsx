@@ -15,6 +15,7 @@ import {
   useGetReconciliationsQuery, useApproveReconciliationMutation, useRejectReconciliationMutation,
   useGetStockSummaryQuery, useGetMovementTrendQuery, useGetTransferSummaryQuery,
   useGetAlertSummaryQuery, useGetAlertsByWarehouseQuery,
+  useGetNotificationAnalyticsQuery,
 } from '../../apis/inventAlertApi'
 
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -90,7 +91,7 @@ function StockPanel() {
             <tbody className="divide-y divide-gray-50">
               {rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-sm">
-                  {!myWarehouseId ? 'You are not assigned to a warehouse.' : isLoading ? 'Loading…' : 'No stock items match.'}
+                  {isLoading ? 'Loading…' : 'No stock items match.'}
                 </td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="hover:bg-gray-50/60">
@@ -407,15 +408,19 @@ function AnalyticsPanel() {
   const [section, setSection] = useState('velocity')
   const [rangeDays, setRangeDays] = useState(30)
 
-  const to = new Date().toISOString().split('T')[0]
-  const from = new Date(Date.now() - rangeDays * 86400000).toISOString().split('T')[0]
-  const dateParams = { from, to }
+  const toDate = new Date().toISOString().split('T')[0]
+  const fromDate = new Date(Date.now() - rangeDays * 86400000).toISOString().split('T')[0]
+  const dateParams = {
+    from: new Date(fromDate).toISOString(),
+    to: new Date(toDate + 'T23:59:59.999Z').toISOString(),
+  }
 
   const { data: stockSummary } = useGetStockSummaryQuery(dateParams)
   const { data: movementTrend = [] } = useGetMovementTrendQuery(dateParams)
   const { data: transferSummary } = useGetTransferSummaryQuery(dateParams)
   const { data: alertSummary } = useGetAlertSummaryQuery(dateParams)
   const { data: alertsByWarehouse = [] } = useGetAlertsByWarehouseQuery(dateParams)
+  const { data: notificationAnalytics } = useGetNotificationAnalyticsQuery(dateParams)
 
   const prodName = id => products.find(p => p.id === String(id))?.name || String(id)
   const whName = id => warehouses.find(w => w.id === String(id))?.name || String(id)
@@ -472,6 +477,7 @@ function AnalyticsPanel() {
     { id: 'trend', label: 'Movement Trend' },
     { id: 'transfers', label: 'Transfer Summary' },
     { id: 'alerts', label: 'Alert Summary' },
+    { id: 'notifications', label: 'Notifications' },
     { id: 'forecast', label: 'Low-Stock Forecast' },
     { id: 'reorder', label: 'Reorder Recommendations' },
   ]
@@ -635,6 +641,66 @@ function AnalyticsPanel() {
         </div>
       )}
 
+      {section === 'notifications' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <StatCard title="Total Notifications" value={notificationAnalytics?.totalNotifications ?? '—'} color="blue" />
+          </div>
+          {notificationAnalytics?.breakdownByType?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
+              </div>
+              <div className="p-5 space-y-3">
+                {(() => {
+                  const items = notificationAnalytics.breakdownByType
+                  const maxVal = Math.max(...items.map(r => Number(r.total ?? r.count ?? 0)), 1)
+                  return items.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium text-gray-900">{r.type ?? r.notificationType ?? r.eventType ?? 'Unknown'}</span>
+                          <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{r.total ?? r.count}</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${(Number(r.total ?? r.count ?? 0) / maxVal) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                })()}
+              </div>
+            </div>
+          )}
+          {notificationAnalytics?.volumeByDay?.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-900">Daily Volume</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {notificationAnalytics.volumeByDay.map((r, i) => (
+                      <tr key={i} className="hover:bg-gray-50/60">
+                        <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(r.day ?? r.date)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-gray-700">{r.total ?? r.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {!notificationAnalytics?.totalNotifications && (
+            <p className="text-sm text-gray-400 italic text-center py-8">No notification data for this period.</p>
+          )}
+        </div>
+      )}
+
       {section === 'forecast' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
@@ -716,6 +782,7 @@ function TeamPanel() {
   const [reactivateUser] = useReactivateUserMutation()
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation()
   const [pendingRole, setPendingRole] = useState({})
+  const [savingRoleFor, setSavingRoleFor] = useState(null)
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
   const [showAddUser, setShowAddUser] = useState(false)
@@ -731,12 +798,15 @@ function TeamPanel() {
   )
 
   const saveRole = async (userId, role) => {
+    setSavingRoleFor(userId)
     try {
       await updateUserRole({ id: userId, role }).unwrap()
       toast.success('Role updated')
       setPendingRole(r => { const n = { ...r }; delete n[userId]; return n })
     } catch {
       toast.error('Failed to update role')
+    } finally {
+      setSavingRoleFor(null)
     }
   }
 
@@ -828,9 +898,11 @@ function TeamPanel() {
                             {pending && pending !== u.role && (
                               <button
                                 onClick={() => saveRole(u.id, pending)}
-                                className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700"
+                                disabled={savingRoleFor === u.id}
+                                className="px-2.5 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 disabled:opacity-70 flex items-center gap-1.5"
                               >
-                                Save
+                                {savingRoleFor === u.id && <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+                                {savingRoleFor === u.id ? 'Saving…' : 'Save'}
                               </button>
                             )}
                           </div>
@@ -910,7 +982,10 @@ function TeamPanel() {
               </div>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setShowAddUser(false)} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={isCreating} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70">{isCreating ? 'Adding…' : 'Add Member'}</button>
+                <button type="submit" disabled={isCreating} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-70 flex items-center justify-center gap-2">
+                  {isCreating && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>}
+                  {isCreating ? 'Adding…' : 'Add Member'}
+                </button>
               </div>
             </form>
           </div>
@@ -993,7 +1068,7 @@ function ComplaintsPanel() {
 export default function ManagerDashboard() {
   const [activeTab, setActiveTab] = useState('stock')
   const { user: me, warehouseId: myWarehouseId } = useSelector(s => s.auth)
-  const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: warehouses = [], isFetching: warehousesFetching } = useGetWarehousesQuery()
   const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId, pollingInterval: 30000 })
   const { data: transfers = [] } = useGetTransfersQuery(undefined, { pollingInterval: 30000 })
   const { data: reconciliations = [] } = useGetReconciliationsQuery(undefined, { pollingInterval: 30000 })
@@ -1046,7 +1121,7 @@ export default function ManagerDashboard() {
           {!myWarehouse.isActive && <span className="ml-auto text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">Inactive</span>}
         </div>
       )}
-      {!myWarehouse && (
+      {!myWarehouse && !warehousesFetching && (
         <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
           <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
