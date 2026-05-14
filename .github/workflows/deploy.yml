@@ -32,7 +32,21 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       # ── 4. Build and push all 4 backend images ─────────────────────────────
-      - name: Build and push backend images
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Build JARs with Maven
+        run: |
+          for dir in identityService inventoryService analyticsService notificationService; do
+            echo "Building $dir..."
+            (cd "$dir" && mvn package -DskipTests -q)
+          done
+
+      - name: Build and push Docker images
         env:
           ECR_URI: ${{ steps.login-ecr.outputs.registry }}
         run: |
@@ -44,7 +58,7 @@ jobs:
           )
           for dir in "${!SERVICES[@]}"; do
             svc="${SERVICES[$dir]}"
-            echo "Building $svc..."
+            echo "Building Docker image for $svc..."
             docker build -t "$ECR_URI/inventalert-$svc:latest" "./$dir"
             docker push "$ECR_URI/inventalert-$svc:latest"
           done
