@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 public interface ReconciliationService {
     ReconciliationResponse submit(SubmitReconciliationRequest request, String staffId, String companyId);
     Page<ReconciliationResponse> list(Pageable pageable);
+    Page<ReconciliationResponse> listByWarehouse(String warehouseId, Pageable pageable);
     void approve(String id, String managerId);
     void reject(String id, String managerId);
 }

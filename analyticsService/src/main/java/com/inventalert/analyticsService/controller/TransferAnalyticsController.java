@@ -38,6 +38,7 @@ public class TransferAnalyticsController {
         if (ChronoUnit.DAYS.between(fromInstant, toInstant) > 365) {
             throw new IllegalArgumentException("Date range cannot exceed 1 year");
         }
-        return ResponseEntity.ok(queryService.getTransferSummary(user.getCompanyId(), fromInstant, toInstant));
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
+        return ResponseEntity.ok(queryService.getTransferSummary(user.getCompanyId(), fromInstant, toInstant, warehouseId));
     }
 }

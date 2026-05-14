@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
@@ -8,7 +8,7 @@ import { submitComplaint } from '../../store/slices/superadminSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetProductsQuery, useGetWarehousesQuery, useGetStockByWarehouseQuery,
-  useRecordMovementMutation,
+  useRecordMovementMutation, useImportMovementsCsvMutation,
   useGetTransfersQuery, useInitiateTransferMutation, useDispatchTransferMutation,
   useAcceptTransferMutation, useRejectDeliveryMutation,
   useSubmitReconciliationMutation,
@@ -249,15 +249,23 @@ function StockPanel() {
 
 const EMPTY_INTAKE = { productId: '', quantity: '' }
 
+const CSV_TEMPLATE = 'sku,quantity,referenceNumber\nEXAMPLE-SKU,10,REF-001\n'
+
 function IntakePanel() {
   const { warehouseId } = useSelector(s => s.auth)
   const { data: products = [] } = useGetProductsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const [recordMovement] = useRecordMovementMutation()
+  const [importMovementsCsv] = useImportMovementsCsvMutation()
   const [rows, setRows] = useState([{ ...EMPTY_INTAKE }])
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState('cards')
+  const [csvMode, setCsvMode] = useState(false)
+  const [csvPreview, setCsvPreview] = useState(null)
+  const [csvFile, setCsvFile] = useState(null)
+  const [csvLoading, setCsvLoading] = useState(false)
+  const fileInputRef = useRef(null)
   const myWarehouse = warehouses.find(w => w.id === warehouseId)
   const activeProducts = products.filter(p => p.isActive)
 
@@ -292,6 +300,136 @@ function IntakePanel() {
       setRows(rs => { const ne = rs.filter(r => r.productId || r.quantity); return ne.length > 0 ? ne : [{ ...EMPTY_INTAKE }] })
     }
     setViewMode(mode)
+  }
+
+  const handleCsvFile = e => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCsvFile(file)
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const lines = ev.target.result.trim().split('\n').filter(Boolean)
+      if (lines.length < 2) { setCsvPreview([]); return }
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+      const skuIdx = headers.indexOf('sku')
+      const qtyIdx = headers.indexOf('quantity')
+      const refIdx = headers.indexOf('referencenumber')
+      const parsed = lines.slice(1).map(line => {
+        const cols = line.split(',').map(c => c.trim())
+        return { sku: cols[skuIdx] || '', quantity: cols[qtyIdx] || '', referenceNumber: refIdx >= 0 ? (cols[refIdx] || '') : '' }
+      }).filter(r => r.sku)
+      setCsvPreview(parsed)
+    }
+    reader.readAsText(file)
+  }
+
+  const handleCsvImport = async () => {
+    if (!csvFile || !csvPreview?.length) return
+    setCsvLoading(true)
+    try {
+      const result = await importMovementsCsv({ warehouseId, file: csvFile }).unwrap()
+      toast.success(`${result.length} intake${result.length !== 1 ? 's' : ''} imported from CSV`)
+      setCsvMode(false)
+      setCsvPreview(null)
+      setCsvFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } catch (err) {
+      toast.error(err?.data?.message || 'CSV import failed')
+    } finally {
+      setCsvLoading(false)
+    }
+  }
+
+  const downloadTemplate = () => {
+    const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'intake_template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (csvMode) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => { setCsvMode(false); setCsvPreview(null); setCsvFile(null) }} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal-600 transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            Manual Entry
+          </button>
+          <div className="h-4 w-px bg-gray-200" />
+          <h2 className="text-lg font-bold text-gray-900">Import CSV</h2>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-5 flex items-start justify-between gap-4">
+          <div className="text-sm text-blue-800">
+            <p className="font-semibold mb-0.5">Required columns: <code className="font-mono">sku</code>, <code className="font-mono">quantity</code></p>
+            <p className="text-blue-700">Optional: <code className="font-mono">referenceNumber</code>. First row must be the header.</p>
+          </div>
+          <button onClick={downloadTemplate} className="shrink-0 text-xs font-semibold text-blue-700 hover:text-blue-900 underline underline-offset-2 whitespace-nowrap">
+            Download template
+          </button>
+        </div>
+
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/30 transition-colors mb-5"
+        >
+          <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          {csvFile ? (
+            <p className="text-sm font-medium text-teal-700">{csvFile.name}</p>
+          ) : (
+            <p className="text-sm text-gray-500">Click to select a <strong>.csv</strong> file</p>
+          )}
+          <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsvFile} />
+        </div>
+
+        {csvPreview && csvPreview.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{csvPreview.length} row{csvPreview.length !== 1 ? 's' : ''} detected</p>
+            <div className="border border-gray-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">SKU</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Qty</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Reference</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {csvPreview.map((r, i) => (
+                    <tr key={i} className="hover:bg-gray-50/60">
+                      <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{r.sku}</td>
+                      <td className="px-4 py-2.5 font-semibold text-teal-700">{r.quantity}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-400">{r.referenceNumber || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {csvPreview && csvPreview.length === 0 && (
+          <p className="text-sm text-red-500 mb-5">No valid rows found. Check that your CSV has a header row with <code>sku</code> and <code>quantity</code> columns.</p>
+        )}
+
+        <div className="flex gap-3">
+          <button type="button" onClick={() => { setCsvMode(false); setCsvPreview(null); setCsvFile(null) }} className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 font-medium">Cancel</button>
+          <button
+            type="button"
+            onClick={handleCsvImport}
+            disabled={!csvPreview?.length || csvLoading}
+            className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {csvLoading ? (
+              <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>Importing…</>
+            ) : `Import ${csvPreview?.length || 0} Row${csvPreview?.length !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (summary) {
@@ -348,7 +486,15 @@ function IntakePanel() {
       <PageHeader
         title="Record Stock Intake"
         subtitle={`Adding stock to ${myWarehouse?.name || 'your warehouse'}`}
-        action={<ViewToggle mode={viewMode} onChange={switchView} />}
+        action={
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setCsvMode(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              Import CSV
+            </button>
+            <ViewToggle mode={viewMode} onChange={switchView} />
+          </div>
+        }
       />
       <form onSubmit={handleSubmit} className="space-y-4">
         {viewMode === 'table' ? (

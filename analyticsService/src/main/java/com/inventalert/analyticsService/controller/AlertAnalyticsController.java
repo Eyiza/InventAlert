@@ -33,7 +33,8 @@ public class AlertAnalyticsController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         Instant[] range = resolveDateRange(from, to);
-        return ResponseEntity.ok(queryService.getAlertSummary(user.getCompanyId(), range[0], range[1]));
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
+        return ResponseEntity.ok(queryService.getAlertSummary(user.getCompanyId(), range[0], range[1], warehouseId));
     }
 
     @GetMapping("/by-warehouse")
@@ -43,8 +44,9 @@ public class AlertAnalyticsController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         Instant[] range = resolveDateRange(from, to);
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
         return ResponseEntity.ok(
-                queryService.getAlertSummary(user.getCompanyId(), range[0], range[1]).alertsByWarehouse());
+                queryService.getAlertSummary(user.getCompanyId(), range[0], range[1], warehouseId).alertsByWarehouse());
     }
 
     private Instant[] resolveDateRange(String from, String to) {

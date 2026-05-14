@@ -165,6 +165,14 @@ export const inventAlertApi = createApi({
       query: body => ({ url: '/api/movements', method: 'POST', body }),
       invalidatesTags: (result, error, { warehouseId }) => ['Movement', { type: 'Stock', id: warehouseId }],
     }),
+    importMovementsCsv: build.mutation({
+      query: ({ warehouseId, file }) => {
+        const fd = new FormData()
+        fd.append('file', file)
+        return { url: `/api/movements/import/${warehouseId}`, method: 'POST', body: fd }
+      },
+      invalidatesTags: (result, error, { warehouseId }) => ['Movement', { type: 'Stock', id: warehouseId }],
+    }),
 
     // ── Transfers ─────────────────────────────────────────────────────────────
     getTransfers: build.query({
@@ -317,6 +325,7 @@ export const {
   useMarkNotificationReadMutation,
   useGetMovementsQuery,
   useRecordMovementMutation,
+  useImportMovementsCsvMutation,
   useGetTransfersQuery,
   useInitiateTransferMutation,
   useApproveTransferMutation,
