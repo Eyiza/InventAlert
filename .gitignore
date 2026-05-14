@@ -74,6 +74,15 @@ desktop.ini
 # JetBrains Junie AI
 .junie/
 
+# Deployment scripts
+deploy.sh
+
+# Node / frontend
+node_modules/
+dist/
+.npm/
+*.tsbuildinfo
+
 # Environment and secrets
 .env
 .env.local
