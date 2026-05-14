@@ -30,7 +30,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             DuplicateSkuException.class,
-            InvalidStateTransitionException.class
+            InvalidStateTransitionException.class,
+            StockNotChangedException.class
     })
     public ResponseEntity<ErrorResponse> handleConflict(RuntimeException ex) {
         return error(HttpStatus.CONFLICT, ex.getMessage());
@@ -86,7 +87,8 @@ public class GlobalExceptionHandler {
         }
         if (cause instanceof InvalidStateTransitionException
                 || cause instanceof DuplicateSkuException
-                || cause instanceof StockConflictException) {
+                || cause instanceof StockConflictException
+                || cause instanceof StockNotChangedException) {
             return error(HttpStatus.CONFLICT, cause.getMessage());
         }
         if (cause instanceof WarehouseNotFoundException
