@@ -4,7 +4,7 @@ kind: ClusterConfig
 metadata:
   name: inventalert-cluster
   region: eu-west-1      # Ireland — closest full-service AWS region to Nigeria
-  version: "1.29"
+  version: "1.32"
 
 iam:
   withOIDC: true          # required for the EBS CSI driver addon IAM role
@@ -17,11 +17,11 @@ addons:
 
 managedNodeGroups:
   - name: worker-nodes
-    instanceType: t3.xlarge   # 4 vCPU / 16 GB — runs all services on one node
-    desiredCapacity: 1
-    minSize: 1
-    maxSize: 1
-    volumeSize: 80            # GB, root EBS volume for container images and OS
+    instanceType: t3.medium   # 2 vCPU / 4 GB — 2 nodes = 8 GB total, fits in 5 vCPU quota
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    volumeSize: 50            # GB, root EBS volume for container images and OS
     volumeType: gp3
     iam:
       attachPolicyARNs:

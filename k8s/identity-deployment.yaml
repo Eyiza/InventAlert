@@ -4,7 +4,12 @@ metadata:
   name: identity-service
   namespace: inventalert-prod
 spec:
-  replicas: 2
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: identity-service

@@ -4,7 +4,12 @@ metadata:
   name: notification-service
   namespace: inventalert-prod
 spec:
-  replicas: 2
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: notification-service
@@ -76,8 +81,8 @@ spec:
             - containerPort: 8083
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: "200m"
+              memory: "256Mi"
             limits:
               cpu: "500m"
               memory: "768Mi"
