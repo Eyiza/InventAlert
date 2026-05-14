@@ -123,7 +123,7 @@ class StockLevelServiceTest {
 
     @Test
     void getStockForWarehouse_returnsFilteredResponses() {
-        when(stockLevelRepository.findByWarehouseId("w1")).thenReturn(List.of(stockLevel));
+        when(stockLevelRepository.findByWarehouseIdOrderByCurrentStockAsc("w1")).thenReturn(List.of(stockLevel));
 
         List<StockLevelResponse> result = stockLevelService.getStockForWarehouse("w1");
 
@@ -148,7 +148,7 @@ class StockLevelServiceTest {
     @Test
     void getStockForWarehouse_daysUntilEmptyIsNullWhenVelocityIsZero() {
         // stockLevel built with velocityPerDay=ZERO; daysUntilEmpty is not set, so null
-        when(stockLevelRepository.findByWarehouseId("w1")).thenReturn(List.of(stockLevel));
+        when(stockLevelRepository.findByWarehouseIdOrderByCurrentStockAsc("w1")).thenReturn(List.of(stockLevel));
 
         List<StockLevelResponse> result = stockLevelService.getStockForWarehouse("w1");
 

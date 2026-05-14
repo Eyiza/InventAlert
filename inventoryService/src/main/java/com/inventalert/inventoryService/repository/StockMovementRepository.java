@@ -19,7 +19,8 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, St
             "(:warehouseId IS NULL OR m.warehouseId = :warehouseId) AND " +
             "(:type IS NULL OR m.type = :type) AND " +
             "(:from IS NULL OR m.createdAt >= :from) AND " +
-            "(:to IS NULL OR m.createdAt <= :to)")
+            "(:to IS NULL OR m.createdAt <= :to) " +
+            "ORDER BY m.createdAt DESC")
     List<StockMovement> findWithFilters(
             @Param("productId") String productId,
             @Param("warehouseId") String warehouseId,

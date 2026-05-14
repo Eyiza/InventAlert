@@ -8,6 +8,6 @@ import java.util.Optional;
 
 public interface StockLevelRepository extends JpaRepository<StockLevel, String> {
     Optional<StockLevel> findByProductIdAndWarehouseId(String productId, String warehouseId);
-    List<StockLevel> findByWarehouseId(String warehouseId);
+    List<StockLevel> findByWarehouseIdOrderByCurrentStockAsc(String warehouseId);
     List<StockLevel> findByProductIdAndWarehouseIdNot(String productId, String excludedWarehouseId);
 }

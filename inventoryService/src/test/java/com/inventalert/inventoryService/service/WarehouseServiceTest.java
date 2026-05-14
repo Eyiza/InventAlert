@@ -65,7 +65,7 @@ class WarehouseServiceTest {
 
     @Test
     void list_returnsOnlyActiveWarehouses() {
-        when(warehouseRepository.findByIsActiveTrue()).thenReturn(List.of(activeWarehouse));
+        when(warehouseRepository.findByIsActiveTrueOrderByNameAsc()).thenReturn(List.of(activeWarehouse));
 
         List<WarehouseResponse> result = warehouseService.list();
 

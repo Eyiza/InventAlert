@@ -24,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -86,7 +87,20 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public List<UserResponse> listUsers(String companyId) {
         return userRepository.findAllByCompanyId(companyId)
-                .stream().map(UserResponse::from).toList();
+                .stream()
+                .sorted(Comparator.comparingInt((User u) -> roleOrder(u.getRole()))
+                        .thenComparing(User::getEmail))
+                .map(UserResponse::from)
+                .toList();
+    }
+
+    private static int roleOrder(Role role) {
+        return switch (role) {
+            case ADMIN -> 0;
+            case MANAGER -> 1;
+            case PROCUREMENT_OFFICER -> 2;
+            case WAREHOUSE_STAFF -> 3;
+        };
     }
 
     @Override
