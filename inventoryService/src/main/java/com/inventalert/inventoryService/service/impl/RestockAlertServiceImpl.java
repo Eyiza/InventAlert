@@ -9,23 +9,32 @@ import com.inventalert.inventoryService.model.RestockAlert;
 import com.inventalert.inventoryService.repository.RestockAlertRepository;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RestockAlertServiceImpl implements RestockAlertService {
 
     private final RestockAlertRepository alertRepository;
     private final AlertEventProducer alertEventProducer;
+    private final JdbcTemplate jdbcTemplate;
+
+    @Value("${identity.db.name:inventalert_identity}")
+    private String identityDbName;
 
     @Override
     @Transactional
     public RestockAlert createAlert(String productId, String warehouseId, int stockAtAlert, int threshold, String companyId) {
         if (alertRepository.existsByProductIdAndWarehouseIdAndStatus(productId, warehouseId, AlertStatus.OPEN)) {
-            return null; // idempotent — already open alert exists
+            return null;
         }
         RestockAlert alert = RestockAlert.builder()
                 .productId(productId)
@@ -37,12 +46,29 @@ public class RestockAlertServiceImpl implements RestockAlertService {
         RestockAlert saved = alertRepository.save(alert);
         alertEventProducer.publishAlertCreated(
                 companyId, saved.getId(), productId, warehouseId, companyId, stockAtAlert, threshold);
+
+        notifyProcurementOfficers(companyId, warehouseId, saved.getId(), stockAtAlert, threshold);
         return saved;
     }
 
     @Override
-    public List<RestockAlertResponse> list() {
-        return alertRepository.findAll().stream().map(this::toResponse).toList();
+    public List<RestockAlertResponse> list(AlertStatus status) {
+        List<RestockAlert> alerts = (status != null)
+                ? alertRepository.findByStatus(status)
+                : alertRepository.findAll();
+        return alerts.stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional
+    public void autoResolveForProduct(String productId, String warehouseId) {
+        List<RestockAlert> active = alertRepository
+                .findByProductIdAndWarehouseIdAndStatusNot(productId, warehouseId, AlertStatus.RESOLVED);
+        if (active.isEmpty()) return;
+        for (RestockAlert alert : active) {
+            alert.setStatus(AlertStatus.RESOLVED);
+        }
+        alertRepository.saveAll(active);
     }
 
     @Override
@@ -76,6 +102,26 @@ public class RestockAlertServiceImpl implements RestockAlertService {
         }
         alert.setStatus(AlertStatus.RESOLVED);
         alertRepository.save(alert);
+    }
+
+    private void notifyProcurementOfficers(String companyId, String warehouseId,
+                                             String alertId, int stockAtAlert, int threshold) {
+        try {
+            String sql = "SELECT u.id, u.email FROM " + identityDbName + ".User u " +
+                         "JOIN " + identityDbName + ".WarehouseAssignment wa ON wa.userId = u.id " +
+                         "WHERE wa.warehouseId = ? AND wa.companyId = ? " +
+                         "AND u.role = 'PROCUREMENT_OFFICER' AND u.isActive = 1";
+            List<Map<String, Object>> officers = jdbcTemplate.queryForList(sql, warehouseId, companyId);
+            for (Map<String, Object> officer : officers) {
+                alertEventProducer.publishNotificationEvent(
+                        companyId,
+                        (String) officer.get("id"),
+                        (String) officer.get("email"),
+                        alertId, stockAtAlert, threshold);
+            }
+        } catch (Exception e) {
+            log.warn("Could not notify procurement officers for alert {}: {}", alertId, e.getMessage());
+        }
     }
 
     private RestockAlert findOrThrow(String id) {

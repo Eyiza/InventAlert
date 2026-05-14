@@ -22,9 +22,12 @@ const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'n
 const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 function dateRange(days) {
-  const to = new Date().toISOString().slice(0, 10)
-  const from = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
-  return { from, to }
+  const toDate = new Date().toISOString().split('T')[0]
+  const fromDate = new Date(Date.now() - days * 86400000).toISOString().split('T')[0]
+  return {
+    from: new Date(fromDate).toISOString(),
+    to: new Date(toDate + 'T23:59:59.999Z').toISOString(),
+  }
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────
@@ -96,13 +99,14 @@ function AlertCard({ alert, productName, warehouseName, onAction, busy }) {
 }
 
 function AlertPipelinePanel() {
-  const { data: alerts = [], isLoading } = useGetAlertsQuery()
+  const { data: alerts = [], isLoading } = useGetAlertsQuery(undefined, { pollingInterval: 15000 })
   const { data: products = [] } = useGetProductsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const [acknowledge] = useAcknowledgeAlertMutation()
   const [placeOrder] = useMarkAlertOrderPlacedMutation()
   const [resolve] = useResolveAlertMutation()
   const [busyId, setBusyId] = useState(null)
+  const [showResolved, setShowResolved] = useState(false)
 
   const getAction = (alert) => {
     if (alert.status === 'RESOLVED') return null
@@ -128,6 +132,10 @@ function AlertPipelinePanel() {
   }
 
   const openCount = alerts.filter(a => a.status === 'OPEN').length
+  const resolvedAlerts = alerts
+    .filter(a => a.status === 'RESOLVED')
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
+  const recentResolved = resolvedAlerts.slice(0, 5)
 
   if (isLoading) return <Spinner />
 
@@ -137,7 +145,7 @@ function AlertPipelinePanel() {
         <StatCard title="Open Alerts"   value={alerts.filter(a => a.status === 'OPEN').length}         color={openCount > 0 ? 'amber' : 'green'} />
         <StatCard title="Acknowledged"  value={alerts.filter(a => a.status === 'ACKNOWLEDGED').length}  color="blue"   />
         <StatCard title="Order Placed"  value={alerts.filter(a => a.status === 'ORDER_PLACED').length}  color="purple" />
-        <StatCard title="Resolved"      value={alerts.filter(a => a.status === 'RESOLVED').length}      color="green"  />
+        <StatCard title="Resolved"      value={resolvedAlerts.length}                                    color="green"  />
       </div>
 
       {alerts.length === 0 && (
@@ -148,13 +156,15 @@ function AlertPipelinePanel() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {PIPELINE_STAGES.map(stage => {
-          const stageAlerts = alerts.filter(a => a.status === stage.status)
+          const isResolved = stage.status === 'RESOLVED'
+          const allStageAlerts = alerts.filter(a => a.status === stage.status)
+          const stageAlerts = isResolved ? recentResolved : allStageAlerts
           return (
             <div key={stage.status} className={`rounded-xl border-2 p-3 ${stage.color}`}>
               <div className="flex items-center gap-2 mb-3">
                 <div className={`w-2.5 h-2.5 rounded-full ${stage.dot}`} />
                 <h4 className={`text-sm font-semibold ${stage.hdr}`}>{stage.label}</h4>
-                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${stage.dot} text-white`}>{stageAlerts.length}</span>
+                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${stage.dot} text-white`}>{allStageAlerts.length}</span>
               </div>
               <div className="space-y-2">
                 {stageAlerts.length === 0 ? (
@@ -169,11 +179,48 @@ function AlertPipelinePanel() {
                     busy={busyId === alert.id}
                   />
                 ))}
+                {isResolved && allStageAlerts.length > 5 && (
+                  <p className="text-xs text-green-600 text-center pt-1">
+                    +{allStageAlerts.length - 5} more — see history below
+                  </p>
+                )}
               </div>
             </div>
           )
         })}
       </div>
+
+      {resolvedAlerts.length > 0 && (
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setShowResolved(s => !s)}
+            className="w-full flex items-center justify-between px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span>Full Resolved History</span>
+              <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">{resolvedAlerts.length}</span>
+            </div>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showResolved ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showResolved && (
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto bg-white">
+              {resolvedAlerts.map(alert => (
+                <AlertCard
+                  key={alert.id}
+                  alert={alert}
+                  productName={products.find(p => p.id === alert.productId)?.name || alert.productId}
+                  warehouseName={warehouses.find(w => w.id === alert.warehouseId)?.name || alert.warehouseId}
+                  onAction={null}
+                  busy={false}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -277,7 +324,8 @@ function StockOverviewPanel({ warehouseId }) {
 // ── In-Progress Orders (ORDER_PLACED alerts) ──────────────────────────────────
 
 function InProgressOrdersPanel() {
-  const { data: orders = [], isLoading } = useGetAlertsQuery({ status: 'ORDER_PLACED' })
+  const { data: allAlerts = [], isLoading } = useGetAlertsQuery({ status: 'ORDER_PLACED' })
+  const orders = allAlerts.filter(o => o.status === 'ORDER_PLACED')
   const { data: products = [] } = useGetProductsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const [resolve] = useResolveAlertMutation()
@@ -417,7 +465,7 @@ function AlertFrequencyPanel() {
               return (
                 <div key={i} className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900 truncate max-w-[180px]">{warehouseName}</p>
+                    <p className="text-sm font-medium text-gray-900 truncate max-w-45">{warehouseName}</p>
                     <p className="text-sm font-bold text-amber-700 shrink-0 ml-2">{b.total} alert{b.total !== 1 ? 's' : ''}</p>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2">
