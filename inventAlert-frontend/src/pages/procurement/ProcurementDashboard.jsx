@@ -35,13 +35,13 @@ function dateRange(days) {
 
 function SearchBar({ value, onChange, placeholder }) {
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
         type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-64"
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-full sm:w-64"
       />
     </div>
   )
@@ -323,7 +323,7 @@ function InProgressOrdersPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="In-Progress Orders" value={orders.length} color="indigo" />
         <StatCard title="Unique Products"     value={new Set(orders.map(o => o.productId)).size} color="blue"  />
         <StatCard title="Resolved Alerts"     value={resolvedAlerts.length} color="green" />
@@ -466,7 +466,7 @@ function AlertFrequencyPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="grid grid-cols-3 gap-4 flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
           <StatCard title="Total Alerts"      value={totalAlerts}          color={totalAlerts > 0 ? 'amber' : 'green'} />
           <StatCard title="Warehouses Affected" value={byWarehouse.length} color="blue"  />
           <StatCard title="Months w/ Alerts"  value={alertsByMonth.length} color="purple" />
