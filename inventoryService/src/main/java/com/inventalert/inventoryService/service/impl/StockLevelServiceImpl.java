@@ -69,7 +69,7 @@ public class StockLevelServiceImpl implements StockLevelService {
 
     @Override
     public List<StockLevelResponse> getStockForWarehouse(String warehouseId) {
-        return stockLevelRepository.findByWarehouseId(warehouseId).stream()
+        return stockLevelRepository.findByWarehouseIdOrderByCurrentStockAsc(warehouseId).stream()
                 .map(this::toResponse)
                 .toList();
     }
