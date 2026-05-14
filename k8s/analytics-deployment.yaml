@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: inventalert-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      initContainers:
+        - name: wait-for-clickhouse
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z clickhouse 8123; do echo waiting for clickhouse; sleep 3; done"]
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command: ["sh", "-c", "until nc -z kafka 9092; do echo waiting for kafka; sleep 3; done"]
+      containers:
+        - name: analytics-service
+          image: <ECR_URI>/inventalert-analytics-service:latest
+          env:
+            - name: CLICKHOUSE_HOST
+              value: "clickhouse"
+            - name: CLICKHOUSE_HTTP_PORT
+              value: "8123"
+            - name: CLICKHOUSE_NATIVE_PORT
+              value: "9000"
+            - name: CLICKHOUSE_DB
+              value: "inventalert_analytics"
+            - name: CLICKHOUSE_USER
+              value: "analytics_user"
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: inventalert-secrets
+                  key: CLICKHOUSE_PASSWORD
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:29092"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: inventalert-secrets
+                  key: JWT_SECRET
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms256m -Xmx512m"
+          ports:
+            - containerPort: 8084
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            initialDelaySeconds: 90
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: inventalert-prod
+spec:
+  selector:
+    app: analytics-service
+  ports:
+    - port: 8084
+      targetPort: 8084
