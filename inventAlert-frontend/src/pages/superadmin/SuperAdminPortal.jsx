@@ -208,8 +208,9 @@ function ComplaintsPanel() {
     .filter(c => filter === 'ALL' || c.status === filter)
     .filter(c => !search ||
       c.subject?.toLowerCase().includes(search.toLowerCase()) ||
-      c.submittedBy?.toLowerCase().includes(search.toLowerCase())
-    )
+      c.submittedBy?.toLowerCase().includes(search.toLowerCase()))
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
   const openCount = complaints.filter(c => c.status === 'OPEN').length
 
