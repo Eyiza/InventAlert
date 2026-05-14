@@ -106,7 +106,6 @@ function AlertPipelinePanel() {
   const [placeOrder] = useMarkAlertOrderPlacedMutation()
   const [resolve] = useResolveAlertMutation()
   const [busyId, setBusyId] = useState(null)
-  const [showResolved, setShowResolved] = useState(false)
 
   const getAction = (alert) => {
     if (alert.status === 'RESOLVED') return null
@@ -135,7 +134,7 @@ function AlertPipelinePanel() {
   const resolvedAlerts = alerts
     .filter(a => a.status === 'RESOLVED')
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
-  const recentResolved = resolvedAlerts.slice(0, 5)
+  const recentResolved = resolvedAlerts.slice(0, 4)
 
   if (isLoading) return <Spinner />
 
@@ -164,7 +163,7 @@ function AlertPipelinePanel() {
               <div className="flex items-center gap-2 mb-3">
                 <div className={`w-2.5 h-2.5 rounded-full ${stage.dot}`} />
                 <h4 className={`text-sm font-semibold ${stage.hdr}`}>{stage.label}</h4>
-                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${stage.dot} text-white`}>{allStageAlerts.length}</span>
+                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${stage.dot} text-white`}>{isResolved ? stageAlerts.length : allStageAlerts.length}</span>
               </div>
               <div className="space-y-2">
                 {stageAlerts.length === 0 ? (
@@ -179,9 +178,9 @@ function AlertPipelinePanel() {
                     busy={busyId === alert.id}
                   />
                 ))}
-                {isResolved && allStageAlerts.length > 5 && (
+                {isResolved && allStageAlerts.length > 4 && (
                   <p className="text-xs text-green-600 text-center pt-1">
-                    +{allStageAlerts.length - 5} more — see history below
+                    +{allStageAlerts.length - 4} more — see Purchase Orders tab
                   </p>
                 )}
               </div>
@@ -190,37 +189,6 @@ function AlertPipelinePanel() {
         })}
       </div>
 
-      {resolvedAlerts.length > 0 && (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <button
-            onClick={() => setShowResolved(s => !s)}
-            className="w-full flex items-center justify-between px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span>Full Resolved History</span>
-              <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">{resolvedAlerts.length}</span>
-            </div>
-            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showResolved ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {showResolved && (
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto bg-white">
-              {resolvedAlerts.map(alert => (
-                <AlertCard
-                  key={alert.id}
-                  alert={alert}
-                  productName={products.find(p => p.id === alert.productId)?.name || alert.productId}
-                  warehouseName={warehouses.find(w => w.id === alert.warehouseId)?.name || alert.warehouseId}
-                  onAction={null}
-                  busy={false}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -325,12 +293,17 @@ function StockOverviewPanel({ warehouseId }) {
 
 function InProgressOrdersPanel() {
   const { data: allAlerts = [], isLoading } = useGetAlertsQuery({ status: 'ORDER_PLACED' })
+  const { data: resolvedData = [] } = useGetAlertsQuery({ status: 'RESOLVED' })
   const orders = allAlerts.filter(o => o.status === 'ORDER_PLACED')
+  const resolvedAlerts = resolvedData
+    .filter(a => a.status === 'RESOLVED')
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
   const { data: products = [] } = useGetProductsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const [resolve] = useResolveAlertMutation()
   const [confirm, setConfirm] = useState(null)
   const [busyId, setBusyId] = useState(null)
+  const [subView, setSubView] = useState('orders')
 
   const handleResolve = async (id) => {
     setBusyId(id)
@@ -352,56 +325,112 @@ function InProgressOrdersPanel() {
       <div className="grid grid-cols-3 gap-4">
         <StatCard title="In-Progress Orders" value={orders.length} color="indigo" />
         <StatCard title="Unique Products"     value={new Set(orders.map(o => o.productId)).size} color="blue"  />
-        <StatCard title="Warehouses Affected" value={new Set(orders.map(o => o.warehouseId)).size} color="amber" />
+        <StatCard title="Resolved Alerts"     value={resolvedAlerts.length} color="green" />
       </div>
 
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-sm text-indigo-800">
-        These are restock alerts where an order has been placed but not yet received. Mark an order as <strong>Resolved</strong> once the stock arrives.
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Orders in Progress</h3>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+            <button
+              onClick={() => setSubView('orders')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${subView === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Orders in Progress
+              {orders.length > 0 && (
+                <span className={`ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded-full ${subView === 'orders' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>{orders.length}</span>
+              )}
+            </button>
+            <button
+              onClick={() => setSubView('resolved')}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${subView === 'resolved' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Resolved History
+              {resolvedAlerts.length > 0 && (
+                <span className={`ml-1.5 text-xs font-bold px-1.5 py-0.5 rounded-full ${subView === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{resolvedAlerts.length}</span>
+              )}
+            </button>
+          </div>
         </div>
-        {orders.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <p className="text-sm text-gray-400">No orders in progress. Acknowledge alerts and mark them as "Order Placed" to see them here.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {['Product', 'Warehouse', 'Stock at Alert', 'Threshold', 'Date', 'Action'].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {orders.map(o => (
-                  <tr key={o.id} className="hover:bg-gray-50/60">
-                    <td className="px-5 py-3 font-medium text-gray-900">{products.find(p => p.id === o.productId)?.name || o.productId}</td>
-                    <td className="px-5 py-3 text-gray-600">{warehouses.find(w => w.id === o.warehouseId)?.name || o.warehouseId}</td>
-                    <td className="px-5 py-3"><span className="font-semibold text-red-600">{o.stockAtAlert}</span></td>
-                    <td className="px-5 py-3 text-gray-600">{o.threshold}</td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{fmtDate(o.createdAt)}</td>
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => setConfirm({ id: o.id, productName: products.find(p => p.id === o.productId)?.name || o.productId })}
-                        disabled={busyId === o.id}
-                        className="px-3 py-1 bg-green-50 text-green-700 border border-green-100 rounded-lg text-xs font-semibold hover:bg-green-100 disabled:opacity-50 transition-colors"
-                      >
-                        {busyId === o.id ? 'Resolving…' : 'Mark Resolved'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+
+        {subView === 'orders' && (
+          <>
+            {orders.length === 0 ? (
+              <div className="px-5 py-10 text-center">
+                <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <p className="text-sm text-gray-400">No orders in progress. Acknowledge alerts and mark them as "Order Placed" to see them here.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      {['Product', 'Warehouse', 'Stock at Alert', 'Threshold', 'Date', 'Action'].map(h => (
+                        <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {orders.map(o => (
+                      <tr key={o.id} className="hover:bg-gray-50/60">
+                        <td className="px-5 py-3 font-medium text-gray-900">{products.find(p => p.id === o.productId)?.name || o.productId}</td>
+                        <td className="px-5 py-3 text-gray-600">{warehouses.find(w => w.id === o.warehouseId)?.name || o.warehouseId}</td>
+                        <td className="px-5 py-3"><span className="font-semibold text-red-600">{o.stockAtAlert}</span></td>
+                        <td className="px-5 py-3 text-gray-600">{o.threshold}</td>
+                        <td className="px-5 py-3 text-gray-500 text-xs">{fmtDate(o.createdAt)}</td>
+                        <td className="px-5 py-3">
+                          <button
+                            onClick={() => setConfirm({ id: o.id, productName: products.find(p => p.id === o.productId)?.name || o.productId })}
+                            disabled={busyId === o.id}
+                            className="px-3 py-1 bg-green-50 text-green-700 border border-green-100 rounded-lg text-xs font-semibold hover:bg-green-100 disabled:opacity-50 transition-colors"
+                          >
+                            {busyId === o.id ? 'Resolving…' : 'Mark Resolved'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {subView === 'resolved' && (
+          <>
+            {resolvedAlerts.length === 0 ? (
+              <div className="px-5 py-10 text-center">
+                <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-sm text-gray-400">No resolved alerts yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      {['Product', 'Warehouse', 'Stock at Alert', 'Threshold', 'Resolved'].map(h => (
+                        <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {resolvedAlerts.map(a => (
+                      <tr key={a.id} className="hover:bg-gray-50/60">
+                        <td className="px-5 py-3 font-medium text-gray-900">{products.find(p => p.id === a.productId)?.name || a.productId}</td>
+                        <td className="px-5 py-3 text-gray-600">{warehouses.find(w => w.id === a.warehouseId)?.name || a.warehouseId}</td>
+                        <td className="px-5 py-3"><span className="font-semibold text-gray-500">{a.stockAtAlert}</span></td>
+                        <td className="px-5 py-3 text-gray-600">{a.threshold}</td>
+                        <td className="px-5 py-3 text-gray-400 text-xs">{fmtDate(a.updatedAt || a.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
 
