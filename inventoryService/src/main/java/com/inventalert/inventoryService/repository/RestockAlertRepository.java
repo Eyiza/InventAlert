@@ -9,4 +9,5 @@ import java.util.List;
 public interface RestockAlertRepository extends JpaRepository<RestockAlert, String> {
     boolean existsByProductIdAndWarehouseIdAndStatus(String productId, String warehouseId, AlertStatus status);
     List<RestockAlert> findByStatus(AlertStatus status);
+    List<RestockAlert> findByProductIdAndWarehouseIdAndStatusNot(String productId, String warehouseId, AlertStatus status);
 }

@@ -38,6 +38,7 @@ public class MovementServiceImpl implements MovementService {
     private final StockLevelService stockLevelService;
     private final VelocityCalculationService velocityService;
     private final ThresholdCheckService thresholdCheckService;
+    private final RestockAlertService restockAlertService;
     private final StockMovementProducer movementProducer;
     private final ProductRepository productRepository;
 
@@ -70,6 +71,10 @@ public class MovementServiceImpl implements MovementService {
         StockMovement saved = movementRepository.save(movement);
 
         level.setCurrentStock(level.getCurrentStock() + request.getQuantity());
+
+        if (level.getCurrentStock() >= level.getThreshold()) {
+            restockAlertService.autoResolveForProduct(request.getProductId(), request.getWarehouseId());
+        }
 
         movementProducer.publishMovementCreated(
                 companyId, saved.getId(), request.getProductId(),
@@ -201,6 +206,10 @@ public class MovementServiceImpl implements MovementService {
                     .referenceId(row.getReferenceNumber()).createdBy(userId).build();
             StockMovement saved = movementRepository.save(movement);
             level.setCurrentStock(level.getCurrentStock() + row.getQuantity());
+
+            if (level.getCurrentStock() >= level.getThreshold()) {
+                restockAlertService.autoResolveForProduct(product.getId(), warehouseId);
+            }
 
             movementProducer.publishMovementCreated(
                     companyId, saved.getId(), product.getId(), warehouseId, MovementType.INTAKE, row.getQuantity());

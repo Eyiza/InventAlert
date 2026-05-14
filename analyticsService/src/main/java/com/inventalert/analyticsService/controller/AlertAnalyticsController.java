@@ -38,7 +38,7 @@ public class AlertAnalyticsController {
     }
 
     @GetMapping("/by-warehouse")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','PROCUREMENT_OFFICER')")
     public ResponseEntity<List<Map<String, Object>>> getByWarehouse(
             @AuthenticationPrincipal JwtUser user,
             @RequestParam(required = false) String from,
