@@ -1,0 +1,126 @@
+# Alternative to nginx-deployment.yaml — use this if the nginx Ingress Controller
+# is installed on the cluster (e.g. via: kubectl apply -f
+# https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.0/deploy/static/provider/aws/deploy.yaml)
+# If you are using nginx-deployment.yaml + LoadBalancer, you do NOT need this file.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: inventalert-ingress
+  namespace: inventalert-prod
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+spec:
+  rules:
+    - http:
+        paths:
+          # Identity
+          - path: /api/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: identity-service
+                port:
+                  number: 8081
+          - path: /api/users
+            pathType: Prefix
+            backend:
+              service:
+                name: identity-service
+                port:
+                  number: 8081
+          - path: /api/companies
+            pathType: Prefix
+            backend:
+              service:
+                name: identity-service
+                port:
+                  number: 8081
+          - path: /api/superadmin
+            pathType: Prefix
+            backend:
+              service:
+                name: identity-service
+                port:
+                  number: 8081
+          - path: /api/complaints
+            pathType: Prefix
+            backend:
+              service:
+                name: identity-service
+                port:
+                  number: 8081
+          # Inventory
+          - path: /api/warehouses
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          - path: /api/products
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          - path: /api/stock
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          - path: /api/movements
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          - path: /api/transfers
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          - path: /api/reconciliations
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          - path: /api/alerts
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8082
+          # Analytics
+          - path: /api/analytics
+            pathType: Prefix
+            backend:
+              service:
+                name: analytics-service
+                port:
+                  number: 8084
+          # Notifications + WebSocket
+          - path: /api/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8083
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8083

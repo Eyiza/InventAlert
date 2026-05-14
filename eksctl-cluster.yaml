@@ -1,0 +1,30 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: inventalert-cluster
+  region: eu-west-1      # Ireland — closest full-service AWS region to Nigeria
+  version: "1.29"
+
+iam:
+  withOIDC: true          # required for the EBS CSI driver addon IAM role
+
+addons:
+  - name: aws-ebs-csi-driver
+    version: latest
+    attachPolicyARNs:
+      - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+
+managedNodeGroups:
+  - name: worker-nodes
+    instanceType: t3.xlarge   # 4 vCPU / 16 GB — runs all services on one node
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    volumeSize: 80            # GB, root EBS volume for container images and OS
+    volumeType: gp3
+    iam:
+      attachPolicyARNs:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
