@@ -36,10 +36,17 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Compile all services
+      - name: Run unit tests
         run: |
           for dir in identityService inventoryService analyticsService notificationService; do
-            echo "▶ $dir"
+            echo "▶ Testing $dir"
+            (cd "$dir" && mvn test -q)
+          done
+
+      - name: Package all services
+        run: |
+          for dir in identityService inventoryService analyticsService notificationService; do
+            echo "▶ Packaging $dir"
             (cd "$dir" && mvn package -DskipTests -q)
           done
 
