@@ -89,7 +89,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /actuator/health
-              port: 8083
+              port: 8090
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
@@ -97,9 +97,11 @@ spec:
           livenessProbe:
             httpGet:
               path: /actuator/health
-              port: 8083
+              port: 8090
             initialDelaySeconds: 90
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -110,5 +112,9 @@ spec:
   selector:
     app: notification-service
   ports:
-    - port: 8083
+    - name: http
+      port: 8083
       targetPort: 8083
+    - name: management
+      port: 8090
+      targetPort: 8090

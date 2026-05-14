@@ -77,6 +77,8 @@ spec:
                   key: CORS_ALLOWED_ORIGINS
             - name: JAVA_TOOL_OPTIONS
               value: "-Xms256m -Xmx512m"
+            - name: APP_SEED_DATA
+              value: "false"
           ports:
             - containerPort: 8081
           resources:
@@ -89,14 +91,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /actuator/health
-              port: 8081
+              port: 8090
             initialDelaySeconds: 45
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /actuator/health
-              port: 8081
+              port: 8090
             initialDelaySeconds: 90
             periodSeconds: 20
 ---
@@ -109,5 +111,9 @@ spec:
   selector:
     app: identity-service
   ports:
-    - port: 8081
+    - name: http
+      port: 8081
       targetPort: 8081
+    - name: management
+      port: 8090
+      targetPort: 8090
