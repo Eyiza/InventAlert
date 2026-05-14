@@ -17,9 +17,12 @@ const AUTH_ENDPOINTS = ['login', 'superAdminLogin', 'signup', 'forgotPassword', 
 const baseQueryWithAuthRedirect = async (args, api, extraOptions) => {
   const result = await baseQuery(args, api, extraOptions)
   if (result.error?.status === 401 && !AUTH_ENDPOINTS.includes(api.endpoint)) {
-    // Soft logout — clears Redux + localStorage without a page reload.
-    // ProtectedRoute will redirect to /login on the next render.
-    api.dispatch(logout())
+    const { role } = api.getState().auth
+    if (role !== 'SUPER_ADMIN') {
+      // Soft logout — clears Redux + localStorage without a page reload.
+      // ProtectedRoute will redirect to /login on the next render.
+      api.dispatch(logout())
+    }
   }
   return result
 }
@@ -29,7 +32,7 @@ export const inventAlertApi = createApi({
   baseQuery: baseQueryWithAuthRedirect,
   refetchOnFocus: true,
   refetchOnReconnect: true,
-  tagTypes: ['User', 'Company', 'Warehouse', 'Product', 'Stock', 'Movement', 'Transfer', 'Reconciliation', 'Alert', 'Notification', 'Analytics'],
+  tagTypes: ['User', 'Company', 'Warehouse', 'Product', 'Stock', 'Movement', 'Transfer', 'Reconciliation', 'Alert', 'Notification', 'Analytics', 'Complaint'],
   endpoints: build => ({
 
     // ── Auth ──────────────────────────────────────────────────────────────────
@@ -151,7 +154,7 @@ export const inventAlertApi = createApi({
       providesTags: (result, error, warehouseId) => [{ type: 'Stock', id: warehouseId }],
     }),
     getAllStock: build.query({
-      query: (params = {}) => ({ url: '/api/stock', params: { size: 1000, ...params } }),
+      query: (params = {}) => ({ url: '/api/stock', params: { size: 1000, sort: 'currentStock,asc', ...params } }),
       transformResponse: res => res.content ?? res,
       providesTags: ['Stock'],
     }),
@@ -176,7 +179,7 @@ export const inventAlertApi = createApi({
 
     // ── Transfers ─────────────────────────────────────────────────────────────
     getTransfers: build.query({
-      query: () => '/api/transfers',
+      query: () => ({ url: '/api/transfers', params: { sort: 'createdAt,desc' } }),
       transformResponse: res => res.content ?? res,
       providesTags: ['Transfer'],
     }),
@@ -222,7 +225,7 @@ export const inventAlertApi = createApi({
 
     // ── Reconciliations ───────────────────────────────────────────────────────
     getReconciliations: build.query({
-      query: () => '/api/reconciliations',
+      query: () => ({ url: '/api/reconciliations', params: { sort: 'createdAt,desc' } }),
       transformResponse: res => res.content ?? res,
       providesTags: ['Reconciliation'],
     }),
@@ -237,6 +240,61 @@ export const inventAlertApi = createApi({
     rejectReconciliation: build.mutation({
       query: id => ({ url: `/api/reconciliations/${id}/reject`, method: 'PATCH' }),
       invalidatesTags: ['Reconciliation'],
+    }),
+
+    // ── Alerts ────────────────────────────────────────────────────────────────────
+    getAlerts: build.query({
+      query: (params = {}) => ({ url: '/api/alerts', params }),
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Alert'],
+    }),
+    acknowledgeAlert: build.mutation({
+      query: id => ({ url: `/api/alerts/${id}/acknowledge`, method: 'PATCH' }),
+      invalidatesTags: ['Alert'],
+    }),
+    markAlertOrderPlaced: build.mutation({
+      query: id => ({ url: `/api/alerts/${id}/order-placed`, method: 'PATCH' }),
+      invalidatesTags: ['Alert'],
+    }),
+    resolveAlert: build.mutation({
+      query: id => ({ url: `/api/alerts/${id}/resolve`, method: 'PATCH' }),
+      invalidatesTags: ['Alert'],
+    }),
+
+    // ── SuperAdmin ────────────────────────────────────────────────────────────
+    getSuperAdminCompanies: build.query({
+      query: () => '/api/superadmin/companies',
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Company'],
+    }),
+    suspendCompany: build.mutation({
+      query: id => ({ url: `/api/superadmin/companies/${id}/suspend`, method: 'PATCH' }),
+      invalidatesTags: ['Company'],
+    }),
+    reactivateCompanySA: build.mutation({
+      query: id => ({ url: `/api/superadmin/companies/${id}/reactivate`, method: 'PATCH' }),
+      invalidatesTags: ['Company'],
+    }),
+
+    // ── Complaints ────────────────────────────────────────────────────────────
+    getComplaints: build.query({
+      query: (params = {}) => ({ url: '/api/complaints', params }),
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Complaint'],
+    }),
+    submitComplaint: build.mutation({
+      query: body => ({ url: '/api/complaints', method: 'POST', body }),
+      invalidatesTags: ['Complaint'],
+    }),
+    resolveComplaint: build.mutation({
+      query: ({ id, resolution }) => ({ url: `/api/complaints/${id}/resolve`, method: 'PATCH', body: { resolution } }),
+      invalidatesTags: ['Complaint'],
+    }),
+
+    // ── Company Analytics ─────────────────────────────────────────────────────
+    getCompanyAnalytics: build.query({
+      query: ({ months = 12 } = {}) => ({ url: '/api/analytics/companies/summary', params: { months } }),
+      providesTags: ['Analytics'],
     }),
 
     // ── Threshold overrides ───────────────────────────────────────────────────
@@ -333,6 +391,10 @@ export const {
   useDispatchTransferMutation,
   useAcceptTransferMutation,
   useRejectDeliveryMutation,
+  useGetAlertsQuery,
+  useAcknowledgeAlertMutation,
+  useMarkAlertOrderPlacedMutation,
+  useResolveAlertMutation,
   useGetReconciliationsQuery,
   useSubmitReconciliationMutation,
   useApproveReconciliationMutation,
@@ -342,4 +404,11 @@ export const {
   useGetTransferSummaryQuery,
   useGetAlertSummaryQuery,
   useGetAlertsByWarehouseQuery,
+  useGetSuperAdminCompaniesQuery,
+  useSuspendCompanyMutation,
+  useReactivateCompanySAMutation,
+  useGetComplaintsQuery,
+  useSubmitComplaintMutation,
+  useResolveComplaintMutation,
+  useGetCompanyAnalyticsQuery,
 } = inventAlertApi

@@ -68,8 +68,12 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         Company savedCompany = companyRepository.save(company);
 
+        String adminName = (request.getAdminName() != null && !request.getAdminName().isBlank())
+                ? request.getAdminName()
+                : request.getAdminEmail().split("@")[0];
         User admin = User.builder()
                 .companyId(savedCompany.getId())
+                .name(adminName)
                 .email(request.getAdminEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(Role.ADMIN)
@@ -179,6 +183,7 @@ public class AuthServiceImpl implements AuthService {
         LoginResponse response = new LoginResponse();
         response.setToken(jwtUtil.generateToken(user, warehouseId));
         response.setUserId(user.getId());
+        response.setName(user.getName());
         response.setEmail(user.getEmail());
         response.setCompanyId(user.getCompanyId());
         response.setCompanyName(company.getCompanyName());

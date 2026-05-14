@@ -13,6 +13,8 @@ public class SignupRequest {
     @NotBlank(message = "Company name is required.")
     private String companyName;
 
+    private String adminName;
+
     @NotBlank(message = "Email address is required.")
     @Email(message = "Please enter a valid email address.")
     private String adminEmail;

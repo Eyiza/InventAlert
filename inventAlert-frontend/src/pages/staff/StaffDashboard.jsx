@@ -1,10 +1,9 @@
 import { useState, useRef } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { submitComplaint } from '../../store/slices/superadminSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetProductsQuery, useGetWarehousesQuery, useGetStockByWarehouseQuery,
@@ -12,9 +11,11 @@ import {
   useGetTransfersQuery, useInitiateTransferMutation, useDispatchTransferMutation,
   useAcceptTransferMutation, useRejectDeliveryMutation,
   useSubmitReconciliationMutation,
+  useSubmitComplaintMutation,
 } from '../../apis/inventAlertApi'
 
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const toUTC = s => !s ? s : String(s).endsWith('Z') || String(s).includes('+') ? String(s) : /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? String(s) + 'T12:00:00Z' : String(s) + 'Z'
+const fmtDT = d => new Date(toUTC(d)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 // ── Shared page-level layout ──────────────────────────────────────────────────
 
@@ -192,12 +193,12 @@ function StockPanel() {
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">Warehouse Stock</h3>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search product or SKU…"
-                className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-72" />
+                className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-full sm:w-72" />
             </div>
             <div className="flex gap-1">
               {['ALL', 'CRITICAL', 'WARNING', 'OK'].map(f => (
@@ -1072,23 +1073,75 @@ function IncomingPanel() {
   const [rejectDelivery] = useRejectDeliveryMutation()
   const [confirm, setConfirm] = useState(null)
 
+  const enrich = t => ({
+    ...t,
+    productName: products.find(p => p.id === t.productId)?.name || t.productId,
+    fromName: warehouses.find(w => w.id === t.fromWarehouseId)?.name || t.fromWarehouseId,
+  })
+
+  const suggested = allTransfers
+    .filter(t => t.toWarehouseId === warehouseId && t.status === 'SUGGESTED')
+    .map(enrich)
+
   const incoming = allTransfers
     .filter(t => t.toWarehouseId === warehouseId && t.status === 'IN_TRANSIT')
-    .map(t => ({ ...t, productName: products.find(p => p.id === t.productId)?.name || t.productId, fromName: warehouses.find(w => w.id === t.fromWarehouseId)?.name || t.fromWarehouseId }))
+    .map(enrich)
 
   const handleAccept = async t => {
     try {
       await acceptTransfer(t.id).unwrap()
       toast.success('Transfer accepted — stock updated')
-    } catch {
-      toast.error('Failed to accept transfer')
+    } catch (err) {
+      const msg = err?.data?.message
+      toast.error(msg || 'Failed to accept transfer')
     }
   }
 
   return (
-    <div>
-      <PageHeader title="Incoming Transfers" subtitle="Shipments in transit headed to your warehouse" />
+    <div className="space-y-6">
+      <PageHeader title="Incoming Transfers" subtitle="Pending suggestions and shipments headed to your warehouse" />
+
+      {suggested.length > 0 && (
+        <div className="bg-white rounded-xl border border-blue-200">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-blue-100 bg-blue-50 rounded-t-xl">
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <h3 className="text-sm font-semibold text-blue-800">Suggested Transfers</h3>
+            <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">{suggested.length}</span>
+          </div>
+          <p className="px-5 py-2 text-xs text-blue-600 border-b border-blue-50">
+            These transfers have been suggested by the system or requested from another warehouse. Awaiting approval from their warehouse manager before dispatch.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'From Warehouse', 'Qty', 'Suggested'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {suggested.map(t => (
+                  <tr key={t.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-semibold text-gray-900">{t.productName}</td>
+                    <td className="px-5 py-3 text-gray-600">{t.fromName}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{t.quantity}</td>
+                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDT(t.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900">In Transit</h3>
+          {incoming.length > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-500 text-white">{incoming.length}</span>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1100,7 +1153,7 @@ function IncomingPanel() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {incoming.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">No incoming transfers awaiting your action.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">No shipments currently in transit to your warehouse.</td></tr>
               ) : incoming.map(t => (
                 <tr key={t.id} className="hover:bg-gray-50/60">
                   <td className="px-5 py-3 font-semibold text-gray-900">{t.productName}</td>
@@ -1110,7 +1163,7 @@ function IncomingPanel() {
                   <td className="px-5 py-3">
                     <div className="flex gap-2">
                       <button onClick={() => setConfirm({ action: () => handleAccept(t), title: 'Accept Delivery', message: `Accept ${t.quantity} units of ${t.productName} from ${t.fromName}? Stock will be added to your warehouse.`, label: 'Accept Delivery' })} className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium">Accept</button>
-                      <button onClick={() => setConfirm({ action: async () => { try { await rejectDelivery(t.id).unwrap(); toast.info('Delivery rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Delivery', message: `Reject the delivery of ${t.quantity} units of ${t.productName} from ${t.fromName}?`, label: 'Reject Delivery', danger: true })} className="px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium">Reject</button>
+                      <button onClick={() => setConfirm({ action: async () => { try { await rejectDelivery(t.id).unwrap(); toast.info('Delivery rejected') } catch (err) { toast.error(err?.data?.message || 'Failed to reject delivery') } }, title: 'Reject Delivery', message: `Reject the delivery of ${t.quantity} units of ${t.productName} from ${t.fromName}?`, label: 'Reject Delivery', danger: true })} className="px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium">Reject</button>
                     </div>
                   </td>
                 </tr>
@@ -1134,23 +1187,79 @@ function OutgoingPanel() {
   const [dispatchTransfer] = useDispatchTransferMutation()
   const [confirm, setConfirm] = useState(null)
 
+  const enrich = t => ({
+    ...t,
+    productName: products.find(p => p.id === t.productId)?.name || t.productId,
+    toName: warehouses.find(w => w.id === t.toWarehouseId)?.name || t.toWarehouseId,
+  })
+
+  const pending = allTransfers
+    .filter(t => t.fromWarehouseId === warehouseId && t.status === 'SUGGESTED')
+    .map(enrich)
+
   const outgoing = allTransfers
     .filter(t => t.fromWarehouseId === warehouseId && t.status === 'APPROVED')
-    .map(t => ({ ...t, productName: products.find(p => p.id === t.productId)?.name || t.productId, toName: warehouses.find(w => w.id === t.toWarehouseId)?.name || t.toWarehouseId }))
+    .map(enrich)
 
   const handleDispatch = async t => {
     try {
       await dispatchTransfer(t.id).unwrap()
       toast.success('Dispatch confirmed — stock deducted, now in transit')
-    } catch {
-      toast.error('Failed to dispatch transfer')
+    } catch (err) {
+      const msg = err?.data?.message
+      if (msg) {
+        toast.error(msg)
+      } else {
+        toast.error('Transfer cannot be dispatched because the available stock is no longer sufficient.')
+      }
     }
   }
 
   return (
-    <div>
-      <PageHeader title="Outgoing Transfers" subtitle="Approved transfers ready to be dispatched from your warehouse" />
+    <div className="space-y-6">
+      <PageHeader title="Outgoing Transfers" subtitle="Your transfer requests and approved shipments ready to dispatch" />
+
+      {pending.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-100 bg-amber-50 rounded-t-xl">
+            <div className="w-2 h-2 rounded-full bg-amber-500" />
+            <h3 className="text-sm font-semibold text-amber-800">Pending Approval</h3>
+            <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">{pending.length}</span>
+          </div>
+          <p className="px-5 py-2 text-xs text-amber-600 border-b border-amber-50">
+            These requests are awaiting review by your warehouse manager. No action required from you yet.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'To Warehouse', 'Qty', 'Requested'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {pending.map(t => (
+                  <tr key={t.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-semibold text-gray-900">{t.productName}</td>
+                    <td className="px-5 py-3 text-gray-600">{t.toName}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{t.quantity}</td>
+                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDT(t.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900">Ready to Dispatch</h3>
+          {outgoing.length > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">{outgoing.length}</span>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1180,6 +1289,7 @@ function OutgoingPanel() {
           </table>
         </div>
       </div>
+
       {confirm && (
         <ConfirmDialog
           title="Confirm Dispatch"
@@ -1260,22 +1370,20 @@ function ReconciliationPanel() {
 // ── Complaints Panel ──────────────────────────────────────────────────────────
 
 function ComplaintsPanel() {
-  const { user: me, companyId, companyName } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const [submitComplaint, { isLoading: loading }] = useSubmitComplaintMutation()
   const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
-  const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!form.subject || !form.message) return
-    setLoading(true)
-    setTimeout(() => {
-      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
-      setLoading(false)
+    try {
+      await submitComplaint({ subject: form.subject, priority: form.priority, description: form.message }).unwrap()
       setSubmitted(true)
-    }, 500)
+    } catch {
+      toast.error('Failed to submit feedback')
+    }
   }
 
   if (submitted) {

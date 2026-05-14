@@ -1,10 +1,14 @@
 import { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
+import {
+  AreaChart, Area, BarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { submitComplaint } from '../../store/slices/superadminSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetUsersQuery, useCreateUserMutation,
@@ -16,10 +20,13 @@ import {
   useGetStockSummaryQuery, useGetMovementTrendQuery, useGetTransferSummaryQuery,
   useGetAlertSummaryQuery, useGetAlertsByWarehouseQuery,
   useGetNotificationAnalyticsQuery,
+  useSubmitComplaintMutation,
 } from '../../apis/inventAlertApi'
 
-const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const toUTC = s => !s ? s : String(s).endsWith('Z') || String(s).includes('+') ? String(s) : /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? String(s) + 'T12:00:00Z' : String(s) + 'Z'
+const fmtDate = d => new Date(toUTC(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const fmtDT = d => new Date(toUTC(d)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const resolveUser = (users, id) => { const u = users.find(u => u.id === id); return u?.name || u?.email?.split('@')[0] || id }
 
 function SectionHeader({ title, subtitle }) {
   return (
@@ -124,13 +131,13 @@ function StockPanel() {
 
 function SearchBar({ value, onChange, placeholder }) {
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
         type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-72"
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-full sm:w-72"
       />
     </div>
   )
@@ -153,7 +160,7 @@ function MovementsPanel() {
       ...m,
       productName: products.find(p => p.id === m.productId)?.name || m.productId,
       warehouseName: warehouses.find(w => w.id === m.warehouseId)?.name || m.warehouseId,
-      createdByName: users.find(u => u.id === m.createdBy)?.email?.split('@')[0] || m.createdBy,
+      createdByName: resolveUser(users, m.createdBy),
     }))
     .filter(m => typeFilter === 'ALL' || m.type === typeFilter)
     .filter(m => !search || m.productName.toLowerCase().includes(search.toLowerCase()) || m.warehouseName.toLowerCase().includes(search.toLowerCase()))
@@ -228,7 +235,7 @@ function TransfersPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="Pending Approval" value={pending} color={pending > 0 ? 'amber' : 'green'} />
         <StatCard title="In Transit" value={transfers.filter(t => t.status === 'IN_TRANSIT').length} color="purple" />
         <StatCard title="Completed" value={transfers.filter(t => t.status === 'COMPLETED').length} color="green" />
@@ -310,7 +317,7 @@ function ReconciliationsPanel() {
       ...r,
       productName: products.find(p => p.id === r.productId)?.name || r.productId,
       warehouseName: warehouses.find(w => w.id === r.warehouseId)?.name || r.warehouseId,
-      createdByName: users.find(u => u.id === r.createdBy)?.email?.split('@')[0] || r.createdBy,
+      createdByName: resolveUser(users, r.createdBy),
     }))
     .filter(r => statusFilter === 'ALL' || r.status === statusFilter)
     .filter(r => !search || r.productName.toLowerCase().includes(search.toLowerCase()) || r.warehouseName.toLowerCase().includes(search.toLowerCase()) || r.reason?.toLowerCase().includes(search.toLowerCase()))
@@ -319,7 +326,7 @@ function ReconciliationsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="Pending Approval" value={pending} color={pending > 0 ? 'amber' : 'green'} />
         <StatCard title="Approved" value={reconciliations.filter(r => r.status === 'APPROVED').length} color="green" />
         <StatCard title="Rejected" value={reconciliations.filter(r => r.status === 'REJECTED').length} color="red" />
@@ -514,23 +521,27 @@ function AnalyticsPanel() {
             <h3 className="font-semibold text-gray-900">Top Moving Products</h3>
             <p className="text-xs text-gray-500 mt-0.5">Ranked by total quantity moved in the selected period</p>
           </div>
-          <div className="p-5 space-y-3">
+          <div className="p-5">
             {topProducts.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No movement data for this period.</p>
-            ) : topProducts.map((p, i) => (
-              <div key={String(p.productId) + i} className="flex items-center gap-3">
-                <span className="w-4 text-xs text-gray-400 font-medium">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 truncate">{prodName(p.productId)}</span>
-                    <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{Number(p.totalQty).toLocaleString()} units</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-teal-600 h-2 rounded-full transition-all" style={{ width: `${(Number(p.totalQty) / maxTopQty) * 100}%` }} />
-                  </div>
-                </div>
-              </div>
-            ))}
+              <p className="text-sm text-gray-400 text-center py-10">No movement data for this period.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(260, topProducts.length * 42)}>
+                <BarChart
+                  layout="vertical"
+                  data={topProducts.map(p => ({ name: prodName(p.productId), Units: Number(p.totalQty) }))}
+                  margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12, fill: '#374151' }} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    formatter={v => [v.toLocaleString() + ' units', 'Quantity']}
+                    contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                  />
+                  <Bar dataKey="Units" fill="#0d9488" radius={[0, 4, 4, 0]} maxBarSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       )}
@@ -541,73 +552,115 @@ function AnalyticsPanel() {
             <h3 className="font-semibold text-gray-900">Movement Trend</h3>
             <p className="text-xs text-gray-500 mt-0.5">Daily intake vs outbound over the selected period</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="bg-gray-50 border-b border-gray-100">
-                {['Date', 'Intake', 'Outbound Sales', 'Transfer Out', 'Visual'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr></thead>
-              <tbody className="divide-y divide-gray-50">
-                {trendDays.length === 0 ? (
-                  <tr><td colSpan={5} className="px-5 py-6 text-center text-gray-400 text-sm">No data for this period.</td></tr>
-                ) : trendDays.map(d => (
-                  <tr key={d.day} className="hover:bg-gray-50/60">
-                    <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(d.day)}</td>
-                    <td className="px-5 py-3 text-green-700 font-medium">{d.INTAKE || '—'}</td>
-                    <td className="px-5 py-3 text-orange-700 font-medium">{d.OUTBOUND_SALE || '—'}</td>
-                    <td className="px-5 py-3 text-purple-700">{d.TRANSFER_OUT || '—'}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-1 items-end h-6">
-                        {d.INTAKE > 0 && <div className="bg-teal-400 rounded-sm w-3" style={{ height: `${(d.INTAKE / maxTrend) * 24}px` }} title={`Intake: ${d.INTAKE}`} />}
-                        {d.OUTBOUND_SALE > 0 && <div className="bg-orange-400 rounded-sm w-3" style={{ height: `${(d.OUTBOUND_SALE / maxTrend) * 24}px` }} title={`Sales: ${d.OUTBOUND_SALE}`} />}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-5">
+            {trendDays.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-10">No data for this period.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart
+                  data={trendDays.map(d => ({
+                    date: new Date(toUTC(d.day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    Intake: d.INTAKE || 0,
+                    Outbound: d.OUTBOUND_SALE || 0,
+                    'Transfer Out': d.TRANSFER_OUT || 0,
+                  }))}
+                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+                >
+                  <defs>
+                    <linearGradient id="mgIntake" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0d9488" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="mgOutbound" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="mgTransfer" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+                  <Area type="monotone" dataKey="Intake" stroke="#0d9488" strokeWidth={2} fill="url(#mgIntake)" dot={false} />
+                  <Area type="monotone" dataKey="Outbound" stroke="#f97316" strokeWidth={2} fill="url(#mgOutbound)" dot={false} />
+                  <Area type="monotone" dataKey="Transfer Out" stroke="#8b5cf6" strokeWidth={2} fill="url(#mgTransfer)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       )}
 
-      {section === 'transfers' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="blue" />
-            <StatCard title="Approved" value={transferSummary?.totalApproved ?? '—'} color="green" />
-            <StatCard title="Rejected" value={transferSummary?.totalRejected ?? '—'} color="red" />
-            <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="teal" />
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Transfer Volume by Product</h3>
+      {section === 'transfers' && (() => {
+        const vbp = transferSummary?.volumeByProduct ?? []
+        const donutData = [
+          { name: 'Suggested', value: transferSummary?.totalSuggested ?? 0, color: '#3b82f6' },
+          { name: 'Approved',  value: transferSummary?.totalApproved  ?? 0, color: '#10b981' },
+          { name: 'Rejected',  value: transferSummary?.totalRejected  ?? 0, color: '#ef4444' },
+          { name: 'Completed', value: transferSummary?.totalCompleted ?? 0, color: '#0d9488' },
+        ].filter(d => d.value > 0)
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="blue" />
+              <StatCard title="Approved"  value={transferSummary?.totalApproved  ?? '—'} color="green" />
+              <StatCard title="Rejected"  value={transferSummary?.totalRejected  ?? '—'} color="red" />
+              <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="teal" />
             </div>
-            <div className="p-5 space-y-3">
-              {(() => {
-                const vbp = transferSummary?.volumeByProduct ?? []
-                const maxQty = Math.max(...vbp.map(p => Number(p.totalQty)), 1)
-                return vbp.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">No transfer data for this period.</p>
-                ) : vbp.map((p, i) => (
-                  <div key={String(p.productId) + i} className="flex items-center gap-3">
-                    <span className="w-4 text-xs text-gray-400">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-900 truncate">{prodName(p.productId)}</span>
-                        <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{Number(p.totalQty).toLocaleString()} units</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(Number(p.totalQty) / maxQty) * 100}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                ))
-              })()}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Status distribution donut */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Status Distribution</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Proportion of transfer outcomes</p>
+                </div>
+                <div className="p-5 flex items-center justify-center">
+                  {donutData.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-10">No transfer data for this period.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={88} paddingAngle={3}>
+                          {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* Volume by product bar chart */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Transfer Volume by Product</h3>
+                </div>
+                <div className="p-5">
+                  {vbp.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-10">No transfer data for this period.</p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={Math.max(200, vbp.length * 42)}>
+                      <BarChart layout="vertical" data={vbp.map(p => ({ name: prodName(p.productId), Units: Number(p.totalQty) }))} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                        <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 12, fill: '#374151' }} tickLine={false} axisLine={false} />
+                        <Tooltip formatter={v => [v.toLocaleString() + ' units', 'Transferred']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Bar dataKey="Units" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={24} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {section === 'alerts' && (
         <div className="space-y-4">
@@ -619,87 +672,128 @@ function AnalyticsPanel() {
               <h3 className="font-semibold text-gray-900">Alerts by Warehouse</h3>
               <p className="text-xs text-gray-500 mt-0.5">Warehouses with the most restock alerts in this period</p>
             </div>
-            <div className="p-5 space-y-3">
+            <div className="p-5">
               {alertWarehouses.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">No alert data for this period.</p>
-              ) : alertWarehouses.map((a, i) => (
-                <div key={a.warehouseName + i} className="flex items-center gap-3">
-                  <span className="w-4 text-xs text-gray-400">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-900">{a.warehouseName}</span>
-                      <span className="text-sm font-semibold text-amber-700 ml-2">{a.total} alerts</span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${(a.total / maxAlertWh) * 100}%` }} />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                <p className="text-sm text-gray-400 text-center py-10">No alert data for this period.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(240, alertWarehouses.length * 52)}>
+                  <BarChart data={alertWarehouses.map(a => ({ name: a.warehouseName, Alerts: a.total }))} margin={{ top: 4, right: 16, left: 0, bottom: 32 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip formatter={v => [v, 'Alerts']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                    <Bar dataKey="Alerts" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {section === 'notifications' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <StatCard title="Total Notifications" value={notificationAnalytics?.totalNotifications ?? '—'} color="blue" />
+      {section === 'notifications' && (() => {
+        const typeItems = notificationAnalytics?.breakdownByType ?? []
+        const dailyItems = notificationAnalytics?.volumeByDay ?? []
+        const NOTIF_COLORS = ['#8b5cf6', '#0d9488', '#3b82f6', '#f59e0b', '#ef4444']
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <StatCard title="Total Notifications" value={notificationAnalytics?.totalNotifications ?? '—'} color="blue" />
+            </div>
+
+            {!notificationAnalytics?.totalNotifications && (
+              <p className="text-sm text-gray-400 italic text-center py-8">No notification data for this period.</p>
+            )}
+
+            {typeItems.length > 0 && dailyItems.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Type breakdown donut */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
+                  </div>
+                  <div className="p-5">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={typeItems.map(r => ({ name: r.type ?? r.notificationType ?? r.eventType ?? 'Unknown', value: Number(r.total ?? r.count ?? 0) }))}
+                          dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={86} paddingAngle={3}
+                        >
+                          {typeItems.map((_, i) => <Cell key={i} fill={NOTIF_COLORS[i % NOTIF_COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Daily volume bar chart */}
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100">
+                    <h3 className="font-semibold text-gray-900">Daily Volume</h3>
+                  </div>
+                  <div className="p-5">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart
+                        data={dailyItems.map(r => ({
+                          date: new Date(toUTC(r.day ?? r.date)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          Count: Number(r.total ?? r.count ?? 0),
+                        }))}
+                        margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                        <Bar dataKey="Count" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {typeItems.length > 0 && dailyItems.length === 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
+                </div>
+                <div className="p-5">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={typeItems.map(r => ({ name: r.type ?? r.notificationType ?? r.eventType ?? 'Unknown', value: Number(r.total ?? r.count ?? 0) }))} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={86} paddingAngle={3}>
+                        {typeItems.map((_, i) => <Cell key={i} fill={NOTIF_COLORS[i % NOTIF_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                      <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {dailyItems.length > 0 && typeItems.length === 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-900">Daily Volume</h3>
+                </div>
+                <div className="p-5">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={dailyItems.map(r => ({ date: new Date(toUTC(r.day ?? r.date)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), Count: Number(r.total ?? r.count ?? 0) }))} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                      <Bar dataKey="Count" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </div>
-          {notificationAnalytics?.breakdownByType?.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-900">Breakdown by Type</h3>
-              </div>
-              <div className="p-5 space-y-3">
-                {(() => {
-                  const items = notificationAnalytics.breakdownByType
-                  const maxVal = Math.max(...items.map(r => Number(r.total ?? r.count ?? 0)), 1)
-                  return items.map((r, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-gray-900">{r.type ?? r.notificationType ?? r.eventType ?? 'Unknown'}</span>
-                          <span className="text-sm font-semibold text-gray-700 ml-2 shrink-0">{r.total ?? r.count}</span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${(Number(r.total ?? r.count ?? 0) / maxVal) * 100}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                })()}
-              </div>
-            </div>
-          )}
-          {notificationAnalytics?.volumeByDay?.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-900">Daily Volume</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {notificationAnalytics.volumeByDay.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50/60">
-                        <td className="px-5 py-3 font-medium text-gray-900">{fmtDate(r.day ?? r.date)}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-gray-700">{r.total ?? r.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-          {!notificationAnalytics?.totalNotifications && (
-            <p className="text-sm text-gray-400 italic text-center py-8">No notification data for this period.</p>
-          )}
-        </div>
-      )}
+        )
+      })()}
 
       {section === 'forecast' && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -787,14 +881,14 @@ function TeamPanel() {
   const [confirm, setConfirm] = useState(null)
   const [showAddUser, setShowAddUser] = useState(false)
   const [showTempPass, setShowTempPass] = useState(false)
-  const [addForm, setAddForm] = useState({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
+  const [addForm, setAddForm] = useState({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
   const chAdd = e => setAddForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const myWarehouseName = warehouses.find(w => w.id === myWarehouseId)?.name || null
 
   const teamUsers = users.filter(u =>
     u.role !== 'ADMIN' &&
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u.name?.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
   )
 
   const saveRole = async (userId, role) => {
@@ -813,11 +907,11 @@ function TeamPanel() {
   const handleAddUser = async e => {
     e.preventDefault()
     try {
-      await createUser({ email: addForm.email, role: addForm.role, password: addForm.password, warehouseId: myWarehouseId || null }).unwrap()
+      await createUser({ name: addForm.name, email: addForm.email, role: addForm.role, password: addForm.password, warehouseId: myWarehouseId || null }).unwrap()
       toast.success(`User added${myWarehouseName ? ` to ${myWarehouseName}` : ''}`)
       setShowAddUser(false)
       setShowTempPass(false)
-      setAddForm({ email: '', role: 'WAREHOUSE_STAFF', password: '' })
+      setAddForm({ name: '', email: '', role: 'WAREHOUSE_STAFF', password: '' })
     } catch (err) {
       toast.error(err?.data?.message || 'Failed to add user')
     }
@@ -862,7 +956,7 @@ function TeamPanel() {
                 {teamUsers.length === 0 ? (
                   <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400 text-sm">No team members found.</td></tr>
                 ) : teamUsers.map(u => {
-                  const displayName = u.email.split('@')[0]
+                  const displayName = u.name || u.email.split('@')[0]
                   const isAdmin = u.role === 'ADMIN'
                   const isMe = u.id === me?.id
                   const pending = pendingRole[u.id]
@@ -955,6 +1049,10 @@ function TeamPanel() {
             </div>
             <form onSubmit={handleAddUser} className="space-y-3">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <input name="name" type="text" value={addForm.name} onChange={chAdd} placeholder="Jane Doe" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input name="email" type="email" value={addForm.email} onChange={chAdd} placeholder="jane@company.com" required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600" />
               </div>
@@ -999,17 +1097,21 @@ function TeamPanel() {
 // ── Complaints Panel ──────────────────────────────────────────────────────────
 
 function ComplaintsPanel() {
-  const { user: me, companyId, companyName } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { user: me } = useSelector(s => s.auth)
+  const [submitComplaint, { isLoading: submitting }] = useSubmitComplaintMutation()
   const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
   const [submitted, setSubmitted] = useState(false)
   const chForm = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
-    setSubmitted(true)
-    setForm({ subject: '', priority: 'MEDIUM', message: '' })
+    try {
+      await submitComplaint({ subject: form.subject, priority: form.priority, description: form.message }).unwrap()
+      setSubmitted(true)
+      setForm({ subject: '', priority: 'MEDIUM', message: '' })
+    } catch {
+      toast.error('Failed to submit feedback')
+    }
   }
 
   return (
@@ -1053,8 +1155,8 @@ function ComplaintsPanel() {
             />
           </div>
           <div className="flex justify-end">
-            <button type="submit" className="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
-              Submit Feedback
+            <button type="submit" disabled={submitting} className="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-70">
+              {submitting ? 'Submitting…' : 'Submit Feedback'}
             </button>
           </div>
         </form>

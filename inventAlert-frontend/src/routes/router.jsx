@@ -11,10 +11,12 @@ import ManagerDashboard from '../pages/manager/ManagerDashboard'
 import StaffDashboard from '../pages/staff/StaffDashboard'
 import ProcurementDashboard from '../pages/procurement/ProcurementDashboard'
 import SuperAdminPortal from '../pages/superadmin/SuperAdminPortal'
+import SuperAdminLogin from '../pages/superadmin/SuperAdminLogin'
 
 const router = createBrowserRouter([
   { path: '/', element: <LandingPage /> },
   { path: '/login', element: <Login /> },
+  { path: '/superadmin/login', element: <SuperAdminLogin /> },
   { path: '/signup', element: <Signup /> },
   { path: '/forgot-password', element: <ForgotPassword /> },
   { path: '/reset-password', element: <ResetPassword /> },
@@ -55,7 +57,7 @@ const router = createBrowserRouter([
   {
     path: '/superadmin',
     element: (
-      <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+      <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
         <SuperAdminPortal />
       </ProtectedRoute>
     ),
