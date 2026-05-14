@@ -239,6 +239,25 @@ export const inventAlertApi = createApi({
       invalidatesTags: ['Reconciliation'],
     }),
 
+    // ── Alerts ────────────────────────────────────────────────────────────────────
+    getAlerts: build.query({
+      query: (params = {}) => ({ url: '/api/alerts', params }),
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Alert'],
+    }),
+    acknowledgeAlert: build.mutation({
+      query: id => ({ url: `/api/alerts/${id}/acknowledge`, method: 'PATCH' }),
+      invalidatesTags: ['Alert'],
+    }),
+    markAlertOrderPlaced: build.mutation({
+      query: id => ({ url: `/api/alerts/${id}/order-placed`, method: 'PATCH' }),
+      invalidatesTags: ['Alert'],
+    }),
+    resolveAlert: build.mutation({
+      query: id => ({ url: `/api/alerts/${id}/resolve`, method: 'PATCH' }),
+      invalidatesTags: ['Alert'],
+    }),
+
     // ── Threshold overrides ───────────────────────────────────────────────────
     setProductDefaultThreshold: build.mutation({
       query: ({ id, threshold }) => ({ url: `/api/products/${id}/threshold`, method: 'PATCH', body: { threshold } }),
@@ -333,6 +352,10 @@ export const {
   useDispatchTransferMutation,
   useAcceptTransferMutation,
   useRejectDeliveryMutation,
+  useGetAlertsQuery,
+  useAcknowledgeAlertMutation,
+  useMarkAlertOrderPlacedMutation,
+  useResolveAlertMutation,
   useGetReconciliationsQuery,
   useSubmitReconciliationMutation,
   useApproveReconciliationMutation,
