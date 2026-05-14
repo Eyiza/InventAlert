@@ -1072,9 +1072,19 @@ function IncomingPanel() {
   const [rejectDelivery] = useRejectDeliveryMutation()
   const [confirm, setConfirm] = useState(null)
 
+  const enrich = t => ({
+    ...t,
+    productName: products.find(p => p.id === t.productId)?.name || t.productId,
+    fromName: warehouses.find(w => w.id === t.fromWarehouseId)?.name || t.fromWarehouseId,
+  })
+
+  const suggested = allTransfers
+    .filter(t => t.toWarehouseId === warehouseId && t.status === 'SUGGESTED')
+    .map(enrich)
+
   const incoming = allTransfers
     .filter(t => t.toWarehouseId === warehouseId && t.status === 'IN_TRANSIT')
-    .map(t => ({ ...t, productName: products.find(p => p.id === t.productId)?.name || t.productId, fromName: warehouses.find(w => w.id === t.fromWarehouseId)?.name || t.fromWarehouseId }))
+    .map(enrich)
 
   const handleAccept = async t => {
     try {
@@ -1087,9 +1097,50 @@ function IncomingPanel() {
   }
 
   return (
-    <div>
-      <PageHeader title="Incoming Transfers" subtitle="Shipments in transit headed to your warehouse" />
+    <div className="space-y-6">
+      <PageHeader title="Incoming Transfers" subtitle="Pending suggestions and shipments headed to your warehouse" />
+
+      {suggested.length > 0 && (
+        <div className="bg-white rounded-xl border border-blue-200">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-blue-100 bg-blue-50 rounded-t-xl">
+            <div className="w-2 h-2 rounded-full bg-blue-500" />
+            <h3 className="text-sm font-semibold text-blue-800">Suggested Transfers</h3>
+            <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">{suggested.length}</span>
+          </div>
+          <p className="px-5 py-2 text-xs text-blue-600 border-b border-blue-50">
+            These transfers have been suggested by the system or requested from another warehouse. Awaiting approval from their warehouse manager before dispatch.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'From Warehouse', 'Qty', 'Suggested'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {suggested.map(t => (
+                  <tr key={t.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-semibold text-gray-900">{t.productName}</td>
+                    <td className="px-5 py-3 text-gray-600">{t.fromName}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{t.quantity}</td>
+                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDT(t.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900">In Transit</h3>
+          {incoming.length > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-500 text-white">{incoming.length}</span>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1101,7 +1152,7 @@ function IncomingPanel() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {incoming.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">No incoming transfers awaiting your action.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-400 text-sm">No shipments currently in transit to your warehouse.</td></tr>
               ) : incoming.map(t => (
                 <tr key={t.id} className="hover:bg-gray-50/60">
                   <td className="px-5 py-3 font-semibold text-gray-900">{t.productName}</td>
@@ -1135,9 +1186,19 @@ function OutgoingPanel() {
   const [dispatchTransfer] = useDispatchTransferMutation()
   const [confirm, setConfirm] = useState(null)
 
+  const enrich = t => ({
+    ...t,
+    productName: products.find(p => p.id === t.productId)?.name || t.productId,
+    toName: warehouses.find(w => w.id === t.toWarehouseId)?.name || t.toWarehouseId,
+  })
+
+  const pending = allTransfers
+    .filter(t => t.fromWarehouseId === warehouseId && t.status === 'SUGGESTED')
+    .map(enrich)
+
   const outgoing = allTransfers
     .filter(t => t.fromWarehouseId === warehouseId && t.status === 'APPROVED')
-    .map(t => ({ ...t, productName: products.find(p => p.id === t.productId)?.name || t.productId, toName: warehouses.find(w => w.id === t.toWarehouseId)?.name || t.toWarehouseId }))
+    .map(enrich)
 
   const handleDispatch = async t => {
     try {
@@ -1154,9 +1215,50 @@ function OutgoingPanel() {
   }
 
   return (
-    <div>
-      <PageHeader title="Outgoing Transfers" subtitle="Approved transfers ready to be dispatched from your warehouse" />
+    <div className="space-y-6">
+      <PageHeader title="Outgoing Transfers" subtitle="Your transfer requests and approved shipments ready to dispatch" />
+
+      {pending.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-100 bg-amber-50 rounded-t-xl">
+            <div className="w-2 h-2 rounded-full bg-amber-500" />
+            <h3 className="text-sm font-semibold text-amber-800">Pending Approval</h3>
+            <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">{pending.length}</span>
+          </div>
+          <p className="px-5 py-2 text-xs text-amber-600 border-b border-amber-50">
+            These requests are awaiting review by your warehouse manager. No action required from you yet.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Product', 'To Warehouse', 'Qty', 'Requested'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {pending.map(t => (
+                  <tr key={t.id} className="hover:bg-gray-50/60">
+                    <td className="px-5 py-3 font-semibold text-gray-900">{t.productName}</td>
+                    <td className="px-5 py-3 text-gray-600">{t.toName}</td>
+                    <td className="px-5 py-3 font-medium text-gray-900">{t.quantity}</td>
+                    <td className="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">{fmtDT(t.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-900">Ready to Dispatch</h3>
+          {outgoing.length > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500 text-white">{outgoing.length}</span>
+          )}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1186,6 +1288,7 @@ function OutgoingPanel() {
           </table>
         </div>
       </div>
+
       {confirm && (
         <ConfirmDialog
           title="Confirm Dispatch"
