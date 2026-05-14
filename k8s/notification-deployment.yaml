@@ -90,8 +90,9 @@ spec:
             httpGet:
               path: /actuator/health
               port: 8083
-            initialDelaySeconds: 45
+            initialDelaySeconds: 60
             periodSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 6
           livenessProbe:
             httpGet:

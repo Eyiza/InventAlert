@@ -159,7 +159,7 @@ jobs:
           for deploy in identity-service inventory-service analytics-service notification-service; do
             echo "▶ Waiting for $deploy..."
             kubectl rollout status deployment/"$deploy" \
-              -n "${{ env.NAMESPACE }}" --timeout=300s
+              -n "${{ env.NAMESPACE }}" --timeout=480s
           done
 
       # If the rollout timed out or a pod crashed, undo to the previous revision
