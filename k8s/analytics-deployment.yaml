@@ -28,6 +28,7 @@ spec:
       containers:
         - name: analytics-service
           image: <ECR_URI>/inventalert-analytics-service:latest
+          imagePullPolicy: Always
           env:
             - name: CLICKHOUSE_HOST
               value: "clickhouse"

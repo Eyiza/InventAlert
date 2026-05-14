@@ -28,6 +28,7 @@ spec:
       containers:
         - name: notification-service
           image: <ECR_URI>/inventalert-notification-service:latest
+          imagePullPolicy: Always
           env:
             - name: REDIS_HOST
               value: "redis"
@@ -89,7 +90,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /actuator/health
-              port: 8090
+              port: 8083
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
@@ -97,7 +98,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /actuator/health
-              port: 8090
+              port: 8083
             initialDelaySeconds: 90
             periodSeconds: 20
             timeoutSeconds: 5
@@ -115,6 +116,3 @@ spec:
     - name: http
       port: 8083
       targetPort: 8083
-    - name: management
-      port: 8090
-      targetPort: 8090
