@@ -46,6 +46,9 @@ class MovementServiceTest {
     private ThresholdCheckService thresholdCheckService;
 
     @Mock
+    private RestockAlertService restockAlertService;
+
+    @Mock
     private StockMovementProducer movementProducer;
 
     @Mock

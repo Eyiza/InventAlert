@@ -1,8 +1,6 @@
 package com.inventalert.inventoryService.service;
 
-import com.inventalert.inventoryService.model.AlertStatus;
 import com.inventalert.inventoryService.model.StockLevel;
-import com.inventalert.inventoryService.repository.RestockAlertRepository;
 import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.repository.TransferSuggestionRepository;
 import com.inventalert.inventoryService.service.impl.ThresholdCheckServiceImpl;
@@ -25,9 +23,6 @@ class ThresholdCheckServiceTest {
 
     @Mock
     private StockLevelRepository stockLevelRepository;
-
-    @Mock
-    private RestockAlertRepository restockAlertRepository;
 
     @Mock
     private TransferSuggestionRepository transferSuggestionRepository;
@@ -70,7 +65,8 @@ class ThresholdCheckServiceTest {
     void checkThreshold_createsAlertWhenNoCandidates() {
         when(stockLevelRepository.findByProductIdAndWarehouseId("p1", "w1"))
                 .thenReturn(Optional.of(lowStock));
-        when(restockAlertRepository.existsByProductIdAndWarehouseIdAndStatus("p1", "w1", AlertStatus.OPEN))
+        when(transferSuggestionRepository.existsByProductIdAndToWarehouseIdAndStatusIn(
+                eq("p1"), eq("w1"), anyList()))
                 .thenReturn(false);
         when(stockLevelRepository.findByProductIdAndWarehouseIdNot("p1", "w1"))
                 .thenReturn(List.of()); // no surplus candidates
@@ -85,8 +81,6 @@ class ThresholdCheckServiceTest {
     void checkThreshold_createsSuggestionWhenSurplusExists() {
         when(stockLevelRepository.findByProductIdAndWarehouseId("p1", "w1"))
                 .thenReturn(Optional.of(lowStock));
-        when(restockAlertRepository.existsByProductIdAndWarehouseIdAndStatus("p1", "w1", AlertStatus.OPEN))
-                .thenReturn(false);
         // surplusStock has 100 - 10 = 90 surplus, shortage = 20 - 5 = 15 -> qualifies
         when(stockLevelRepository.findByProductIdAndWarehouseIdNot("p1", "w1"))
                 .thenReturn(List.of(surplusStock));
@@ -96,19 +90,21 @@ class ThresholdCheckServiceTest {
 
         thresholdCheckService.checkThreshold("p1", "w1", "company1");
 
+        verify(restockAlertService).createAlert(eq("p1"), eq("w1"), anyInt(), anyInt(), eq("company1"));
         verify(transferService).createSuggestion(eq("p1"), eq("w1"), anyList(), eq(15), eq("company1"));
-        verify(restockAlertService, never()).createAlert(any(), any(), anyInt(), anyInt(), any());
     }
 
     @Test
-    void checkThreshold_skipsWhenOpenAlertAlreadyExists() {
+    void checkThreshold_skipsTransferSuggestionWhenPendingExists() {
         when(stockLevelRepository.findByProductIdAndWarehouseId("p1", "w1"))
                 .thenReturn(Optional.of(lowStock));
-        when(restockAlertRepository.existsByProductIdAndWarehouseIdAndStatus("p1", "w1", AlertStatus.OPEN))
-                .thenReturn(true);
+        when(transferSuggestionRepository.existsByProductIdAndToWarehouseIdAndStatusIn(
+                eq("p1"), eq("w1"), anyList()))
+                .thenReturn(true); // pending suggestion already exists
 
         thresholdCheckService.checkThreshold("p1", "w1", "company1");
 
-        verifyNoInteractions(restockAlertService, transferService);
+        verify(restockAlertService).createAlert(eq("p1"), eq("w1"), anyInt(), anyInt(), eq("company1"));
+        verify(transferService, never()).createSuggestion(any(), any(), any(), anyInt(), any());
     }
 }
