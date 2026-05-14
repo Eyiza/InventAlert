@@ -43,14 +43,16 @@ public class MovementController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<List<StockMovementResponse>> listMovements(
             @RequestParam(required = false) String productId,
             @RequestParam(required = false) String warehouseId,
             @RequestParam(required = false) MovementType type,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
-        return ResponseEntity.ok(movementService.listMovements(productId, warehouseId, type, from, to));
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String effectiveWarehouseId = "ADMIN".equals(principal.getRole()) ? warehouseId : principal.getWarehouseId();
+        return ResponseEntity.ok(movementService.listMovements(productId, effectiveWarehouseId, type, from, to));
     }
 
     @PostMapping(value = "/import/{warehouseId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

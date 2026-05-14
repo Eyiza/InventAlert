@@ -9,7 +9,7 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetUsersQuery, useCreateUserMutation,
   useUpdateUserRoleMutation, useDeactivateUserMutation, useReactivateUserMutation,
-  useGetWarehousesQuery, useGetProductsQuery, useGetStockByWarehouseQuery, useGetAllStockQuery,
+  useGetWarehousesQuery, useGetProductsQuery, useGetStockByWarehouseQuery,
   useGetMovementsQuery,
   useGetTransfersQuery, useApproveTransferMutation, useRejectTransferMutation,
   useGetReconciliationsQuery, useApproveReconciliationMutation, useRejectReconciliationMutation,
@@ -33,7 +33,8 @@ function SectionHeader({ title, subtitle }) {
 // ── Stock Overview ────────────────────────────────────────────────────────────
 
 function StockPanel() {
-  const { data: stockLevels = [], isLoading } = useGetAllStockQuery()
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [], isLoading } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
   const { data: products = [] } = useGetProductsQuery()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
@@ -400,7 +401,8 @@ function ReconciliationsPanel() {
 // ── Analytics Panel ───────────────────────────────────────────────────────────
 
 function AnalyticsPanel() {
-  const { data: stockLevels = [] } = useGetAllStockQuery()
+  const { warehouseId: myWarehouseId } = useSelector(s => s.auth)
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(myWarehouseId, { skip: !myWarehouseId })
   const { data: products = [] } = useGetProductsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
   const [section, setSection] = useState('velocity')

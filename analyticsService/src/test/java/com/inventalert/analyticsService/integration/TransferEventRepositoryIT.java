@@ -56,7 +56,7 @@ class TransferEventRepositoryIT extends ClickHouseIntegrationTest {
         repo.insert(new TransferEvent("s4-" + now.toEpochMilli(), companyId, "sug-s4", "p1", "wh-a", "wh-b",
                 null, null, "ACCEPTED", "2025-05-04T00:00:00Z"), Instant.parse("2025-05-04T00:00:00Z"));
 
-        List<Map<String, Object>> statusCounts = repo.transferCountByStatus(companyId);
+        List<Map<String, Object>> statusCounts = repo.transferCountByStatus(companyId, null);
         assertThat(statusCounts).hasSize(4);
         assertThat(statusCounts).extracting(m -> m.get("status"))
                 .containsExactlyInAnyOrder("SUGGESTED", "APPROVED", "REJECTED", "ACCEPTED");
@@ -70,7 +70,7 @@ class TransferEventRepositoryIT extends ClickHouseIntegrationTest {
         repo.insert(new TransferEvent("d2-" + System.nanoTime(), companyId, "sug-d2", "p", "wa", "wb",
                 10, 40.0, "SUGGESTED", "2025-05-02T00:00:00Z"), Instant.parse("2025-05-02T00:00:00Z"));
 
-        double avg = repo.avgDistanceKm(companyId);
+        double avg = repo.avgDistanceKm(companyId, null);
         assertThat(avg).isEqualTo(30.0);
     }
 }
