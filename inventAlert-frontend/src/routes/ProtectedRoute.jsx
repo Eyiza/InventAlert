@@ -9,7 +9,7 @@ const ROLE_HOME = {
   MANAGER: '/manager',
   WAREHOUSE_STAFF: '/staff',
   PROCUREMENT_OFFICER: '/procurement',
-  SUPERADMIN: '/superadmin',
+  SUPER_ADMIN: '/superadmin',
 }
 
 function SessionSync() {
@@ -40,7 +40,10 @@ function CompanyLogoSync() {
 
 export function ProtectedRoute({ children, allowedRoles }) {
   const { isAuthenticated, role, mustChangePassword } = useSelector(s => s.auth)
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (!isAuthenticated) {
+    const loginPath = window.location.pathname.startsWith('/superadmin') ? '/superadmin/login' : '/login'
+    return <Navigate to={loginPath} replace />
+  }
   if (mustChangePassword) return <Navigate to="/change-password" replace />
   if (allowedRoles && !allowedRoles.includes(role)) {
     return <Navigate to={ROLE_HOME[role] || '/login'} replace />

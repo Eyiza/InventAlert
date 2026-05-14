@@ -8,7 +8,9 @@ import java.time.LocalDateTime;
 public record ComplaintResponse(
         String id,
         String companyId,
+        String companyName,
         String submittedBy,
+        String submitterEmail,
         String subject,
         String description,
         ComplaintStatus status,
@@ -20,7 +22,9 @@ public record ComplaintResponse(
         return new ComplaintResponse(
                 c.getId(),
                 c.getCompanyId(),
+                null,
                 c.getSubmittedBy(),
+                null,
                 c.getSubject(),
                 c.getDescription(),
                 c.getStatus(),

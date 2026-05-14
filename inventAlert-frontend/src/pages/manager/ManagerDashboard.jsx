@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { submitComplaint } from '../../store/slices/superadminSlice'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import {
   useGetUsersQuery, useCreateUserMutation,
@@ -16,10 +15,12 @@ import {
   useGetStockSummaryQuery, useGetMovementTrendQuery, useGetTransferSummaryQuery,
   useGetAlertSummaryQuery, useGetAlertsByWarehouseQuery,
   useGetNotificationAnalyticsQuery,
+  useSubmitComplaintMutation,
 } from '../../apis/inventAlertApi'
 
-const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const toUTC = s => !s ? s : String(s).endsWith('Z') || String(s).includes('+') ? String(s) : /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? String(s) + 'T12:00:00Z' : String(s) + 'Z'
+const fmtDate = d => new Date(toUTC(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const fmtDT = d => new Date(toUTC(d)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 const resolveUser = (users, id) => { const u = users.find(u => u.id === id); return u?.name || u?.email?.split('@')[0] || id }
 
 function SectionHeader({ title, subtitle }) {
@@ -1004,17 +1005,21 @@ function TeamPanel() {
 // ── Complaints Panel ──────────────────────────────────────────────────────────
 
 function ComplaintsPanel() {
-  const { user: me, companyId, companyName } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const { user: me } = useSelector(s => s.auth)
+  const [submitComplaint, { isLoading: submitting }] = useSubmitComplaintMutation()
   const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
   const [submitted, setSubmitted] = useState(false)
   const chForm = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
-    setSubmitted(true)
-    setForm({ subject: '', priority: 'MEDIUM', message: '' })
+    try {
+      await submitComplaint({ subject: form.subject, priority: form.priority, description: form.message }).unwrap()
+      setSubmitted(true)
+      setForm({ subject: '', priority: 'MEDIUM', message: '' })
+    } catch {
+      toast.error('Failed to submit feedback')
+    }
   }
 
   return (
@@ -1058,8 +1063,8 @@ function ComplaintsPanel() {
             />
           </div>
           <div className="flex justify-end">
-            <button type="submit" className="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
-              Submit Feedback
+            <button type="submit" disabled={submitting} className="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-70">
+              {submitting ? 'Submitting…' : 'Submit Feedback'}
             </button>
           </div>
         </form>
