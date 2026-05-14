@@ -101,8 +101,10 @@ public class TransferServiceImpl implements TransferService {
                                       String suggestionId, int quantity) {
         try {
             String sql = "SELECT u.id, u.email FROM " + identityDbName + ".User u " +
-                         "WHERE u.companyId = ? AND u.role = 'MANAGER' AND u.isActive = 1";
-            List<Map<String, Object>> managers = jdbcTemplate.queryForList(sql, companyId);
+                         "JOIN " + identityDbName + ".WarehouseAssignment wa ON wa.userId = u.id " +
+                         "WHERE u.companyId = ? AND u.role = 'MANAGER' AND u.isActive = 1 " +
+                         "AND wa.warehouseId = ?";
+            List<Map<String, Object>> managers = jdbcTemplate.queryForList(sql, companyId, fromWarehouseId);
             for (Map<String, Object> manager : managers) {
                 alertEventProducer.publishNotificationEvent(
                         companyId,
