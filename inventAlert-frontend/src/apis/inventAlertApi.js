@@ -150,6 +150,11 @@ export const inventAlertApi = createApi({
       query: warehouseId => `/api/stock/${warehouseId}`,
       providesTags: (result, error, warehouseId) => [{ type: 'Stock', id: warehouseId }],
     }),
+    getAllStock: build.query({
+      query: (params = {}) => ({ url: '/api/stock', params: { size: 1000, ...params } }),
+      transformResponse: res => res.content ?? res,
+      providesTags: ['Stock'],
+    }),
 
     // ── Movements ─────────────────────────────────────────────────────────────
     getMovements: build.query({
@@ -193,6 +198,10 @@ export const inventAlertApi = createApi({
     }),
 
     // ── Notifications ─────────────────────────────────────────────────────────
+    getUnreadCount: build.query({
+      query: () => '/api/notifications/unread-count',
+      providesTags: ['Notification'],
+    }),
     getNotifications: build.query({
       query: () => '/api/notifications',
       transformResponse: res => res.map(n => ({ ...n, id: n.notificationId, isRead: n.read })),
@@ -261,6 +270,10 @@ export const inventAlertApi = createApi({
       query: ({ from, to } = {}) => ({ url: '/api/analytics/stock/movements/by-warehouse', params: { from, to } }),
       providesTags: ['Analytics'],
     }),
+    getNotificationAnalytics: build.query({
+      query: ({ from, to } = {}) => ({ url: '/api/analytics/notifications/summary', params: { from, to } }),
+      providesTags: ['Analytics'],
+    }),
 
   }),
 })
@@ -271,6 +284,9 @@ export const {
   useSetStockLevelThresholdMutation,
   useGetTopProductsQuery,
   useGetMovementsByWarehouseQuery,
+  useGetNotificationAnalyticsQuery,
+  useGetAllStockQuery,
+  useGetUnreadCountQuery,
   useLoginMutation,
   useSuperAdminLoginMutation,
   useSignupMutation,
