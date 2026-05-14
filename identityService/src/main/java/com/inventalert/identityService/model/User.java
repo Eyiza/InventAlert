@@ -21,6 +21,10 @@ public class User {
     private String email;
 
     @Column(nullable = false)
+    @Builder.Default
+    private String name = "";
+
+    @Column(nullable = false)
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)

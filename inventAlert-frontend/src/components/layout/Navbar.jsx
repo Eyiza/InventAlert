@@ -213,7 +213,7 @@ export default function Navbar({ title }) {
             </div>
             <div className="hidden sm:block">
               <p className="text-sm font-medium text-gray-900 leading-none">{user?.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{roleLabel}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{user?.email}</p>
             </div>
           </div>
 

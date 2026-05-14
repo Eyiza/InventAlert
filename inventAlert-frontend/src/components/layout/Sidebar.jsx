@@ -30,7 +30,7 @@ export default function Sidebar({ navItems = [], activeTab, onTabChange }) {
             )}
             <div className="min-w-0">
               <p className="text-white font-semibold text-sm leading-tight truncate">{companyName}</p>
-              <p className="text-teal-200 text-xs font-medium">Workspace</p>
+              <p className="text-teal-200 text-xs font-medium">Inventory</p>
             </div>
           </div>
         ) : (

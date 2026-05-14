@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public record UserResponse(
         String id,
         String companyId,
+        String name,
         String email,
         Role role,
         boolean isActive,
@@ -17,6 +18,7 @@ public record UserResponse(
         return new UserResponse(
                 user.getId(),
                 user.getCompanyId(),
+                user.getName(),
                 user.getEmail(),
                 user.getRole(),
                 user.isActive(),

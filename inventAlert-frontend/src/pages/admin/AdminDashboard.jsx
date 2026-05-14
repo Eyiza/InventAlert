@@ -1176,11 +1176,12 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
   const [showAdd, setShowAdd] = useState(openAdd)
   const [showTempPass, setShowTempPass] = useState(false)
   const [manageUser, setManageUser] = useState(null)
-  const [form, setForm] = useState({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'MANAGER', password: '', warehouseId: '' })
   const [search, setSearch] = useState('')
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const filtered = users.filter(u =>
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -1195,11 +1196,11 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
       return
     }
     try {
-      await createUser({ email: form.email, role: form.role, password: form.password, warehouseId: form.warehouseId || null }).unwrap()
+      await createUser({ name: form.name, email: form.email, role: form.role, password: form.password, warehouseId: form.warehouseId || null }).unwrap()
       toast.success('Team member added — they must set a new password on first login')
       setShowAdd(false)
       setShowTempPass(false)
-      setForm({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
+      setForm({ name: '', email: '', role: 'MANAGER', password: '', warehouseId: '' })
     } catch (err) {
       toast.error(err?.data?.message || 'Failed to create user')
     }
@@ -1264,7 +1265,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(u => {
-                  const displayName = u.email.split('@')[0]
+                  const displayName = u.name || u.email.split('@')[0]
                   return (
                     <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
                       <td className="px-5 py-3">
@@ -1303,6 +1304,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
       {showAdd && (
         <Modal title="Add Team Member" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleAdd} className="space-y-3">
+            <Field label="Full Name" name="name" type="text" value={form.name} onChange={ch} placeholder="Jane Doe" required />
             <Field label="Email" name="email" type="email" value={form.email} onChange={ch} placeholder="jane@company.com" required />
             <Field label="Role">
               <select name="role" value={form.role} onChange={ch} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
