@@ -7,6 +7,8 @@ import com.inventalert.identityService.exception.ComplaintNotFoundException;
 import com.inventalert.identityService.model.Complaint;
 import com.inventalert.identityService.model.ComplaintStatus;
 import com.inventalert.identityService.repository.ComplaintRepository;
+import com.inventalert.identityService.repository.CompanyRepository;
+import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.service.ComplaintService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,8 @@ import java.util.List;
 public class ComplaintServiceImpl implements ComplaintService {
 
     private final ComplaintRepository complaintRepository;
+    private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
 
     @Override
     public ComplaintResponse submit(String companyId, String userId, SubmitComplaintRequest request) {
@@ -30,21 +34,21 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .description(request.getDescription())
                 .status(ComplaintStatus.OPEN)
                 .build();
-        return ComplaintResponse.from(complaintRepository.save(complaint));
+        return toResponse(complaintRepository.save(complaint));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ComplaintResponse> listForCompany(String companyId) {
         return complaintRepository.findAllByCompanyId(companyId)
-                .stream().map(ComplaintResponse::from).toList();
+                .stream().map(this::toResponse).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ComplaintResponse> listAll() {
         return complaintRepository.findAll()
-                .stream().map(ComplaintResponse::from).toList();
+                .stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -53,6 +57,26 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .orElseThrow(() -> new ComplaintNotFoundException(id));
         complaint.setStatus(ComplaintStatus.RESOLVED);
         complaint.setResolution(request.getResolution());
-        return ComplaintResponse.from(complaintRepository.save(complaint));
+        return toResponse(complaintRepository.save(complaint));
+    }
+
+    private ComplaintResponse toResponse(Complaint c) {
+        String companyName = null;
+        String submitterEmail = null;
+        try {
+            companyName = companyRepository.findById(c.getCompanyId())
+                    .map(company -> company.getCompanyName())
+                    .orElse(null);
+            submitterEmail = userRepository.findById(c.getSubmittedBy())
+                    .map(user -> user.getEmail())
+                    .orElse(null);
+        } catch (Exception ignored) {}
+        return new ComplaintResponse(
+                c.getId(), c.getCompanyId(), companyName,
+                c.getSubmittedBy(), submitterEmail,
+                c.getSubject(), c.getDescription(),
+                c.getStatus(), c.getResolution(),
+                c.getCreatedAt(), c.getUpdatedAt()
+        );
     }
 }
