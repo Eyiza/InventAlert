@@ -3,6 +3,8 @@ package com.inventalert.inventoryService.service.impl;
 import com.inventalert.inventoryService.dto.response.RestockAlertResponse;
 import com.inventalert.inventoryService.exception.AlertNotFoundException;
 import com.inventalert.inventoryService.exception.InvalidStateTransitionException;
+import com.inventalert.inventoryService.exception.StockNotChangedException;
+import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.kafka.AlertEventProducer;
 import com.inventalert.inventoryService.model.AlertStatus;
 import com.inventalert.inventoryService.model.RestockAlert;
@@ -24,6 +26,7 @@ import java.util.Map;
 public class RestockAlertServiceImpl implements RestockAlertService {
 
     private final RestockAlertRepository alertRepository;
+    private final StockLevelRepository stockLevelRepository;
     private final AlertEventProducer alertEventProducer;
     private final JdbcTemplate jdbcTemplate;
 
@@ -99,6 +102,13 @@ public class RestockAlertServiceImpl implements RestockAlertService {
         RestockAlert alert = findOrThrow(id);
         if (alert.getStatus() != AlertStatus.ORDER_PLACED) {
             throw new InvalidStateTransitionException("RestockAlert", alert.getStatus().name(), "resolve");
+        }
+        int currentStock = stockLevelRepository
+                .findByProductIdAndWarehouseId(alert.getProductId(), alert.getWarehouseId())
+                .map(sl -> sl.getCurrentStock())
+                .orElse(0);
+        if (currentStock <= alert.getThreshold()) {
+            throw new StockNotChangedException(currentStock, alert.getThreshold());
         }
         alert.setStatus(AlertStatus.RESOLVED);
         alertRepository.save(alert);
