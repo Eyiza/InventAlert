@@ -27,6 +27,7 @@ public class TransferEventProducer {
         event.put("productId", productId);
         event.put("quantity", quantity);
         event.put("distanceKm", distanceKm);
+        event.put("status", "SUGGESTED");
         event.put("timestamp", Instant.now().toString());
         kafkaTemplate.send("transfer.suggestion.created", companyId, event);
     }
