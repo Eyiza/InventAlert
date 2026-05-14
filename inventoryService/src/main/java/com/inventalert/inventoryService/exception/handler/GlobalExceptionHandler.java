@@ -4,6 +4,7 @@ import com.inventalert.inventoryService.dto.response.CsvImportErrorResponse;
 import com.inventalert.inventoryService.dto.response.ErrorResponse;
 import com.inventalert.inventoryService.exception.*;
 import java.time.LocalDateTime;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -11,7 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -75,6 +76,28 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
+        // @Retryable wraps non-retryable exceptions when a @Recover method is present — unwrap one level
+        Throwable cause = ex.getCause();
+        if (cause instanceof InsufficientStockException
+                || cause instanceof WarehouseNotAssignedException
+                || cause instanceof InvalidMovementTypeException
+                || cause instanceof CsvParseException) {
+            return error(HttpStatus.BAD_REQUEST, cause.getMessage());
+        }
+        if (cause instanceof InvalidStateTransitionException
+                || cause instanceof DuplicateSkuException
+                || cause instanceof StockConflictException) {
+            return error(HttpStatus.CONFLICT, cause.getMessage());
+        }
+        if (cause instanceof WarehouseNotFoundException
+                || cause instanceof ProductNotFoundException
+                || cause instanceof StockLevelNotFoundException
+                || cause instanceof TransferNotFoundException
+                || cause instanceof AlertNotFoundException
+                || cause instanceof ReconciliationNotFoundException) {
+            return error(HttpStatus.NOT_FOUND, cause.getMessage());
+        }
+        log.error("Unhandled exception in inventory service: {}", ex.getMessage(), ex);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
     }
 

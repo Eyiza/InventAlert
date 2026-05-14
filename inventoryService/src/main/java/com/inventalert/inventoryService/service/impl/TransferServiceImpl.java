@@ -22,6 +22,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -50,7 +51,7 @@ public class TransferServiceImpl implements TransferService {
     private String identityDbName;
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createSuggestion(String productId, String deficitWarehouseId,
                                   List<StockLevel> candidates, int shortage, String companyId) {
         Warehouse toWarehouse = warehouseRepository.findByIdAndIsActiveTrue(deficitWarehouseId)
@@ -100,10 +101,8 @@ public class TransferServiceImpl implements TransferService {
                                       String suggestionId, int quantity) {
         try {
             String sql = "SELECT u.id, u.email FROM " + identityDbName + ".User u " +
-                         "JOIN " + identityDbName + ".WarehouseAssignment wa ON wa.userId = u.id " +
-                         "WHERE wa.warehouseId = ? AND wa.companyId = ? " +
-                         "AND u.role = 'MANAGER' AND u.isActive = 1";
-            List<Map<String, Object>> managers = jdbcTemplate.queryForList(sql, fromWarehouseId, companyId);
+                         "WHERE u.companyId = ? AND u.role = 'MANAGER' AND u.isActive = 1";
+            List<Map<String, Object>> managers = jdbcTemplate.queryForList(sql, companyId);
             for (Map<String, Object> manager : managers) {
                 alertEventProducer.publishNotificationEvent(
                         companyId,
