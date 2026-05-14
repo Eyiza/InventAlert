@@ -6,12 +6,15 @@ import lombok.Data;
 @Data
 public class UpdateProductRequest {
 
-    @Size(min = 1)
+    @Size(min = 1, message = "Product name cannot be empty.")
     private String name;
 
-    @Size(min = 1)
+    @Size(min = 1, message = "SKU cannot be empty.")
+    private String sku;
+
+    @Size(min = 1, message = "Unit of measure cannot be empty.")
     private String unitOfMeasure;
 
-    @Min(0)
+    @Min(value = 0, message = "Threshold must be 0 or greater.")
     private Integer defaultThreshold;
 }

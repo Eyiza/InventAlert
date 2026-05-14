@@ -71,14 +71,14 @@ class AnalyticsQueryServiceTest {
         Instant from = Instant.parse("2025-01-01T00:00:00Z");
         Instant to = Instant.parse("2025-01-31T00:00:00Z");
 
-        when(stockMovementRepo.countAll(companyId)).thenReturn(0L);
-        when(stockMovementRepo.countByMovementType(companyId, "INTAKE")).thenReturn(0L);
-        when(stockMovementRepo.countByMovementType(companyId, "OUTBOUND_SALE")).thenReturn(0L);
-        when(stockMovementRepo.countByMovementType(companyId, "TRANSFER_OUT")).thenReturn(0L);
-        when(stockMovementRepo.topMovingProducts(eq(companyId), eq("OUTBOUND_SALE"), eq(10))).thenReturn(List.of());
-        when(stockMovementRepo.movementTrendByDay(eq(companyId), any(), any())).thenReturn(List.of());
+        when(stockMovementRepo.countAll(companyId, null)).thenReturn(0L);
+        when(stockMovementRepo.countByMovementType(companyId, "INTAKE", null)).thenReturn(0L);
+        when(stockMovementRepo.countByMovementType(companyId, "OUTBOUND_SALE", null)).thenReturn(0L);
+        when(stockMovementRepo.countByMovementType(companyId, "TRANSFER_OUT", null)).thenReturn(0L);
+        when(stockMovementRepo.topMovingProducts(eq(companyId), eq("OUTBOUND_SALE"), eq(10), isNull())).thenReturn(List.of());
+        when(stockMovementRepo.movementTrendByDay(eq(companyId), any(), any(), isNull())).thenReturn(List.of());
 
-        StockSummaryResponse result = service.getStockSummary(companyId, from, to);
+        StockSummaryResponse result = service.getStockSummary(companyId, from, to, null);
 
         assertThat(result.totalMovements()).isZero();
         assertThat(result.totalIntake()).isZero();
@@ -94,15 +94,15 @@ class AnalyticsQueryServiceTest {
         Instant from = Instant.parse("2025-01-01T00:00:00Z");
         Instant to = Instant.parse("2025-01-31T00:00:00Z");
 
-        when(stockMovementRepo.countAll(companyId)).thenReturn(300L);
-        when(stockMovementRepo.countByMovementType(companyId, "INTAKE")).thenReturn(100L);
-        when(stockMovementRepo.countByMovementType(companyId, "OUTBOUND_SALE")).thenReturn(150L);
-        when(stockMovementRepo.countByMovementType(companyId, "TRANSFER_OUT")).thenReturn(50L);
-        when(stockMovementRepo.topMovingProducts(any(), any(), anyInt()))
+        when(stockMovementRepo.countAll(companyId, null)).thenReturn(300L);
+        when(stockMovementRepo.countByMovementType(companyId, "INTAKE", null)).thenReturn(100L);
+        when(stockMovementRepo.countByMovementType(companyId, "OUTBOUND_SALE", null)).thenReturn(150L);
+        when(stockMovementRepo.countByMovementType(companyId, "TRANSFER_OUT", null)).thenReturn(50L);
+        when(stockMovementRepo.topMovingProducts(any(), any(), anyInt(), any()))
                 .thenReturn(List.of(Map.of("productId", "prod-1", "totalQty", 150L)));
-        when(stockMovementRepo.movementTrendByDay(any(), any(), any())).thenReturn(List.of());
+        when(stockMovementRepo.movementTrendByDay(any(), any(), any(), any())).thenReturn(List.of());
 
-        StockSummaryResponse result = service.getStockSummary(companyId, from, to);
+        StockSummaryResponse result = service.getStockSummary(companyId, from, to, null);
 
         assertThat(result.totalMovements()).isEqualTo(300L);
         assertThat(result.totalIntake()).isEqualTo(100L);
@@ -118,16 +118,16 @@ class AnalyticsQueryServiceTest {
         Instant from = Instant.parse("2025-01-01T00:00:00Z");
         Instant to = Instant.parse("2025-01-31T00:00:00Z");
 
-        when(transferRepo.transferCountByStatus(companyId)).thenReturn(List.of(
+        when(transferRepo.transferCountByStatus(companyId, null)).thenReturn(List.of(
                 Map.of("status", "SUGGESTED", "total", 10L),
                 Map.of("status", "APPROVED", "total", 7L),
                 Map.of("status", "REJECTED", "total", 2L),
                 Map.of("status", "ACCEPTED", "total", 5L)
         ));
-        when(transferRepo.avgDistanceKm(companyId)).thenReturn(42.5);
-        when(transferRepo.transferVolumeByProduct(any(), any(), any())).thenReturn(List.of());
+        when(transferRepo.avgDistanceKm(companyId, null)).thenReturn(42.5);
+        when(transferRepo.transferVolumeByProduct(any(), any(), any(), any())).thenReturn(List.of());
 
-        TransferSummaryResponse result = service.getTransferSummary(companyId, from, to);
+        TransferSummaryResponse result = service.getTransferSummary(companyId, from, to, null);
 
         assertThat(result.totalSuggested()).isEqualTo(10L);
         assertThat(result.totalApproved()).isEqualTo(7L);
@@ -142,11 +142,11 @@ class AnalyticsQueryServiceTest {
         Instant from = Instant.parse("2025-01-01T00:00:00Z");
         Instant to = Instant.parse("2025-01-31T00:00:00Z");
 
-        when(transferRepo.transferCountByStatus(companyId)).thenReturn(List.of());
-        when(transferRepo.avgDistanceKm(companyId)).thenReturn(0.0);
-        when(transferRepo.transferVolumeByProduct(any(), any(), any())).thenReturn(List.of());
+        when(transferRepo.transferCountByStatus(companyId, null)).thenReturn(List.of());
+        when(transferRepo.avgDistanceKm(companyId, null)).thenReturn(0.0);
+        when(transferRepo.transferVolumeByProduct(any(), any(), any(), any())).thenReturn(List.of());
 
-        TransferSummaryResponse result = service.getTransferSummary(companyId, from, to);
+        TransferSummaryResponse result = service.getTransferSummary(companyId, from, to, null);
 
         assertThat(result.totalSuggested()).isZero();
         assertThat(result.totalApproved()).isZero();

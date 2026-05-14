@@ -18,6 +18,7 @@ import com.inventalert.identityService.repository.CompanyRepository;
 import com.inventalert.identityService.repository.PasswordResetTokenRepository;
 import com.inventalert.identityService.repository.UserRepository;
 import com.inventalert.identityService.repository.WarehouseAssignmentRepository;
+import com.inventalert.identityService.security.exception.DeactivatedUserException;
 import com.inventalert.identityService.security.exception.InvalidCredentialsException;
 import com.inventalert.identityService.security.exception.SuspendedCompanyException;
 import com.inventalert.identityService.security.service.JwtUtil;
@@ -87,7 +88,7 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(InvalidCredentialsException::new);
 
         if (!user.isActive()) {
-            throw new InvalidCredentialsException();
+            throw new DeactivatedUserException();
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {

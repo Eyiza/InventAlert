@@ -2,6 +2,6 @@ package com.inventalert.inventoryService.exception;
 
 public class InvalidMovementTypeException extends RuntimeException {
     public InvalidMovementTypeException(String type) {
-        super("Invalid movement type via this endpoint: " + type + ". Use INTAKE or OUTBOUND_SALE only.");
+        super("Only stock intake and sales can be recorded through this form.");
     }
 }

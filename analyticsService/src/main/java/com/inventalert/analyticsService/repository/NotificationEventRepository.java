@@ -5,8 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public class NotificationEventRepository {
                 "(eventId, companyId, userId, notifType, referenceId, eventTime) " +
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 e.eventId(), e.companyId(), e.userId(), e.type(), e.referenceId(),
-                Timestamp.from(eventTime));
+                LocalDateTime.ofInstant(eventTime, ZoneOffset.UTC));
     }
 
     public long countAll(String companyId) {
@@ -44,7 +45,7 @@ public class NotificationEventRepository {
                 "SELECT notifType, count() AS total FROM notification_events " +
                 "WHERE companyId = ? AND eventTime BETWEEN ? AND ? " +
                 "GROUP BY notifType ORDER BY total DESC",
-                companyId, Timestamp.from(from), Timestamp.from(to));
+                companyId, LocalDateTime.ofInstant(from, ZoneOffset.UTC), LocalDateTime.ofInstant(to, ZoneOffset.UTC));
     }
 
     public List<Map<String, Object>> notificationVolumeByDay(String companyId, Instant from, Instant to) {
@@ -52,7 +53,7 @@ public class NotificationEventRepository {
                 "SELECT toDate(eventTime) AS day, count() AS total FROM notification_events " +
                 "WHERE companyId = ? AND eventTime BETWEEN ? AND ? " +
                 "GROUP BY day ORDER BY day",
-                companyId, Timestamp.from(from), Timestamp.from(to));
+                companyId, LocalDateTime.ofInstant(from, ZoneOffset.UTC), LocalDateTime.ofInstant(to, ZoneOffset.UTC));
     }
 
     public List<Map<String, Object>> topNotifiedUsers(String companyId, int limit) {

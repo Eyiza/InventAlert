@@ -43,7 +43,7 @@ class StockMovementRepositoryIT extends ClickHouseIntegrationTest {
 
         repo.insert(event, Instant.parse("2025-03-10T12:00:00Z"));
 
-        List<Map<String, Object>> top = repo.topMovingProducts(companyId, "OUTBOUND_SALE", 5);
+        List<Map<String, Object>> top = repo.topMovingProducts(companyId, "OUTBOUND_SALE", 5, null);
         assertThat(top).isNotEmpty();
         assertThat(top.get(0).get("productId")).isEqualTo("prod-top");
     }
@@ -60,7 +60,7 @@ class StockMovementRepositoryIT extends ClickHouseIntegrationTest {
 
         Instant from = Instant.parse("2025-03-01T00:00:00Z");
         Instant to = Instant.parse("2025-04-01T00:00:00Z");
-        List<Map<String, Object>> trend = repo.movementTrendByDay(companyId, from, to);
+        List<Map<String, Object>> trend = repo.movementTrendByDay(companyId, from, to, null);
         assertThat(trend).isNotEmpty();
     }
 }

@@ -7,6 +7,6 @@ import lombok.Data;
 public class SubmitComplaintRequest {
     private String subject;
 
-    @NotBlank
+    @NotBlank(message = "Please describe your issue.")
     private String description;
 }

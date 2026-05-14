@@ -32,10 +32,14 @@ public class ReconciliationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<Page<ReconciliationResponse>> list(
             @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(reconciliationService.list(pageable));
+        JwtUser principal = (JwtUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if ("ADMIN".equals(principal.getRole())) {
+            return ResponseEntity.ok(reconciliationService.list(pageable));
+        }
+        return ResponseEntity.ok(reconciliationService.listByWarehouse(principal.getWarehouseId(), pageable));
     }
 
     @PatchMapping("/{id}/approve")

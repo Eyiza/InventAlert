@@ -4,8 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public class CompanyEventRepository {
                 "(eventId, companyId, companyName, adminEmail, eventType, eventTime) " +
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 eventId, companyId, companyName, adminEmail, eventType,
-                Timestamp.from(eventTime));
+                LocalDateTime.ofInstant(eventTime, ZoneOffset.UTC));
     }
 
     public long countByEventType(String eventType) {

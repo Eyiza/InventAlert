@@ -32,7 +32,8 @@ public class StockAnalyticsController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         Instant[] range = resolveDateRange(from, to);
-        return ResponseEntity.ok(queryService.getStockSummary(user.getCompanyId(), range[0], range[1]));
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
+        return ResponseEntity.ok(queryService.getStockSummary(user.getCompanyId(), range[0], range[1], warehouseId));
     }
 
     @GetMapping("/top-products")
@@ -41,7 +42,8 @@ public class StockAnalyticsController {
             @AuthenticationPrincipal JwtUser user,
             @RequestParam(defaultValue = "OUTBOUND_SALE") String type,
             @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(queryService.getTopMovingProducts(user.getCompanyId(), type, limit));
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
+        return ResponseEntity.ok(queryService.getTopMovingProducts(user.getCompanyId(), type, limit, warehouseId));
     }
 
     @GetMapping("/movements/trend")
@@ -51,7 +53,8 @@ public class StockAnalyticsController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         Instant[] range = resolveDateRange(from, to);
-        return ResponseEntity.ok(queryService.getMovementTrendByDay(user.getCompanyId(), range[0], range[1]));
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
+        return ResponseEntity.ok(queryService.getMovementTrendByDay(user.getCompanyId(), range[0], range[1], warehouseId));
     }
 
     @GetMapping("/movements/by-warehouse")
@@ -61,7 +64,8 @@ public class StockAnalyticsController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         Instant[] range = resolveDateRange(from, to);
-        return ResponseEntity.ok(queryService.getMovementTrendByWarehouse(user.getCompanyId(), range[0], range[1]));
+        String warehouseId = "ADMIN".equals(user.getRole()) ? null : user.getWarehouseId();
+        return ResponseEntity.ok(queryService.getMovementTrendByWarehouse(user.getCompanyId(), range[0], range[1], warehouseId));
     }
 
     private Instant[] resolveDateRange(String from, String to) {

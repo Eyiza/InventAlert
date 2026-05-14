@@ -8,9 +8,9 @@ import lombok.Setter;
 @Setter
 public class LoginRequest {
 
-    @NotBlank
+    @NotBlank(message = "Email address is required.")
     private String email;
 
-    @NotBlank
+    @NotBlank(message = "Password is required.")
     private String password;
 }

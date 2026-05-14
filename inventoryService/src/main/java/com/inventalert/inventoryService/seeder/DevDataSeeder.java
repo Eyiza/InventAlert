@@ -1,5 +1,8 @@
 package com.inventalert.inventoryService.seeder;
 
+import com.inventalert.inventoryService.kafka.AlertEventProducer;
+import com.inventalert.inventoryService.kafka.StockMovementProducer;
+import com.inventalert.inventoryService.kafka.TransferEventProducer;
 import com.inventalert.inventoryService.model.*;
 import com.inventalert.inventoryService.multicompany.CompanyContext;
 import com.inventalert.inventoryService.multicompany.CompanySchemaService;
@@ -32,6 +35,22 @@ public class DevDataSeeder implements ApplicationRunner {
     private final StockMovementRepository stockMovementRepository;
     private final TransferSuggestionRepository transferSuggestionRepository;
     private final RestockAlertRepository restockAlertRepository;
+    private final StockMovementProducer movementProducer;
+    private final AlertEventProducer alertProducer;
+    private final TransferEventProducer transferProducer;
+
+    // Fixed warehouse IDs — must match identityService DevDataSeeder
+    private static final String WH_PHARMAPLUS_LAGOS   = "20000000-0000-0000-0000-000000000001";
+    private static final String WH_PHARMAPLUS_ABUJA   = "20000000-0000-0000-0000-000000000002";
+    private static final String WH_EKOFRESH_LAGOS     = "20000000-0000-0000-0000-000000000003";
+    private static final String WH_EKOFRESH_IBADAN    = "20000000-0000-0000-0000-000000000004";
+    private static final String WH_LAGOSLIVING_ISLAND = "20000000-0000-0000-0000-000000000005";
+    private static final String WH_LAGOSLIVING_LEKKI  = "20000000-0000-0000-0000-000000000006";
+    private static final String WH_TECHZONE_IKEJA     = "20000000-0000-0000-0000-000000000007";
+    private static final String WH_TECHZONE_ABUJA     = "20000000-0000-0000-0000-000000000008";
+
+    // Tracks the company being seeded so helper methods can publish Kafka events
+    private String currentCompanyId;
 
     @Override
     public void run(ApplicationArguments args) {
@@ -44,12 +63,14 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     public void seedCompany(String companyId, Runnable seeder) {
+        currentCompanyId = companyId;
         companySchemaService.provisionSchema(companyId);
         CompanyContext.set(companyId);
         try {
             self.doSeedCompany(seeder, companyId);
         } finally {
             CompanyContext.clear();
+            currentCompanyId = null;
         }
     }
 
@@ -66,9 +87,11 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedPharmaplus() {
         log.info("[Seeder] Seeding Pharmaplus Nigeria Ltd...");
-        Warehouse lagos = warehouse("Pharmaplus Lagos Central",
+        Warehouse lagos = warehouse(WH_PHARMAPLUS_LAGOS,
+                "Pharmaplus Lagos Central",
                 "10 Apapa Road, Lagos Island, Lagos", "6.4531", "3.3958");
-        Warehouse abuja = warehouse("Pharmaplus Abuja Hub",
+        Warehouse abuja = warehouse(WH_PHARMAPLUS_ABUJA,
+                "Pharmaplus Abuja Hub",
                 "Plot 22 Wuse Zone 5, Abuja FCT", "9.0679", "7.4951");
 
         Product paracetamol = product("Paracetamol 500mg Tablets",        "PHARM-001", "Boxes",   50);
@@ -89,18 +112,17 @@ public class DevDataSeeder implements ApplicationRunner {
         Product multivit    = product("Multivitamin Capsules Bottle/60",   "PHARM-016", "Bottles", 15);
         Product folicAcid   = product("Folic Acid 5mg Tablets",            "PHARM-017", "Boxes",   10);
 
-        // Lagos well-stocked; Abuja has several items below threshold
-        sl(paracetamol, lagos, 200, 50);  sl(paracetamol, abuja,  45, 50); // LOW
+        sl(paracetamol, lagos, 200, 50);  sl(paracetamol, abuja,  45, 50);
         sl(amoxicillin, lagos, 120, 30);  sl(amoxicillin, abuja,  25, 30);
         sl(vitaminC,    lagos,  80, 20);  sl(vitaminC,    abuja,  60, 20);
-        sl(ibuprofen,   lagos, 150, 30);  sl(ibuprofen,   abuja,  20, 30); // LOW
+        sl(ibuprofen,   lagos, 150, 30);  sl(ibuprofen,   abuja,  20, 30);
         sl(metformin,   lagos,  90, 20);  sl(metformin,   abuja,  55, 20);
         sl(cipro,       lagos,  60, 15);  sl(cipro,       abuja,  40, 15);
-        sl(chloroquine, lagos,  45, 10);  sl(chloroquine, abuja,   8, 10); // LOW
+        sl(chloroquine, lagos,  45, 10);  sl(chloroquine, abuja,   8, 10);
         sl(zinc,        lagos,  70, 15);  sl(zinc,        abuja,  30, 15);
         sl(ors,         lagos, 100, 25);  sl(ors,         abuja,  50, 25);
         sl(bpMonitor,   lagos,  20,  5);  sl(bpMonitor,   abuja,  12,  5);
-        sl(syringes,    lagos,  50, 10);  sl(syringes,    abuja,   8, 10); // LOW
+        sl(syringes,    lagos,  50, 10);  sl(syringes,    abuja,   8, 10);
         sl(gloves,      lagos,  80, 20);  sl(gloves,      abuja,  35, 20);
         sl(masks,       lagos, 120, 30);  sl(masks,       abuja,  70, 30);
         sl(antiseptic,  lagos,  60, 20);  sl(antiseptic,  abuja,  45, 20);
@@ -130,9 +152,11 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedEkoFresh() {
         log.info("[Seeder] Seeding Eko Fresh Market...");
-        Warehouse lagos  = warehouse("Eko Fresh Lagos Main",
+        Warehouse lagos  = warehouse(WH_EKOFRESH_LAGOS,
+                "Eko Fresh Lagos Main",
                 "Km 15 Ikorodu Road, Ketu, Lagos", "6.4698", "3.5852");
-        Warehouse ibadan = warehouse("Eko Fresh Ibadan Depot",
+        Warehouse ibadan = warehouse(WH_EKOFRESH_IBADAN,
+                "Eko Fresh Ibadan Depot",
                 "12 Ring Road, Ibadan, Oyo State", "7.3775", "3.9470");
 
         Product rice      = product("Rice 50kg Bag",                     "EKO-001", "Bags",    15);
@@ -152,10 +176,9 @@ public class DevDataSeeder implements ApplicationRunner {
         Product yamFlour  = product("Yam Flour (Elubo) 10kg",            "EKO-015", "Bags",    15);
         Product cornmeal  = product("Cornmeal (Ogi) 10kg Bag",           "EKO-016", "Bags",    10);
 
-        // Lagos main depot well-stocked; Ibadan has several items critical
-        sl(rice,      lagos,  80, 15);  sl(rice,      ibadan,  5, 15); // LOW
-        sl(beans,     lagos,  60, 15);  sl(beans,     ibadan,  8, 15); // LOW
-        sl(palmOil,   lagos,  40, 10);  sl(palmOil,   ibadan,  3, 10); // LOW
+        sl(rice,      lagos,  80, 15);  sl(rice,      ibadan,  5, 15);
+        sl(beans,     lagos,  60, 15);  sl(beans,     ibadan,  8, 15);
+        sl(palmOil,   lagos,  40, 10);  sl(palmOil,   ibadan,  3, 10);
         sl(tomPaste,  lagos,  50, 10);  sl(tomPaste,  ibadan, 20, 10);
         sl(semolina,  lagos,  90, 20);  sl(semolina,  ibadan, 45, 20);
         sl(garri,     lagos,  70, 20);  sl(garri,     ibadan, 30, 20);
@@ -192,9 +215,11 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedLagosLiving() {
         log.info("[Seeder] Seeding Lagos Living Furniture...");
-        Warehouse island = warehouse("Lagos Living Island Showroom",
+        Warehouse island = warehouse(WH_LAGOSLIVING_ISLAND,
+                "Lagos Living Island Showroom",
                 "45 Broad Street, Lagos Island, Lagos", "6.4536", "3.3966");
-        Warehouse lekki  = warehouse("Lagos Living Lekki Distribution",
+        Warehouse lekki  = warehouse(WH_LAGOSLIVING_LEKKI,
+                "Lagos Living Lekki Distribution",
                 "Km 21 Lekki-Epe Expressway, Lekki, Lagos", "6.4281", "3.5418");
 
         Product sofa3      = product("3-Seater Sofa (Fabric)",          "FURN-001", "Units", 3);
@@ -213,11 +238,11 @@ public class DevDataSeeder implements ApplicationRunner {
         Product cornerSofa = product("L-Shaped Corner Sofa",            "FURN-014", "Units", 2);
         Product bunkBed    = product("Bunk Bed (Metal Frame)",          "FURN-015", "Units", 3);
 
-        sl(sofa3,      island, 15, 3);  sl(sofa3,      lekki,  2, 3); // LOW
+        sl(sofa3,      island, 15, 3);  sl(sofa3,      lekki,  2, 3);
         sl(execChair,  island, 12, 3);  sl(execChair,  lekki,  8, 3);
         sl(diningTbl,  island,  8, 2);  sl(diningTbl,  lekki,  5, 2);
         sl(bedFrame,   island, 18, 3);  sl(bedFrame,   lekki, 10, 3);
-        sl(wardrobe,   island, 20, 3);  sl(wardrobe,   lekki,  1, 3); // LOW
+        sl(wardrobe,   island, 20, 3);  sl(wardrobe,   lekki,  1, 3);
         sl(tvStand,    island, 25, 4);  sl(tvStand,    lekki, 14, 4);
         sl(bookshelf,  island, 20, 4);  sl(bookshelf,  lekki, 12, 4);
         sl(desk,       island, 15, 3);  sl(desk,       lekki,  8, 3);
@@ -249,9 +274,11 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private void seedTechZone() {
         log.info("[Seeder] Seeding TechZone Gadgets...");
-        Warehouse ikeja = warehouse("TechZone Ikeja Computer Village",
+        Warehouse ikeja = warehouse(WH_TECHZONE_IKEJA,
+                "TechZone Ikeja Computer Village",
                 "Computer Village, Obafemi Awolowo Way, Ikeja, Lagos", "6.5954", "3.3434");
-        Warehouse abuja = warehouse("TechZone Abuja Annex",
+        Warehouse abuja = warehouse(WH_TECHZONE_ABUJA,
+                "TechZone Abuja Annex",
                 "Plot 44 Garki Area 11, Abuja FCT", "9.0165", "7.4892");
 
         Product galaxyA55  = product("Samsung Galaxy A55 128GB",          "TECH-001", "Units",  5);
@@ -272,8 +299,8 @@ public class DevDataSeeder implements ApplicationRunner {
         Product usbHub     = product("USB Hub 7-Port (USB-C)",            "TECH-016", "Units", 10);
         Product keyboard   = product("Rapoo E9350G Wireless Keyboard",    "TECH-017", "Units", 10);
 
-        sl(galaxyA55,  ikeja,  25,  5);  sl(galaxyA55,  abuja,  4,  5); // LOW
-        sl(iphone15,   ikeja,  30,  5);  sl(iphone15,   abuja,  3,  5); // LOW
+        sl(galaxyA55,  ikeja,  25,  5);  sl(galaxyA55,  abuja,  4,  5);
+        sl(iphone15,   ikeja,  30,  5);  sl(iphone15,   abuja,  3,  5);
         sl(camon30,    ikeja,  40,  8);  sl(camon30,    abuja, 12,  8);
         sl(redmiNote,  ikeja,  22,  5);  sl(redmiNote,  abuja,  8,  5);
         sl(airpods,    ikeja,  20,  5);  sl(airpods,    abuja, 10,  5);
@@ -308,9 +335,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private Warehouse warehouse(String name, String address, String lat, String lon) {
+    private Warehouse warehouse(String id, String name, String address, String lat, String lon) {
         return warehouseRepository.save(Warehouse.builder()
-                .name(name).address(address)
+                .id(id).name(name).address(address)
                 .latitude(new BigDecimal(lat)).longitude(new BigDecimal(lon))
                 .isActive(true).createdBy("seeder")
                 .build());
@@ -331,28 +358,37 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private void mv(Product p, Warehouse w, MovementType type, int qty, String ref) {
-        stockMovementRepository.save(StockMovement.builder()
+        StockMovement saved = stockMovementRepository.save(StockMovement.builder()
                 .productId(p.getId()).warehouseId(w.getId())
                 .type(type).quantity(qty).referenceId(ref)
                 .createdBy("seeder")
                 .build());
+        movementProducer.publishMovementCreated(
+                currentCompanyId, saved.getId(), p.getId(), w.getId(), type, qty);
     }
 
     private void tf(Product p, Warehouse from, Warehouse to,
                     int qty, String distKm, DistanceSource src) {
-        transferSuggestionRepository.save(TransferSuggestion.builder()
+        TransferSuggestion saved = transferSuggestionRepository.save(TransferSuggestion.builder()
                 .productId(p.getId())
                 .fromWarehouseId(from.getId()).toWarehouseId(to.getId())
                 .quantity(qty).distanceKm(new BigDecimal(distKm))
                 .distanceSource(src).status(TransferStatus.SUGGESTED)
                 .build());
+        transferProducer.publishTransferSuggestionCreated(
+                currentCompanyId, saved.getId(),
+                from.getId(), to.getId(),
+                p.getId(), qty, Double.parseDouble(distKm));
     }
 
     private void alert(Product p, Warehouse w, int stockAtAlert, int threshold) {
-        restockAlertRepository.save(RestockAlert.builder()
+        RestockAlert saved = restockAlertRepository.save(RestockAlert.builder()
                 .productId(p.getId()).warehouseId(w.getId())
                 .stockAtAlert(stockAtAlert).threshold(threshold)
                 .status(AlertStatus.OPEN)
                 .build());
+        alertProducer.publishAlertCreated(
+                currentCompanyId, saved.getId(), p.getId(), w.getId(),
+                null, stockAtAlert, threshold);
     }
 }

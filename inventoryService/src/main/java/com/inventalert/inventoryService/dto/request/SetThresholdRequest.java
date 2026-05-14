@@ -6,6 +6,6 @@ import lombok.Data;
 @Data
 public class SetThresholdRequest {
 
-    @Min(0)
+    @Min(value = 0, message = "Threshold must be 0 or greater.")
     private int threshold;
 }

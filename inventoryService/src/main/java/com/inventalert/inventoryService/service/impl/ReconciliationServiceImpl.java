@@ -66,6 +66,11 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     }
 
     @Override
+    public Page<ReconciliationResponse> listByWarehouse(String warehouseId, Pageable pageable) {
+        return reconciliationRepository.findByWarehouseId(warehouseId, pageable).map(this::toResponse);
+    }
+
+    @Override
     @Retryable(
         retryFor = ObjectOptimisticLockingFailureException.class,
         maxAttempts = 3,
