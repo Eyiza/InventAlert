@@ -2,6 +2,7 @@ package com.inventalert.analyticsService.exception.handler;
 
 import com.inventalert.analyticsService.dto.response.ErrorResponse;
 import com.inventalert.analyticsService.exception.ClickHouseQueryException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.time.format.DateTimeParseException;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -38,6 +40,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
+        log.error("Unhandled exception in analytics service: {}", ex.getMessage(), ex);
         return ResponseEntity.status(500).body(new ErrorResponse("Internal server error"));
     }
 }

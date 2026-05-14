@@ -10,7 +10,6 @@ import com.inventalert.inventoryService.service.RestockAlertService;
 import com.inventalert.inventoryService.service.ThresholdCheckService;
 import com.inventalert.inventoryService.service.TransferService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,7 +25,6 @@ public class ThresholdCheckServiceImpl implements ThresholdCheckService {
     private final TransferService transferService;
 
     @Override
-    @Async
     public void checkThreshold(String productId, String warehouseId, String companyId) {
         StockLevel level = stockLevelRepository.findByProductIdAndWarehouseId(productId, warehouseId)
                 .orElseThrow();

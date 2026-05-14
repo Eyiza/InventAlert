@@ -1,6 +1,7 @@
 package com.inventalert.inventoryService.controller;
 
 import com.inventalert.inventoryService.dto.response.RestockAlertResponse;
+import com.inventalert.inventoryService.model.AlertStatus;
 import com.inventalert.inventoryService.security.model.JwtUser;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import lombok.RequiredArgsConstructor;
@@ -20,8 +21,9 @@ public class AlertController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('PROCUREMENT_OFFICER','MANAGER')")
-    public ResponseEntity<List<RestockAlertResponse>> list() {
-        return ResponseEntity.ok(alertService.list());
+    public ResponseEntity<List<RestockAlertResponse>> list(
+            @RequestParam(required = false) AlertStatus status) {
+        return ResponseEntity.ok(alertService.list(status));
     }
 
     @PatchMapping("/{id}/acknowledge")
