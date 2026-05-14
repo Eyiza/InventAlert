@@ -1,0 +1,99 @@
+name: Deploy to EKS
+
+on:
+  push:
+    branches: [production]
+
+env:
+  AWS_REGION: eu-west-1
+  CLUSTER_NAME: inventalert-cluster
+  NAMESPACE: inventalert-prod
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. AWS credentials ─────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+
+      # ── 3. Log in to ECR ───────────────────────────────────────────────────
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── 4. Build and push all 4 backend images ─────────────────────────────
+      - name: Build and push backend images
+        env:
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          declare -A SERVICES=(
+            ["identityService"]="identity-service"
+            ["inventoryService"]="inventory-service"
+            ["analyticsService"]="analytics-service"
+            ["notificationService"]="notification-service"
+          )
+          for dir in "${!SERVICES[@]}"; do
+            svc="${SERVICES[$dir]}"
+            echo "Building $svc..."
+            docker build -t "$ECR_URI/inventalert-$svc:latest" "./$dir"
+            docker push "$ECR_URI/inventalert-$svc:latest"
+          done
+
+      # ── 5. Update kubeconfig ───────────────────────────────────────────────
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      # ── 6. Apply k8s manifests and roll out new images ────────────────────
+      - name: Deploy to EKS
+        env:
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          for manifest in \
+            k8s/identity-deployment.yaml \
+            k8s/inventory-deployment.yaml \
+            k8s/analytics-deployment.yaml \
+            k8s/notification-deployment.yaml \
+            k8s/nginx-deployment.yaml; do
+            sed "s|<ECR_URI>|${ECR_URI}|g" "$manifest" | kubectl apply -f -
+          done
+
+          kubectl rollout restart deployment -n ${{ env.NAMESPACE }}
+
+          for deploy in identity-service inventory-service analytics-service notification-service; do
+            kubectl rollout status deployment/$deploy \
+              -n ${{ env.NAMESPACE }} --timeout=300s
+          done
+
+      # ── 7. Build and deploy frontend to S3 ────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: inventAlert-frontend/package-lock.json
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          cd inventAlert-frontend
+          npm ci
+          npm run build
+
+      - name: Sync frontend to S3
+        run: |
+          aws s3 sync inventAlert-frontend/dist/ \
+            s3://${{ secrets.S3_BUCKET }} --delete
