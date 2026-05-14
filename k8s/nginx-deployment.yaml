@@ -5,6 +5,11 @@ metadata:
   namespace: inventalert-prod
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: nginx
@@ -30,10 +35,9 @@ spec:
               cpu: "200m"
               memory: "128Mi"
           readinessProbe:
-            httpGet:
-              path: /api/auth/
+            tcpSocket:
               port: 80
-            initialDelaySeconds: 10
+            initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
       volumes:
@@ -49,6 +53,7 @@ metadata:
   namespace: inventalert-prod
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-type: "classic"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
     service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
 spec:
   type: LoadBalancer

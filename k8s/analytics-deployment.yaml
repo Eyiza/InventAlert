@@ -5,6 +5,11 @@ metadata:
   namespace: inventalert-prod
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: analytics-service
@@ -46,6 +51,11 @@ spec:
                 secretKeyRef:
                   name: inventalert-secrets
                   key: JWT_SECRET
+            - name: CORS_ALLOWED_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: inventalert-secrets
+                  key: CORS_ALLOWED_ORIGINS
             - name: JAVA_TOOL_OPTIONS
               value: "-Xms256m -Xmx512m"
           ports:

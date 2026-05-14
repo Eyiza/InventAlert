@@ -45,6 +45,9 @@ spec:
       labels:
         app: kafka
     spec:
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 1000
       containers:
         - name: kafka
           image: confluentinc/cp-kafka:7.6.0
@@ -66,7 +69,7 @@ spec:
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: "CONTROLLER"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "INTERNAL"
+              value: "PLAINTEXT"
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
               value: "1"
             - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
@@ -75,6 +78,12 @@ spec:
               value: "1"
             - name: CLUSTER_ID
               value: "MkU3OEVBNTcwNTJENDM2Qk"
+            # Use a subdirectory so EBS lost+found doesn't confuse Kafka
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data/kafka-logs"
+            # Cap heap so Kafka doesn't OOM on t3.medium (4GB node)
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256m -Xmx512m"
           ports:
             - containerPort: 9092
             - containerPort: 29092
@@ -90,22 +99,17 @@ spec:
               cpu: "1500m"
               memory: "2Gi"
           readinessProbe:
-            exec:
-              command:
-                - kafka-broker-api-versions
-                - --bootstrap-server
-                - localhost:9092
-            initialDelaySeconds: 45
-            periodSeconds: 15
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
-            exec:
-              command:
-                - kafka-broker-api-versions
-                - --bootstrap-server
-                - localhost:9092
-            initialDelaySeconds: 90
-            periodSeconds: 30
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 5
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
