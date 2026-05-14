@@ -1080,8 +1080,9 @@ function IncomingPanel() {
     try {
       await acceptTransfer(t.id).unwrap()
       toast.success('Transfer accepted — stock updated')
-    } catch {
-      toast.error('Failed to accept transfer')
+    } catch (err) {
+      const msg = err?.data?.message
+      toast.error(msg || 'Failed to accept transfer')
     }
   }
 
@@ -1110,7 +1111,7 @@ function IncomingPanel() {
                   <td className="px-5 py-3">
                     <div className="flex gap-2">
                       <button onClick={() => setConfirm({ action: () => handleAccept(t), title: 'Accept Delivery', message: `Accept ${t.quantity} units of ${t.productName} from ${t.fromName}? Stock will be added to your warehouse.`, label: 'Accept Delivery' })} className="px-3 py-1.5 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium">Accept</button>
-                      <button onClick={() => setConfirm({ action: async () => { try { await rejectDelivery(t.id).unwrap(); toast.info('Delivery rejected') } catch { toast.error('Failed to reject') } }, title: 'Reject Delivery', message: `Reject the delivery of ${t.quantity} units of ${t.productName} from ${t.fromName}?`, label: 'Reject Delivery', danger: true })} className="px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium">Reject</button>
+                      <button onClick={() => setConfirm({ action: async () => { try { await rejectDelivery(t.id).unwrap(); toast.info('Delivery rejected') } catch (err) { toast.error(err?.data?.message || 'Failed to reject delivery') } }, title: 'Reject Delivery', message: `Reject the delivery of ${t.quantity} units of ${t.productName} from ${t.fromName}?`, label: 'Reject Delivery', danger: true })} className="px-3 py-1.5 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 font-medium">Reject</button>
                     </div>
                   </td>
                 </tr>
@@ -1142,8 +1143,13 @@ function OutgoingPanel() {
     try {
       await dispatchTransfer(t.id).unwrap()
       toast.success('Dispatch confirmed — stock deducted, now in transit')
-    } catch {
-      toast.error('Failed to dispatch transfer')
+    } catch (err) {
+      const msg = err?.data?.message
+      if (msg) {
+        toast.error(msg)
+      } else {
+        toast.error('Transfer cannot be dispatched because the available stock is no longer sufficient.')
+      }
     }
   }
 
