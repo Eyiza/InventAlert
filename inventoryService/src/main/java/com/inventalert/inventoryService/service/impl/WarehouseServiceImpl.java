@@ -35,7 +35,7 @@ public class WarehouseServiceImpl implements WarehouseService {
 
     @Override
     public List<WarehouseResponse> list() {
-        return warehouseRepository.findAll().stream()
+        return warehouseRepository.findByIsActiveTrueOrderByNameAsc().stream()
                 .map(this::toResponse)
                 .toList();
     }

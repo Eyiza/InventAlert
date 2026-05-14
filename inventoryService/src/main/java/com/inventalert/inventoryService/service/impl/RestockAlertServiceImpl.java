@@ -57,8 +57,8 @@ public class RestockAlertServiceImpl implements RestockAlertService {
     @Override
     public List<RestockAlertResponse> list(AlertStatus status) {
         List<RestockAlert> alerts = (status != null)
-                ? alertRepository.findByStatus(status)
-                : alertRepository.findAll();
+                ? alertRepository.findByStatusOrderByCreatedAtDesc(status)
+                : alertRepository.findAllByOrderByCreatedAtDesc();
         return alerts.stream().map(this::toResponse).toList();
     }
 

@@ -151,7 +151,7 @@ export const inventAlertApi = createApi({
       providesTags: (result, error, warehouseId) => [{ type: 'Stock', id: warehouseId }],
     }),
     getAllStock: build.query({
-      query: (params = {}) => ({ url: '/api/stock', params: { size: 1000, ...params } }),
+      query: (params = {}) => ({ url: '/api/stock', params: { size: 1000, sort: 'currentStock,asc', ...params } }),
       transformResponse: res => res.content ?? res,
       providesTags: ['Stock'],
     }),
@@ -176,7 +176,7 @@ export const inventAlertApi = createApi({
 
     // ── Transfers ─────────────────────────────────────────────────────────────
     getTransfers: build.query({
-      query: () => '/api/transfers',
+      query: () => ({ url: '/api/transfers', params: { sort: 'createdAt,desc' } }),
       transformResponse: res => res.content ?? res,
       providesTags: ['Transfer'],
     }),
@@ -222,7 +222,7 @@ export const inventAlertApi = createApi({
 
     // ── Reconciliations ───────────────────────────────────────────────────────
     getReconciliations: build.query({
-      query: () => '/api/reconciliations',
+      query: () => ({ url: '/api/reconciliations', params: { sort: 'createdAt,desc' } }),
       transformResponse: res => res.content ?? res,
       providesTags: ['Reconciliation'],
     }),

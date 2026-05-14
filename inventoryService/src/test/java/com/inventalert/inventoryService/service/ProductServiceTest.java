@@ -79,7 +79,7 @@ class ProductServiceTest {
 
     @Test
     void list_returnsOnlyActiveProducts() {
-        when(productRepository.findByIsActiveTrue()).thenReturn(List.of(activeProduct));
+        when(productRepository.findByIsActiveTrueOrderByNameAsc()).thenReturn(List.of(activeProduct));
 
         List<ProductResponse> result = productService.list();
 
