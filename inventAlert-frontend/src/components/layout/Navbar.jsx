@@ -183,8 +183,9 @@ export default function Navbar({ title }) {
   const [showPasswordModal, setShowPasswordModal] = useState(false)
 
   const handleLogout = () => {
+    const loginPath = role === 'SUPER_ADMIN' ? '/superadmin/login' : '/login'
     dispatch(logout())
-    navigate('/login', { replace: true })
+    navigate(loginPath, { replace: true })
   }
 
   const roleLabel = {

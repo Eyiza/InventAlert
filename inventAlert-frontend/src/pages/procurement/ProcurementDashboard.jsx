@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
+import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
 import Layout from '../../components/layout/Layout'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { submitComplaint } from '../../store/slices/superadminSlice'
 import {
   useGetAlertsQuery,
   useAcknowledgeAlertMutation,
@@ -16,10 +15,12 @@ import {
   useGetStockByWarehouseQuery,
   useGetAlertSummaryQuery,
   useGetAlertsByWarehouseQuery,
+  useSubmitComplaintMutation,
 } from '../../apis/inventAlertApi'
 
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const toUTC = s => !s ? s : String(s).endsWith('Z') || String(s).includes('+') ? String(s) : /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? String(s) + 'T12:00:00Z' : String(s) + 'Z'
+const fmtDT = d => new Date(toUTC(d)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtDate = d => new Date(toUTC(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 function dateRange(days) {
   const toDate = new Date().toISOString().split('T')[0]
@@ -526,7 +527,7 @@ function AlertFrequencyPanel() {
                   {alertsByMonth.map((m, i) => {
                     const ym = String(m.month)
                     const label = ym.length === 6
-                      ? new Date(`${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                      ? new Date(`${ym.slice(0, 4)}-${ym.slice(4, 6)}-01T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
                       : m.month
                     return (
                       <tr key={i} className="hover:bg-gray-50/60">
@@ -555,18 +556,21 @@ function AlertFrequencyPanel() {
 // ── Complaints ────────────────────────────────────────────────────────────────
 
 function ComplaintsPanel() {
-  const { companyId, companyName } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const [submitComplaint, { isLoading: submitting }] = useSubmitComplaintMutation()
   const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
   const [submitted, setSubmitted] = useState(false)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
-    dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, companyName: companyName || '', companyId }))
-    setSubmitted(true)
-    setForm({ subject: '', priority: 'MEDIUM', message: '' })
-    setTimeout(() => setSubmitted(false), 5000)
+    try {
+      await submitComplaint({ subject: form.subject, priority: form.priority, description: form.message }).unwrap()
+      setSubmitted(true)
+      setForm({ subject: '', priority: 'MEDIUM', message: '' })
+      setTimeout(() => setSubmitted(false), 5000)
+    } catch {
+      toast.error('Failed to submit feedback')
+    }
   }
 
   return (

@@ -6,7 +6,6 @@ import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { setCompanyLogo, setCompanyName } from '../../store/slices/authSlice'
 import { uploadToCloudinary } from '../../services/cloudinary'
-import { submitComplaint } from '../../store/slices/superadminSlice'
 import {
   useGetMyCompanyQuery, useUpdateMyCompanyMutation,
   useGetUsersQuery, useCreateUserMutation,
@@ -21,6 +20,7 @@ import {
   useGetStockSummaryQuery, useGetTransferSummaryQuery,
   useGetAlertSummaryQuery,
   useGetTopProductsQuery, useGetMovementsByWarehouseQuery,
+  useSubmitComplaintMutation,
 } from '../../apis/inventAlertApi'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
@@ -136,8 +136,9 @@ function parseCSV(text) {
   }).filter(r => r.name && r.sku)
 }
 
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const toUTC = s => !s ? s : String(s).endsWith('Z') || String(s).includes('+') ? String(s) : /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? String(s) + 'T12:00:00Z' : String(s) + 'Z'
+const fmtDT = d => new Date(toUTC(d)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtDate = d => new Date(toUTC(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 const ROLE_PILL = {
   MANAGER: 'bg-purple-100 text-purple-700',
@@ -1515,21 +1516,20 @@ function AnalyticsPanel() {
 
 function FeedbackPanel() {
   const { user: me, companyId, companyName } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const [submitComplaint, { isLoading: loading }] = useSubmitComplaintMutation()
   const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
-  const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!form.subject || !form.message) return
-    setLoading(true)
-    setTimeout(() => {
-      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
-      setLoading(false)
+    try {
+      await submitComplaint({ subject: form.subject, priority: form.priority, description: form.message }).unwrap()
       setSubmitted(true)
-    }, 500)
+    } catch {
+      toast.error('Failed to submit feedback')
+    }
   }
 
   if (submitted) {
