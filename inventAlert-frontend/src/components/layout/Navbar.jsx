@@ -193,8 +193,10 @@ export default function Navbar({ title }) {
     MANAGER: 'Manager',
     WAREHOUSE_STAFF: 'Warehouse Staff',
     PROCUREMENT_OFFICER: 'Procurement Officer',
-    SUPERADMIN: 'Platform Admin',
+    SUPER_ADMIN: 'Platform Admin',
   }[role] || role
+
+  const isCompanyUser = role !== 'SUPER_ADMIN'
 
   return (
     <>
@@ -204,7 +206,7 @@ export default function Navbar({ title }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <NotificationBell />
+          {isCompanyUser && <NotificationBell />}
 
           <div className="h-6 w-px bg-gray-200" />
 
