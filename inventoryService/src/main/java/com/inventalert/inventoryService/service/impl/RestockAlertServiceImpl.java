@@ -117,7 +117,10 @@ public class RestockAlertServiceImpl implements RestockAlertService {
                         companyId,
                         (String) officer.get("id"),
                         (String) officer.get("email"),
-                        alertId, stockAtAlert, threshold);
+                        "RESTOCK_ALERT",
+                        "Low stock alert: stock has dropped to " + stockAtAlert
+                                + " (threshold: " + threshold + "). Immediate restocking may be required.",
+                        alertId);
             }
         } catch (Exception e) {
             log.warn("Could not notify procurement officers for alert {}: {}", alertId, e.getMessage());
