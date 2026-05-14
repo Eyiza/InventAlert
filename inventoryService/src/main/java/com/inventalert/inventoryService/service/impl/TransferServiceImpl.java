@@ -57,6 +57,8 @@ public class TransferServiceImpl implements TransferService {
         Warehouse toWarehouse = warehouseRepository.findByIdAndIsActiveTrue(deficitWarehouseId)
                 .orElseThrow(() -> new WarehouseNotFoundException(deficitWarehouseId));
 
+        // Select the surplus warehouse with the shortest driving distance to the deficit warehouse.
+        // Candidates were pre-filtered by ThresholdCheckService to have enough surplus stock.
         StockLevel bestCandidate = null;
         double minDistance = Double.MAX_VALUE;
         DistanceSource bestDistanceSource = DistanceSource.GOOGLE_MAPS;
@@ -66,6 +68,7 @@ public class TransferServiceImpl implements TransferService {
                     .findByIdAndIsActiveTrue(candidate.getWarehouseId()).orElse(null);
             if (fromWarehouse == null) continue;
 
+            // Falls back to Haversine (straight-line) distance when the Google Maps API is unavailable
             DistanceResult result = googleMapsService.getDrivingDistanceKm(
                     fromWarehouse.getId(), fromWarehouse.getLatitude(), fromWarehouse.getLongitude(),
                     toWarehouse.getId(), toWarehouse.getLatitude(), toWarehouse.getLongitude());
@@ -77,6 +80,8 @@ public class TransferServiceImpl implements TransferService {
             }
         }
 
+        // Skip suggestion if no candidate qualifies or the nearest one exceeds the configured cap
+        // (default 150 km) — beyond that, external restocking is cheaper than an internal transfer
         if (bestCandidate == null || minDistance > maxTransferDistanceKm) return;
 
         TransferSuggestion suggestion = TransferSuggestion.builder()
@@ -183,6 +188,7 @@ public class TransferServiceImpl implements TransferService {
         suggestion.setStatus(TransferStatus.REJECTED);
         transferRepository.save(suggestion);
 
+        // Escalate to a restock alert so the deficit warehouse is not left without a follow-up action
         RestockAlert alert = restockAlertService.createAlert(
                 suggestion.getProductId(), suggestion.getToWarehouseId(), 0, 0, companyId);
         String alertId = alert != null ? alert.getId() : null;
@@ -298,6 +304,7 @@ public class TransferServiceImpl implements TransferService {
                 .findByProductIdAndWarehouseId(suggestion.getProductId(), suggestion.getFromWarehouseId())
                 .orElseThrow(() -> new StockLevelNotFoundException(suggestion.getProductId(), suggestion.getFromWarehouseId()));
 
+        // Goods are being returned to origin, so restore the source warehouse's stock
         fromStock.setCurrentStock(fromStock.getCurrentStock() + suggestion.getQuantity());
         stockLevelRepository.save(fromStock);
 
@@ -313,6 +320,7 @@ public class TransferServiceImpl implements TransferService {
         suggestion.setStatus(TransferStatus.DELIVERY_REJECTED);
         transferRepository.save(suggestion);
 
+        // Destination warehouse is still in deficit — escalate to a restock alert
         RestockAlert alert = restockAlertService.createAlert(
                 suggestion.getProductId(), suggestion.getToWarehouseId(), 0, 0, companyId);
         String alertId = alert != null ? alert.getId() : null;

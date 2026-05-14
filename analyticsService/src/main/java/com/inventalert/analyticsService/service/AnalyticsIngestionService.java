@@ -20,6 +20,9 @@ public class AnalyticsIngestionService {
     private final ReconciliationEventRepository reconciliationRepo;
     private final NotificationEventRepository notificationRepo;
 
+    // Each ingest method is idempotent: existsByEventId checks ClickHouse before inserting,
+    // so Kafka at-least-once delivery never produces duplicate analytics rows.
+
     public void ingestCompanyCreated(CompanyCreatedEvent event) {
         if (companyEventRepo.existsByEventId(event.eventId())) {
             log.debug("Duplicate company.created event {}, skipping", event.eventId());
@@ -57,6 +60,8 @@ public class AnalyticsIngestionService {
 
     public void ingestNotification(NotificationEvent event) {
         if (notificationRepo.existsByEventId(event.eventId())) return;
+        // Notifications carry no business timestamp; ingest time is used so the analytics
+        // row reflects when the notification was delivered, not when the originating alert fired
         notificationRepo.insert(event, Instant.now());
     }
 }

@@ -20,6 +20,8 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
+        // Only CONNECT frames carry the Authorization header; subsequent SEND/SUBSCRIBE frames
+        // inherit the principal set here, so we validate once per session rather than per message
         if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
             String authHeader = accessor.getFirstNativeHeader("Authorization");
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -35,6 +37,8 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                     jwtUtil.extractRole(token),
                     jwtUtil.extractWarehouseId(token)
             );
+            // Attaching the authentication to the accessor binds it to the STOMP session
+            // so @MessageMapping methods receive a populated SecurityContext automatically
             accessor.setUser(new UsernamePasswordAuthenticationToken(
                     principal, null, principal.getAuthorities()));
         }

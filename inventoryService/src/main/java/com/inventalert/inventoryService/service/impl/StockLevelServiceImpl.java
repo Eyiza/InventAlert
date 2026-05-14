@@ -47,6 +47,9 @@ public class StockLevelServiceImpl implements StockLevelService {
                     try {
                         return stockLevelRepository.save(level);
                     } catch (DataIntegrityViolationException e) {
+                        // Two threads can both pass the findBy check and race to insert the same
+                        // (productId, warehouseId) pair. The loser catches the unique-key violation
+                        // and falls back to reading the row the winner already committed.
                         return stockLevelRepository.findByProductIdAndWarehouseId(productId, warehouseId)
                                 .orElseThrow();
                     }

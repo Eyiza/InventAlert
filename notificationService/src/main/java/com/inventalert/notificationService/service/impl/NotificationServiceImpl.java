@@ -30,6 +30,8 @@ public class NotificationServiceImpl implements NotificationService {
     public Notification create(String eventId, String companyId, String userId, String userEmail,
                                NotificationType type, String message, String referenceId) {
 
+        // Idempotency guard: Redis SET NX ensures only the first delivery of a Kafka event
+        // is processed; retries and duplicates are silently dropped
         if (!repository.setEventProcessedIfAbsent(eventId)) {
             return null;
         }
@@ -46,6 +48,8 @@ public class NotificationServiceImpl implements NotificationService {
                 .build();
 
         repository.saveHash(notification);
+        // Sorted set score is epoch-millis so getNotifications can page by insertion order
+        // without a secondary index; the set also acts as the user's notification inbox pointer
         repository.addToUserSortedSet(
                 companyId, userId,
                 notification.getNotificationId(),
@@ -85,6 +89,7 @@ public class NotificationServiceImpl implements NotificationService {
             throw new NotificationNotFoundException(notificationId);
         }
 
+        // Redis hash stores isRead as "1"/"0" strings; guard prevents double-decrementing the counter
         if (!"1".equals(hash.get("isRead"))) {
             repository.markHashAsRead(companyId, notificationId);
             repository.decrementUnreadCount(companyId, hash.get("userId"));
