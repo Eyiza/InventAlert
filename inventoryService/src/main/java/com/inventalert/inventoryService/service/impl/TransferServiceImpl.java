@@ -3,6 +3,7 @@ package com.inventalert.inventoryService.service.impl;
 import com.inventalert.inventoryService.dto.request.StaffInitiateTransferRequest;
 import com.inventalert.inventoryService.dto.response.TransferSuggestionResponse;
 import com.inventalert.inventoryService.exception.*;
+import com.inventalert.inventoryService.kafka.AlertEventProducer;
 import com.inventalert.inventoryService.kafka.TransferEventProducer;
 import com.inventalert.inventoryService.model.*;
 import com.inventalert.inventoryService.repository.*;
@@ -11,19 +12,24 @@ import com.inventalert.inventoryService.service.GoogleMapsService;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import com.inventalert.inventoryService.service.TransferService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TransferServiceImpl implements TransferService {
@@ -35,12 +41,17 @@ public class TransferServiceImpl implements TransferService {
     private final RestockAlertService restockAlertService;
     private final GoogleMapsService googleMapsService;
     private final TransferEventProducer eventProducer;
+    private final AlertEventProducer alertEventProducer;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${transfer.max.distance.km:150}")
     private double maxTransferDistanceKm;
 
+    @Value("${identity.db.name:inventalert_identity}")
+    private String identityDbName;
+
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createSuggestion(String productId, String deficitWarehouseId,
                                   List<StockLevel> candidates, int shortage, String companyId) {
         Warehouse toWarehouse = warehouseRepository.findByIdAndIsActiveTrue(deficitWarehouseId)
@@ -82,6 +93,31 @@ public class TransferServiceImpl implements TransferService {
         eventProducer.publishTransferSuggestionCreated(
                 companyId, saved.getId(), bestCandidate.getWarehouseId(),
                 deficitWarehouseId, productId, shortage, minDistance);
+
+        notifySourceManager(companyId, bestCandidate.getWarehouseId(), saved.getId(), shortage);
+    }
+
+    private void notifySourceManager(String companyId, String fromWarehouseId,
+                                      String suggestionId, int quantity) {
+        try {
+            String sql = "SELECT u.id, u.email FROM " + identityDbName + ".User u " +
+                         "JOIN " + identityDbName + ".WarehouseAssignment wa ON wa.userId = u.id " +
+                         "WHERE u.companyId = ? AND u.role = 'MANAGER' AND u.isActive = 1 " +
+                         "AND wa.warehouseId = ?";
+            List<Map<String, Object>> managers = jdbcTemplate.queryForList(sql, companyId, fromWarehouseId);
+            for (Map<String, Object> manager : managers) {
+                alertEventProducer.publishNotificationEvent(
+                        companyId,
+                        (String) manager.get("id"),
+                        (String) manager.get("email"),
+                        "TRANSFER_SUGGESTION",
+                        "Transfer suggestion: " + quantity + " unit(s) requested from your warehouse. "
+                                + "Please review and approve or reject.",
+                        suggestionId);
+            }
+        } catch (Exception e) {
+            log.warn("Could not notify source manager for transfer suggestion {}: {}", suggestionId, e.getMessage());
+        }
     }
 
     @Override

@@ -119,7 +119,7 @@ class RestockAlertServiceTest {
     void list_returnsAllAlerts() {
         when(alertRepository.findAll()).thenReturn(List.of(openAlert));
 
-        List<RestockAlertResponse> result = alertService.list();
+        List<RestockAlertResponse> result = alertService.list(null);
 
         assertThat(result).hasSize(1);
     }

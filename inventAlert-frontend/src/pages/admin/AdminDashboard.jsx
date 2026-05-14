@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { toast } from 'react-toastify'
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
 import { setCompanyLogo, setCompanyName } from '../../store/slices/authSlice'
 import { uploadToCloudinary } from '../../services/cloudinary'
-import { submitComplaint } from '../../store/slices/superadminSlice'
 import {
   useGetMyCompanyQuery, useUpdateMyCompanyMutation,
   useGetUsersQuery, useCreateUserMutation,
@@ -21,6 +24,7 @@ import {
   useGetStockSummaryQuery, useGetTransferSummaryQuery,
   useGetAlertSummaryQuery,
   useGetTopProductsQuery, useGetMovementsByWarehouseQuery,
+  useSubmitComplaintMutation,
 } from '../../apis/inventAlertApi'
 import ConfirmDialog from '../../components/shared/ConfirmDialog'
 import PlacesAutocompleteInput from '../../components/shared/PlacesAutocompleteInput'
@@ -72,7 +76,7 @@ function BtnRow({ onClose, submitLabel, loading = false }) {
 
 function SearchBar({ value, onChange, placeholder }) {
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
@@ -81,7 +85,7 @@ function SearchBar({ value, onChange, placeholder }) {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent w-72"
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent w-full sm:w-72"
       />
     </div>
   )
@@ -136,8 +140,9 @@ function parseCSV(text) {
   }).filter(r => r.name && r.sku)
 }
 
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const toUTC = s => !s ? s : String(s).endsWith('Z') || String(s).includes('+') ? String(s) : /^\d{4}-\d{2}-\d{2}$/.test(String(s)) ? String(s) + 'T12:00:00Z' : String(s) + 'Z'
+const fmtDT = d => new Date(toUTC(d)).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtDate = d => new Date(toUTC(d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 const ROLE_PILL = {
   MANAGER: 'bg-purple-100 text-purple-700',
@@ -1176,11 +1181,12 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
   const [showAdd, setShowAdd] = useState(openAdd)
   const [showTempPass, setShowTempPass] = useState(false)
   const [manageUser, setManageUser] = useState(null)
-  const [form, setForm] = useState({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
+  const [form, setForm] = useState({ name: '', email: '', role: 'MANAGER', password: '', warehouseId: '' })
   const [search, setSearch] = useState('')
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
   const filtered = users.filter(u =>
+    u.name?.toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -1195,11 +1201,11 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
       return
     }
     try {
-      await createUser({ email: form.email, role: form.role, password: form.password, warehouseId: form.warehouseId || null }).unwrap()
+      await createUser({ name: form.name, email: form.email, role: form.role, password: form.password, warehouseId: form.warehouseId || null }).unwrap()
       toast.success('Team member added — they must set a new password on first login')
       setShowAdd(false)
       setShowTempPass(false)
-      setForm({ email: '', role: 'MANAGER', password: '', warehouseId: '' })
+      setForm({ name: '', email: '', role: 'MANAGER', password: '', warehouseId: '' })
     } catch (err) {
       toast.error(err?.data?.message || 'Failed to create user')
     }
@@ -1264,7 +1270,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(u => {
-                  const displayName = u.email.split('@')[0]
+                  const displayName = u.name || u.email.split('@')[0]
                   return (
                     <tr key={u.id} className={`hover:bg-gray-50/60 ${!u.isActive ? 'opacity-60' : ''}`}>
                       <td className="px-5 py-3">
@@ -1303,6 +1309,7 @@ function UsersPanel({ onGoToWarehouses, openAdd = false }) {
       {showAdd && (
         <Modal title="Add Team Member" onClose={() => setShowAdd(false)}>
           <form onSubmit={handleAdd} className="space-y-3">
+            <Field label="Full Name" name="name" type="text" value={form.name} onChange={ch} placeholder="Jane Doe" required />
             <Field label="Email" name="email" type="email" value={form.email} onChange={ch} placeholder="jane@company.com" required />
             <Field label="Role">
               <select name="role" value={form.role} onChange={ch} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600">
@@ -1412,17 +1419,43 @@ function AnalyticsPanel() {
       {/* Transfer summary */}
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Transfer Summary</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="gray" />
-          <StatCard title="Approved" value={transferSummary?.totalApproved ?? '—'} color="teal" />
-          <StatCard title="Rejected" value={transferSummary?.totalRejected ?? '—'} color="red" />
-          <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="blue" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard title="Suggested" value={transferSummary?.totalSuggested ?? '—'} color="gray" />
+              <StatCard title="Approved"  value={transferSummary?.totalApproved  ?? '—'} color="teal" />
+              <StatCard title="Rejected"  value={transferSummary?.totalRejected  ?? '—'} color="red" />
+              <StatCard title="Completed" value={transferSummary?.totalCompleted ?? '—'} color="blue" />
+            </div>
+            {transferSummary?.avgDistanceKm != null && (
+              <p className="text-xs text-gray-500">
+                Avg transfer distance: <strong>{Number(transferSummary.avgDistanceKm).toFixed(1)} km</strong>
+              </p>
+            )}
+          </div>
+          {(() => {
+            const donutData = [
+              { name: 'Suggested', value: transferSummary?.totalSuggested ?? 0, color: '#6b7280' },
+              { name: 'Approved',  value: transferSummary?.totalApproved  ?? 0, color: '#0d9488' },
+              { name: 'Rejected',  value: transferSummary?.totalRejected  ?? 0, color: '#ef4444' },
+              { name: 'Completed', value: transferSummary?.totalCompleted ?? 0, color: '#3b82f6' },
+            ].filter(d => d.value > 0)
+            return donutData.length > 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Status Distribution</p>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>
+                      {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 4 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : null
+          })()}
         </div>
-        {transferSummary?.avgDistanceKm != null && (
-          <p className="text-xs text-gray-500 mt-2">
-            Avg transfer distance: <strong>{Number(transferSummary.avgDistanceKm).toFixed(1)} km</strong>
-          </p>
-        )}
       </div>
 
       {/* Alert summary */}
@@ -1457,25 +1490,23 @@ function AnalyticsPanel() {
         {/* Top moving products */}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Top Moving Products</p>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
             {topProducts.length === 0 ? (
-              <p className="px-5 py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
+              <p className="py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
             ) : (
-              <div className="divide-y divide-gray-50">
-                {topProducts.map((p, i) => (
-                  <div key={i} className="px-5 py-3 flex items-center gap-3">
-                    <span className="text-xs font-bold text-gray-300 w-4 text-right tabular-nums">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{productName(p.productId)}</p>
-                      <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full bg-teal-500 rounded-full transition-all"
-                          style={{ width: `${(Number(p.totalQty) / maxTopQty) * 100}%` }} />
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700 tabular-nums shrink-0">{p.totalQty}</span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={Math.max(240, topProducts.length * 40)}>
+                <BarChart
+                  layout="vertical"
+                  data={topProducts.map(p => ({ name: productName(p.productId), Units: Number(p.totalQty) }))}
+                  margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                  <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: '#374151' }} tickLine={false} axisLine={false} />
+                  <Tooltip formatter={v => [v.toLocaleString(), 'Units Moved']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                  <Bar dataKey="Units" fill="#0d9488" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
@@ -1483,25 +1514,23 @@ function AnalyticsPanel() {
         {/* Movements by warehouse */}
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movements by Warehouse</p>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
             {Object.keys(byWhGrouped).length === 0 ? (
-              <p className="px-5 py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {Object.entries(byWhGrouped).sort((a, b) => b[1] - a[1]).map(([whId, total]) => (
-                  <div key={whId} className="px-5 py-3 flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{warehouseName(whId)}</p>
-                      <div className="mt-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full transition-all"
-                          style={{ width: `${(total / maxByWh) * 100}%` }} />
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700 tabular-nums shrink-0">{total}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+              <p className="py-8 text-sm text-gray-400 italic text-center">No movement data yet.</p>
+            ) : (() => {
+              const whData = Object.entries(byWhGrouped).sort((a, b) => b[1] - a[1]).map(([whId, total]) => ({ name: warehouseName(whId), Movements: total }))
+              return (
+                <ResponsiveContainer width="100%" height={Math.max(240, whData.length * 40)}>
+                  <BarChart layout="vertical" data={whData} margin={{ top: 4, right: 24, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: '#374151' }} tickLine={false} axisLine={false} />
+                    <Tooltip formatter={v => [v.toLocaleString(), 'Movements']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                    <Bar dataKey="Movements" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )
+            })()}
           </div>
         </div>
       </div>
@@ -1513,21 +1542,20 @@ function AnalyticsPanel() {
 
 function FeedbackPanel() {
   const { user: me, companyId, companyName } = useSelector(s => s.auth)
-  const dispatch = useDispatch()
+  const [submitComplaint, { isLoading: loading }] = useSubmitComplaintMutation()
   const [form, setForm] = useState({ subject: '', priority: 'MEDIUM', message: '' })
-  const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const ch = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     if (!form.subject || !form.message) return
-    setLoading(true)
-    setTimeout(() => {
-      dispatch(submitComplaint({ subject: form.subject, priority: form.priority, message: form.message, submittedBy: me?.email, email: me?.email, companyName, companyId }))
-      setLoading(false)
+    try {
+      await submitComplaint({ subject: form.subject, priority: form.priority, description: form.message }).unwrap()
       setSubmitted(true)
-    }, 500)
+    } catch {
+      toast.error('Failed to submit feedback')
+    }
   }
 
   if (submitted) {

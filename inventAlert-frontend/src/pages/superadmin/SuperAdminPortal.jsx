@@ -1,32 +1,47 @@
 import { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import { toast } from 'react-toastify'
+import {
+  AreaChart, Area, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 import Layout from '../../components/layout/Layout'
 import StatusBadge from '../../components/shared/StatusBadge'
 import StatCard from '../../components/shared/StatCard'
-import { suspendCompany, reactivateCompany, resolveComplaint, reviewComplaint } from '../../store/slices/superadminSlice'
+import {
+  useGetSuperAdminCompaniesQuery,
+  useSuspendCompanyMutation,
+  useReactivateCompanySAMutation,
+  useGetComplaintsQuery,
+  useResolveComplaintMutation,
+  useGetCompanyAnalyticsQuery,
+} from '../../apis/inventAlertApi'
 
-const fmtDate = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-const fmtDT = d => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+import { fmtDate, fmtDT } from '../../utils/dateUtils'
 
 function SearchBar({ value, onChange, placeholder }) {
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <input
         type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600 w-52"
+        className="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-52"
       />
     </div>
   )
 }
 
-const PRIORITY_COLOR = {
-  HIGH: 'bg-red-100 text-red-700 border-red-200',
-  MEDIUM: 'bg-amber-100 text-amber-700 border-amber-200',
-  LOW: 'bg-gray-100 text-gray-600 border-gray-200',
+function LoadingRows({ cols }) {
+  return Array.from({ length: 4 }).map((_, i) => (
+    <tr key={i}>
+      {Array.from({ length: cols }).map((__, j) => (
+        <td key={j} className="px-5 py-4">
+          <div className="h-4 bg-gray-100 rounded animate-pulse" style={{ width: j === 0 ? '60%' : '80%' }} />
+        </td>
+      ))}
+    </tr>
+  ))
 }
 
 const COMPLAINT_STATUS_COLOR = {
@@ -38,25 +53,47 @@ const COMPLAINT_STATUS_COLOR = {
 // ── Companies Panel ───────────────────────────────────────────────────────────
 
 function CompaniesPanel() {
-  const { companies } = useSelector(s => s.superadmin)
-  const dispatch = useDispatch()
+  const { data: companies = [], isLoading, isError } = useGetSuperAdminCompaniesQuery()
+  const [suspendMutation] = useSuspendCompanyMutation()
+  const [reactivateMutation] = useReactivateCompanySAMutation()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [confirm, setConfirm] = useState(null)
+  const [actionLoading, setActionLoading] = useState(null)
 
   const filtered = companies
     .filter(c => filter === 'ALL' || c.status === filter)
-    .filter(c => !search || c.companyName.toLowerCase().includes(search.toLowerCase()) || c.adminEmail.toLowerCase().includes(search.toLowerCase()))
+    .filter(c => !search || c.companyName?.toLowerCase().includes(search.toLowerCase()) || c.adminEmail?.toLowerCase().includes(search.toLowerCase()))
 
   const handleAction = (company) => {
     if (company.status === 'ACTIVE') setConfirm({ company, action: 'suspend' })
-    else { dispatch(reactivateCompany(company.id)); toast.success(`${company.companyName} reactivated`) }
+    else handleReactivate(company)
   }
 
-  const confirmSuspend = () => {
-    dispatch(suspendCompany(confirm.company.id))
-    toast.warning(`${confirm.company.companyName} suspended`)
+  const handleReactivate = async (company) => {
+    setActionLoading(company.id)
+    try {
+      await reactivateMutation(company.id).unwrap()
+      toast.success(`${company.companyName} reactivated`)
+    } catch {
+      toast.error('Failed to reactivate company')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const confirmSuspend = async () => {
+    const { company } = confirm
     setConfirm(null)
+    setActionLoading(company.id)
+    try {
+      await suspendMutation(company.id).unwrap()
+      toast.warning(`${company.companyName} suspended`)
+    } catch {
+      toast.error('Failed to suspend company')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   return (
@@ -64,8 +101,14 @@ function CompaniesPanel() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard title="Total Companies" value={companies.length} color="blue" />
         <StatCard title="Active" value={companies.filter(c => c.status === 'ACTIVE').length} color="teal" />
-        <StatCard title="Suspended" value={companies.filter(c => c.status === 'SUSPENDED').length} color="red" />
+        <StatCard title="Suspended" value={companies.filter(c => c.status !== 'ACTIVE').length} color="red" />
       </div>
+
+      {isError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-600">
+          Failed to load companies. Please refresh.
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
@@ -74,7 +117,7 @@ function CompaniesPanel() {
             <SearchBar value={search} onChange={setSearch} placeholder="Search name or email…" />
             <div className="flex gap-1">
               {['ALL', 'ACTIVE', 'SUSPENDED'].map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
+                <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{f}</button>
               ))}
             </div>
           </div>
@@ -89,15 +132,21 @@ function CompaniesPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(c => (
-                <tr key={c.id} className={`hover:bg-gray-50/60 ${c.status === 'SUSPENDED' ? 'opacity-70' : ''}`}>
+              {isLoading ? (
+                <LoadingRows cols={5} />
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">No companies found.</td>
+                </tr>
+              ) : filtered.map(c => (
+                <tr key={c.id} className={`hover:bg-gray-50/60 ${c.status !== 'ACTIVE' ? 'opacity-70' : ''}`}>
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      {c.logo ? (
-                        <img src={c.logo} alt={c.companyName} className="w-8 h-8 rounded-lg object-contain border border-gray-200 bg-gray-50 shrink-0" />
+                      {c.logoUrl ? (
+                        <img src={c.logoUrl} alt={c.companyName} className="w-8 h-8 rounded-lg object-contain border border-gray-200 bg-gray-50 shrink-0" />
                       ) : (
-                        <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
-                          {c.companyName[0]}
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">
+                          {c.companyName?.[0] ?? '?'}
                         </div>
                       )}
                       <span className="font-medium text-gray-900">{c.companyName}</span>
@@ -109,9 +158,10 @@ function CompaniesPanel() {
                   <td className="px-5 py-4">
                     <button
                       onClick={() => handleAction(c)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${c.status === 'ACTIVE' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
+                      disabled={actionLoading === c.id}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60 ${c.status === 'ACTIVE' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
                     >
-                      {c.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
+                      {actionLoading === c.id ? '…' : c.status === 'ACTIVE' ? 'Suspend' : 'Reactivate'}
                     </button>
                   </td>
                 </tr>
@@ -149,57 +199,82 @@ function CompaniesPanel() {
 // ── Complaints Panel ──────────────────────────────────────────────────────────
 
 function ComplaintsPanel() {
-  const { complaints } = useSelector(s => s.superadmin)
-  const dispatch = useDispatch()
+  const { data: complaints = [], isLoading, isError } = useGetComplaintsQuery()
+  const [resolveComplaint] = useResolveComplaintMutation()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
-  const [companyFilter, setCompanyFilter] = useState('')
   const [expanded, setExpanded] = useState(null)
+  const [resolvingId, setResolvingId] = useState(null)
+  const [resolveModal, setResolveModal] = useState(null)
+  const [resolutionText, setResolutionText] = useState('')
 
-  const companies = [...new Set(complaints.map(c => c.companyName))].sort()
   const filtered = complaints
     .filter(c => filter === 'ALL' || c.status === filter)
-    .filter(c => !companyFilter || c.companyName === companyFilter)
-    .filter(c => !search || c.subject.toLowerCase().includes(search.toLowerCase()) || c.submittedBy.toLowerCase().includes(search.toLowerCase()) || c.companyName.toLowerCase().includes(search.toLowerCase()))
+    .filter(c => !search ||
+      c.subject?.toLowerCase().includes(search.toLowerCase()) ||
+      c.submittedBy?.toLowerCase().includes(search.toLowerCase()))
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+
   const openCount = complaints.filter(c => c.status === 'OPEN').length
+
+  const openResolveModal = (complaint) => {
+    setResolveModal(complaint)
+    setResolutionText('')
+  }
+
+  const handleResolve = async () => {
+    if (!resolveModal) return
+    if (!resolutionText.trim()) { toast.error('Please enter a resolution note.'); return }
+    setResolvingId(resolveModal.id)
+    setResolveModal(null)
+    try {
+      await resolveComplaint({ id: resolveModal.id, resolution: resolutionText.trim() }).unwrap()
+      toast.success('Ticket resolved')
+    } catch {
+      toast.error('Failed to resolve ticket')
+    } finally {
+      setResolvingId(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard title="Total Tickets" value={complaints.length} color="blue" />
         <StatCard title="Open" value={openCount} color={openCount > 0 ? 'red' : 'teal'} />
-        <StatCard title="In Review" value={complaints.filter(c => c.status === 'IN_REVIEW').length} color="amber" />
         <StatCard title="Resolved" value={complaints.filter(c => c.status === 'RESOLVED').length} color="teal" />
       </div>
+
+      {isError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-600">
+          Failed to load complaints. Please refresh.
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-100 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-gray-900">Support & Complaints</h3>
+              <h3 className="font-semibold text-gray-900">Support &amp; Complaints</h3>
               <p className="text-xs text-gray-500 mt-0.5">Feedback and issues submitted by company users</p>
             </div>
-            <div className="flex gap-1">
-              {['ALL', 'OPEN', 'IN_REVIEW', 'RESOLVED'].map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                  {f === 'IN_REVIEW' ? 'In Review' : f}
+            <div className="flex gap-1 flex-wrap">
+              {['ALL', 'OPEN', 'RESOLVED'].map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filter === f ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                  {f}
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <SearchBar value={search} onChange={setSearch} placeholder="Search subject or company…" />
-            <select
-              value={companyFilter} onChange={e => setCompanyFilter(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
-            >
-              <option value="">All Companies</option>
-              {companies.map(name => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </div>
+          <SearchBar value={search} onChange={setSearch} placeholder="Search subject or user…" />
         </div>
         <div className="divide-y divide-gray-100">
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="px-5 py-8 space-y-3">
+              {[1, 2, 3].map(i => <div key={i} className="h-16 bg-gray-50 rounded-lg animate-pulse" />)}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="px-5 py-12 text-center text-gray-400">
               <svg className="w-10 h-10 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -211,28 +286,41 @@ function ComplaintsPanel() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${PRIORITY_COLOR[c.priority]}`}>{c.priority}</span>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${COMPLAINT_STATUS_COLOR[c.status]}`}>{c.status.replace('_', ' ')}</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${COMPLAINT_STATUS_COLOR[c.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      {c.status?.replace('_', ' ')}
+                    </span>
                     <span className="text-xs text-gray-400">{fmtDT(c.createdAt)}</span>
                   </div>
                   <p className="font-medium text-gray-900 text-sm">{c.subject}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{c.submittedBy} · {c.companyName} · <a href={`mailto:${c.email}`} className="text-teal-600 hover:underline">{c.email}</a></p>
-                  {expanded === c.id && (
-                    <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">{c.message}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {c.submitterEmail ?? c.submittedBy}
+                    {(c.companyName ?? c.companyId) && (
+                      <span className="ml-1 text-gray-400">· {c.companyName ?? `Company #${c.companyId}`}</span>
+                    )}
+                  </p>
+                  {expanded === c.id && c.description && (
+                    <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">{c.description}</p>
+                  )}
+                  {expanded === c.id && c.resolution && (
+                    <p className="text-xs text-teal-700 mt-1.5 bg-teal-50 rounded-lg px-3 py-2 border border-teal-100">
+                      <strong>Resolution:</strong> {c.resolution}
+                    </p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => setExpanded(expanded === c.id ? null : c.id)} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
+                  <button
+                    onClick={() => setExpanded(expanded === c.id ? null : c.id)}
+                    className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
+                  >
                     {expanded === c.id ? 'Collapse' : 'View'}
                   </button>
-                  {c.status === 'OPEN' && (
-                    <button onClick={() => { dispatch(reviewComplaint(c.id)); toast.info('Ticket marked as in review') }} className="px-2.5 py-1 bg-blue-50 text-blue-600 text-xs rounded-lg hover:bg-blue-100 font-medium">
-                      Mark In Review
-                    </button>
-                  )}
                   {c.status !== 'RESOLVED' && (
-                    <button onClick={() => { dispatch(resolveComplaint(c.id)); toast.success('Ticket resolved') }} className="px-2.5 py-1 bg-teal-50 text-teal-600 text-xs rounded-lg hover:bg-teal-100 font-medium">
-                      Resolve
+                    <button
+                      onClick={() => openResolveModal(c)}
+                      disabled={resolvingId === c.id}
+                      className="px-2.5 py-1 bg-teal-50 text-teal-600 text-xs rounded-lg hover:bg-teal-100 font-medium disabled:opacity-60"
+                    >
+                      {resolvingId === c.id ? '…' : 'Resolve'}
                     </button>
                   )}
                 </div>
@@ -240,6 +328,112 @@ function ComplaintsPanel() {
             </div>
           ))}
         </div>
+      </div>
+
+      {resolveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setResolveModal(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 mb-1">Resolve Ticket</h3>
+            <p className="text-xs text-gray-500 mb-4 truncate">"{resolveModal.subject}"</p>
+            <textarea
+              autoFocus
+              rows={3}
+              value={resolutionText}
+              onChange={e => setResolutionText(e.target.value)}
+              placeholder="Describe how this was resolved…"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+            />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setResolveModal(null)} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button onClick={handleResolve} disabled={!resolutionText.trim()} className="flex-1 py-2 bg-teal-500 text-white rounded-lg text-sm font-semibold hover:bg-teal-600 disabled:opacity-50">Mark Resolved</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Analytics Panel ───────────────────────────────────────────────────────────
+
+function AnalyticsPanel() {
+  const { data, isLoading, isError } = useGetCompanyAnalyticsQuery({ months: 12 })
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map(i => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}
+      </div>
+    )
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-amber-700">
+        Platform analytics are unavailable right now.
+      </div>
+    )
+  }
+
+  const months = data.growthByMonth ?? []
+  const growthChartData = months.map((m, i) => ({
+    month: m.month ?? m.label ?? `M${i + 1}`,
+    'New Companies': m.count ?? m.value ?? 0,
+  }))
+
+  const donutData = [
+    { name: 'Active',      value: data.activeCompanies     ?? 0, color: '#0d9488' },
+    { name: 'Offboarded',  value: data.offboardedCompanies ?? 0, color: '#ef4444' },
+  ].filter(d => d.value > 0)
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <StatCard title="Total Companies"  value={data.totalCompanies     ?? '—'} color="blue" />
+        <StatCard title="Active Companies" value={data.activeCompanies    ?? '—'} color="teal" />
+        <StatCard title="Offboarded"       value={data.offboardedCompanies ?? '—'} color="red" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Monthly growth area chart */}
+        {growthChartData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Monthly Company Growth</h3>
+            <p className="text-xs text-gray-500 mb-4">New companies onboarded per month (last 12 months)</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={growthChartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="saGrowth" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip formatter={v => [v, 'New Companies']} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                <Area type="monotone" dataKey="New Companies" stroke="#6366f1" strokeWidth={2} fill="url(#saGrowth)" dot={{ r: 3, fill: '#6366f1' }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Active vs Offboarded donut */}
+        {donutData.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Company Status Breakdown</h3>
+            <p className="text-xs text-gray-500 mb-4">Active vs offboarded companies</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={donutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={62} outerRadius={90} paddingAngle={4}>
+                  {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Pie>
+                <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -249,7 +443,8 @@ function ComplaintsPanel() {
 
 export default function SuperAdminPortal() {
   const [activeTab, setActiveTab] = useState('companies')
-  const { companies, complaints } = useSelector(s => s.superadmin)
+  const { data: companies = [] } = useGetSuperAdminCompaniesQuery()
+  const { data: complaints = [] } = useGetComplaintsQuery()
 
   const openComplaints = complaints.filter(c => c.status === 'OPEN').length
 
@@ -262,12 +457,17 @@ export default function SuperAdminPortal() {
       id: 'complaints', label: 'Support & Complaints', badge: openComplaints,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
     },
+    {
+      id: 'analytics', label: 'Platform Analytics',
+      icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
+    },
   ]
 
   return (
     <Layout title="Platform Admin Console" navItems={navItems} activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'companies' && <CompaniesPanel />}
       {activeTab === 'complaints' && <ComplaintsPanel />}
+      {activeTab === 'analytics' && <AnalyticsPanel />}
     </Layout>
   )
 }

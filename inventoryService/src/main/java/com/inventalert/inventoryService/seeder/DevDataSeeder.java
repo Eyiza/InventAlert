@@ -7,6 +7,8 @@ import com.inventalert.inventoryService.model.*;
 import com.inventalert.inventoryService.multicompany.CompanyContext;
 import com.inventalert.inventoryService.multicompany.CompanySchemaService;
 import com.inventalert.inventoryService.repository.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,9 @@ public class DevDataSeeder implements ApplicationRunner {
 
     @Autowired @Lazy
     private DevDataSeeder self;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private final CompanySchemaService companySchemaService;
     private final WarehouseRepository warehouseRepository;
@@ -336,11 +341,22 @@ public class DevDataSeeder implements ApplicationRunner {
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Warehouse warehouse(String id, String name, String address, String lat, String lon) {
-        return warehouseRepository.save(Warehouse.builder()
-                .id(id).name(name).address(address)
-                .latitude(new BigDecimal(lat)).longitude(new BigDecimal(lon))
-                .isActive(true).createdBy("seeder")
-                .build());
+        return warehouseRepository.findById(id).orElseGet(() -> {
+            // em.persist() fails with @GeneratedValue + manual ID in Hibernate 7 (treats it as detached),
+            // and merge() fails when the row doesn't exist yet. Use a native INSERT to bypass both.
+            em.createNativeQuery(
+                "INSERT INTO warehouses (id, name, address, latitude, longitude, isActive, createdBy, createdAt, updatedAt) " +
+                "VALUES (?, ?, ?, ?, ?, 1, 'seeder', NOW(), NOW())"
+            )
+            .setParameter(1, id)
+            .setParameter(2, name)
+            .setParameter(3, address)
+            .setParameter(4, new BigDecimal(lat))
+            .setParameter(5, new BigDecimal(lon))
+            .executeUpdate();
+            em.flush();
+            return warehouseRepository.findById(id).orElseThrow();
+        });
     }
 
     private Product product(String name, String sku, String unit, int threshold) {

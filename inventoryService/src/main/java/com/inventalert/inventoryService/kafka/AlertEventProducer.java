@@ -28,4 +28,17 @@ public class AlertEventProducer {
         event.put("timestamp", Instant.now().toString());
         kafkaTemplate.send("restock.alert.created", companyId, event);
     }
+
+    public void publishNotificationEvent(String companyId, String userId, String userEmail,
+                                          String type, String message, String referenceId) {
+        Map<String, Object> event = new HashMap<>();
+        event.put("eventId", UUID.randomUUID().toString());
+        event.put("companyId", companyId);
+        event.put("userId", userId);
+        event.put("userEmail", userEmail);
+        event.put("type", type);
+        event.put("message", message);
+        event.put("referenceId", referenceId);
+        kafkaTemplate.send("notification.events", companyId, event);
+    }
 }
