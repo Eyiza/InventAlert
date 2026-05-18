@@ -19,6 +19,8 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStreamReader;
@@ -128,8 +130,15 @@ public class MovementServiceImpl implements MovementService {
                 companyId, saved.getId(), request.getProductId(),
                 request.getWarehouseId(), MovementType.OUTBOUND_SALE, request.getQuantity());
 
-        velocityService.recalculate(request.getProductId(), request.getWarehouseId());
-        thresholdCheckService.checkThreshold(request.getProductId(), request.getWarehouseId(), companyId);
+        String productId = request.getProductId();
+        String warehouseId = request.getWarehouseId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                velocityService.recalculate(productId, warehouseId);
+                thresholdCheckService.checkThreshold(productId, warehouseId, companyId);
+            }
+        });
 
         return toResponse(saved);
     }
