@@ -123,6 +123,7 @@ jobs:
         env:
           ECR_URI: ${{ steps.login-ecr.outputs.registry }}
         run: |
+          kubectl apply -f k8s/configmap-nginx.yaml
           for manifest in \
             k8s/identity-deployment.yaml \
             k8s/inventory-deployment.yaml \
@@ -131,6 +132,8 @@ jobs:
             k8s/nginx-deployment.yaml; do
             sed "s|<ECR_URI>|${ECR_URI}|g" "$manifest" | kubectl apply -f -
           done
+          kubectl rollout restart deployment/nginx -n "${{ env.NAMESPACE }}"
+          kubectl rollout status deployment/nginx -n "${{ env.NAMESPACE }}" --timeout=120s
 
       # Pin each container to the exact SHA tag (not :latest) so rollbacks
       # are deterministic and we know exactly which commit is running.

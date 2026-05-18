@@ -34,6 +34,9 @@ data:
             proxy_read_timeout    60s;
             proxy_connect_timeout 10s;
 
+            # CORS preflight is handled by each microservice (CORS_ALLOWED_ORIGINS).
+            # Do not short-circuit OPTIONS in nginx — empty 204 responses lack Access-Control-* headers.
+
             location /api/auth/           { proxy_pass http://identity; }
             location /api/users           { proxy_pass http://identity; }
             location /api/companies       { proxy_pass http://identity; }
