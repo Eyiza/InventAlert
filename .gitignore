@@ -90,3 +90,14 @@ docker-compose.override.yml
 env.properties
 SENIOR_DEV_HANDOFF.md
 follow-up.md
+
+# Local notes and presentation drafts
+notes.md
+e
+deploy.sh
+docs/presentation/
+ekofresh_products.csv
+pharma_products.csv
+products_ekofresh.csv
+products_pharma.csv
+products_template*.csv
