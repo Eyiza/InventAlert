@@ -40,6 +40,16 @@ INTEGRATION_PLAN.md
 CUSTOMER_PRESENTATION.md
 BUSINESS_EDGE_CASES_AND_RISKS.md
 PRACTICAL_SOLUTIONS_FOR_EDGE_CASES.md
+SENIOR_DEV_HANDOFF.md
+follow-up.md
+SEED_USERS.md
+sequential_plan.md
+CODEBASE_EXPLANATION.md
+01_feedback_and_corrections.md
+02_v1_delivered.md
+03_v2_comprehensive_plans.md
+04_next_presentation_structure.md
+usp.md
 HANDOVER.md
 
 # Maven build output
@@ -106,8 +116,3 @@ logs/
 docker-compose.override.yml
 
 env.properties
-SENIOR_DEV_HANDOFF.md
-follow-up.md
-SEED_USERS.md
-sequential_plan.md
-CODEBASE_EXPLANATION.md

@@ -7,8 +7,12 @@ import com.inventalert.inventoryService.exception.StockNotChangedException;
 import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.kafka.AlertEventProducer;
 import com.inventalert.inventoryService.model.AlertStatus;
+import com.inventalert.inventoryService.model.Product;
 import com.inventalert.inventoryService.model.RestockAlert;
+import com.inventalert.inventoryService.model.Warehouse;
+import com.inventalert.inventoryService.repository.ProductRepository;
 import com.inventalert.inventoryService.repository.RestockAlertRepository;
+import com.inventalert.inventoryService.repository.WarehouseRepository;
 import com.inventalert.inventoryService.service.RestockAlertService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +31,8 @@ public class RestockAlertServiceImpl implements RestockAlertService {
 
     private final RestockAlertRepository alertRepository;
     private final StockLevelRepository stockLevelRepository;
+    private final ProductRepository productRepository;
+    private final WarehouseRepository warehouseRepository;
     private final AlertEventProducer alertEventProducer;
     private final JdbcTemplate jdbcTemplate;
 
@@ -50,7 +56,7 @@ public class RestockAlertServiceImpl implements RestockAlertService {
         alertEventProducer.publishAlertCreated(
                 companyId, saved.getId(), productId, warehouseId, companyId, stockAtAlert, threshold);
 
-        notifyProcurementOfficers(companyId, warehouseId, saved.getId(), stockAtAlert, threshold);
+        notifyProcurementOfficers(companyId, productId, warehouseId, saved.getId(), stockAtAlert, threshold);
         return saved;
     }
 
@@ -114,9 +120,23 @@ public class RestockAlertServiceImpl implements RestockAlertService {
         alertRepository.save(alert);
     }
 
-    private void notifyProcurementOfficers(String companyId, String warehouseId,
+    private void notifyProcurementOfficers(String companyId, String productId, String warehouseId,
                                              String alertId, int stockAtAlert, int threshold) {
         try {
+            Product product = productRepository.findByIdAndIsActiveTrue(productId).orElse(null);
+            Warehouse warehouse = warehouseRepository.findByIdAndIsActiveTrue(warehouseId).orElse(null);
+
+            String productLabel = product != null
+                    ? product.getName() + " (SKU: " + product.getSku() + ")"
+                    : productId;
+            String warehouseLabel = warehouse != null ? warehouse.getName() : warehouseId;
+            String unit = product != null ? product.getUnitOfMeasure() : "units";
+
+            String message = "Low stock alert — " + productLabel + " at " + warehouseLabel
+                    + " has dropped to " + stockAtAlert + " " + unit
+                    + " (threshold: " + threshold + " " + unit
+                    + "). Please raise a purchase order immediately.";
+
             String sql = "SELECT u.id, u.email FROM " + identityDbName + ".User u " +
                          "JOIN " + identityDbName + ".WarehouseAssignment wa ON wa.userId = u.id " +
                          "WHERE wa.warehouseId = ? AND wa.companyId = ? " +
@@ -128,8 +148,7 @@ public class RestockAlertServiceImpl implements RestockAlertService {
                         (String) officer.get("id"),
                         (String) officer.get("email"),
                         "RESTOCK_ALERT",
-                        "Low stock alert: stock has dropped to " + stockAtAlert
-                                + " (threshold: " + threshold + "). Immediate restocking may be required.",
+                        message,
                         alertId);
             }
         } catch (Exception e) {

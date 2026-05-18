@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +26,6 @@ public class VelocityCalculationServiceImpl implements VelocityCalculationServic
     private final StockLevelRepository stockLevelRepository;
 
     @Override
-    @Async
     @Retryable(retryFor = ObjectOptimisticLockingFailureException.class,
                maxAttempts = 3, backoff = @Backoff(delay = 50, multiplier = 2))
     @Transactional
