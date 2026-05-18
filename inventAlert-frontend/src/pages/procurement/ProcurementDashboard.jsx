@@ -628,11 +628,13 @@ export default function ProcurementDashboard() {
   const { warehouseId } = useSelector(s => s.auth)
   const { data: alerts = [] } = useGetAlertsQuery()
   const { data: warehouses = [] } = useGetWarehousesQuery()
+  const { data: stockLevels = [] } = useGetStockByWarehouseQuery(warehouseId, { skip: !warehouseId, pollingInterval: 30000 })
   const [activeTab, setActiveTab] = useState('alerts')
 
   const myWarehouse = warehouses.find(w => w.id === warehouseId)
   const openAlerts      = alerts.filter(a => a.status === 'OPEN').length
   const ordersInFlight  = alerts.filter(a => a.status === 'ORDER_PLACED').length
+  const criticalStock   = stockLevels.filter(sl => sl.currentStock < sl.threshold).length
 
   const navItems = [
     {
@@ -640,7 +642,7 @@ export default function ProcurementDashboard() {
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
     },
     {
-      id: 'stock', label: 'Stock Overview', badge: 0,
+      id: 'stock', label: 'Stock Overview', badge: criticalStock,
       icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 6v12M14 6v12M5 6h14a1 1 0 011 1v10a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1z" /></svg>,
     },
     {
