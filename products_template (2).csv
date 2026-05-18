@@ -1,0 +1,4 @@
+name,sku,unitOfMeasure,defaultThreshold
+Industrial Laptop,LAP-001,units,20
+Office Chair,CHR-002,units,15
+Printer Ink Cartridge,INK-003,boxes,50

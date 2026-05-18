@@ -1,0 +1,21 @@
+name,sku,unitOfMeasure,defaultThreshold
+Paracetamol 500mg Tablets (100s),PHA-001,packs,200
+Amoxicillin 250mg Capsules (30s),PHA-002,packs,150
+Ibuprofen 400mg Tablets (24s),PHA-003,packs,180
+Vitamin C 1000mg Effervescent (20s),PHA-004,tubes,120
+Omeprazole 20mg Capsules (28s),PHA-005,packs,100
+Cetirizine 10mg Tablets (30s),PHA-006,packs,130
+Metformin 500mg Tablets (60s),PHA-007,packs,90
+Salbutamol Inhaler 100mcg,PHA-008,units,60
+Antiseptic Wound Spray 100ml,PHA-009,bottles,80
+Surgical Latex Gloves Medium (100s),PHA-010,boxes,250
+Sterile Gauze Dressing 10x10cm,PHA-011,packs,300
+Disposable Syringes 5ml (50s),PHA-012,boxes,200
+Oral Rehydration Salts Sachets (10s),PHA-013,packs,160
+Multivitamin Tablets (60s),PHA-014,bottles,140
+Zinc Supplement 20mg (30s),PHA-015,packs,110
+Alcohol-Based Hand Sanitiser 500ml,PHA-016,bottles,150
+Digital Thermometer,PHA-017,units,50
+Blood Pressure Monitor,PHA-018,units,20
+Bandage Roll 7.5cm x 5m,PHA-019,rolls,200
+Eye Drops Lubricating 10ml,PHA-020,bottles,90

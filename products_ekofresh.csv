@@ -1,0 +1,21 @@
+name,sku,unitOfMeasure,defaultThreshold
+Fresh Tomatoes,EKO-TOM-001,kg,50
+Red Onions,EKO-ONI-002,kg,40
+Fresh Spinach,EKO-SPN-003,bundles,30
+Ripe Plantain,EKO-PLT-004,bunches,25
+Sweet Potatoes,EKO-SWP-005,kg,45
+Fresh Ginger,EKO-GNG-006,kg,20
+Garlic Bulbs,EKO-GRL-007,kg,15
+Cucumber,EKO-CUC-008,kg,30
+Fresh Pepper (Tatashe),EKO-PPR-009,kg,35
+Waterleaf,EKO-WTL-010,bundles,40
+Ugu (Fluted Pumpkin Leaves),EKO-UGU-011,bundles,35
+Fresh Okra,EKO-OKR-012,kg,25
+Bitter Leaf,EKO-BTL-013,bundles,20
+Carrots,EKO-CAR-014,kg,40
+Fresh Corn,EKO-CRN-015,pieces,60
+Scotch Bonnet Pepper,EKO-SCB-016,kg,20
+Cabbage,EKO-CAB-017,heads,30
+Green Beans,EKO-GRB-018,kg,25
+Fresh Mushrooms,EKO-MSH-019,kg,15
+Avocado Pear,EKO-AVO-020,pieces,40
