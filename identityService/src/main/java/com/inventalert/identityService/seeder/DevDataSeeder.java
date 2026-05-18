@@ -65,17 +65,18 @@ public class DevDataSeeder implements ApplicationRunner {
                 .build());
         companyEventProducer.publishCompanyCreated(id, name, "admin@" + domain);
 
-        user(id, "admin@"   + domain, Role.ADMIN,               pw, null,          null);
-        user(id, "manager@" + domain, Role.MANAGER,             pw, id, primaryWhId);
-        user(id, "staff1@"  + domain, Role.WAREHOUSE_STAFF,     pw, id, primaryWhId);
-        user(id, "staff2@"  + domain, Role.WAREHOUSE_STAFF,     pw, id, secondaryWhId);
-        user(id, "proc@"    + domain, Role.PROCUREMENT_OFFICER, pw, id, primaryWhId);
+        user(id, "admin@"   + domain, name + " Admin",          Role.ADMIN,               pw, null, null);
+        user(id, "manager@" + domain, name + " Manager",        Role.MANAGER,             pw, id, primaryWhId);
+        user(id, "staff1@"  + domain, "Warehouse Staff 1",      Role.WAREHOUSE_STAFF,     pw, id, primaryWhId);
+        user(id, "staff2@"  + domain, "Warehouse Staff 2",      Role.WAREHOUSE_STAFF,     pw, id, secondaryWhId);
+        user(id, "proc@"    + domain, "Procurement Officer",    Role.PROCUREMENT_OFFICER, pw, id, primaryWhId);
     }
 
-    private void user(String companyId, String email, Role role, String pw,
+    private void user(String companyId, String email, String name, Role role, String pw,
                       String assignCompanyId, String warehouseId) {
         User saved = userRepository.save(User.builder()
                 .companyId(companyId)
+                .name(name)
                 .email(email)
                 .passwordHash(pw)
                 .role(role)

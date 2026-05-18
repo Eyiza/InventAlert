@@ -49,7 +49,7 @@ class UserServiceTest {
     @Test
     void CreateUserAccount_CheckIfSuccessfulTest() {
         String companyId = "company-1";
-        CreateUserRequest request = new CreateUserRequest("bob@acme.com", "password123", Role.MANAGER, "warehouse-1");
+        CreateUserRequest request = new CreateUserRequest("Bob", "bob@acme.com", "password123", Role.MANAGER, "warehouse-1");
 
         when(userRepository.existsByCompanyIdAndEmail(companyId, request.email())).thenReturn(false);
         when(assignmentRepository.findAllByWarehouseIdAndCompanyId("warehouse-1", companyId)).thenReturn(List.of());
@@ -78,7 +78,7 @@ class UserServiceTest {
     @Test
     void CreateUserAccount_DuplicateEmail_CheckIfThrowsExceptionTest() {
         String companyId = "company-1";
-        CreateUserRequest request = new CreateUserRequest("bob@acme.com", "password123", Role.MANAGER, null);
+        CreateUserRequest request = new CreateUserRequest("Bob", "bob@acme.com", "password123", Role.MANAGER, null);
 
         when(userRepository.existsByCompanyIdAndEmail(companyId, request.email())).thenReturn(true);
 
@@ -104,7 +104,7 @@ class UserServiceTest {
 
         assertThat(result).hasSize(3);
         assertThat(result).extracting(UserResponse::email)
-                .containsExactly("a@acme.com", "b@acme.com", "c@acme.com");
+                .containsExactly("b@acme.com", "a@acme.com", "c@acme.com");
     }
 
     @Test
@@ -235,7 +235,6 @@ class UserServiceTest {
         savedAssignment.setWarehouseId(warehouseId);
 
         when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.of(user));
-        when(assignmentRepository.existsByUserIdAndWarehouseId(userId, warehouseId)).thenReturn(false);
         when(assignmentRepository.save(any(WarehouseAssignment.class))).thenReturn(savedAssignment);
 
         AssignmentResponse response = userService.assignToWarehouse(companyId, userId, request);
@@ -269,14 +268,13 @@ class UserServiceTest {
         existingAssignment.setWarehouseId(warehouseId);
 
         when(userRepository.findByIdAndCompanyId(userId, companyId)).thenReturn(Optional.of(user));
-        when(assignmentRepository.existsByUserIdAndWarehouseId(userId, warehouseId)).thenReturn(true);
-        when(assignmentRepository.findAllByUserId(userId)).thenReturn(List.of(existingAssignment));
+        when(assignmentRepository.save(any(WarehouseAssignment.class))).thenReturn(existingAssignment);
 
         AssignmentResponse response = userService.assignToWarehouse(companyId, userId, request);
 
         assertThat(response.id()).isEqualTo("assignment-1");
         assertThat(response.warehouseId()).isEqualTo(warehouseId);
-        verify(assignmentRepository, never()).save(any(WarehouseAssignment.class));
+        verify(assignmentRepository).save(any(WarehouseAssignment.class));
     }
 
     @Test

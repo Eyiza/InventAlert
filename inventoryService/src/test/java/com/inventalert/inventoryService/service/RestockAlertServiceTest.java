@@ -5,7 +5,9 @@ import com.inventalert.inventoryService.exception.AlertNotFoundException;
 import com.inventalert.inventoryService.exception.InvalidStateTransitionException;
 import com.inventalert.inventoryService.model.AlertStatus;
 import com.inventalert.inventoryService.model.RestockAlert;
+import com.inventalert.inventoryService.model.StockLevel;
 import com.inventalert.inventoryService.repository.RestockAlertRepository;
+import com.inventalert.inventoryService.repository.StockLevelRepository;
 import com.inventalert.inventoryService.service.impl.RestockAlertServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,7 +15,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,7 +32,13 @@ class RestockAlertServiceTest {
     private RestockAlertRepository alertRepository;
 
     @Mock
+    private StockLevelRepository stockLevelRepository;
+
+    @Mock
     private com.inventalert.inventoryService.kafka.AlertEventProducer alertEventProducer;
+
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     private RestockAlertServiceImpl alertService;
@@ -99,6 +109,10 @@ class RestockAlertServiceTest {
     void resolve_transitionsOrderPlacedToResolved() {
         openAlert.setStatus(AlertStatus.ORDER_PLACED);
         when(alertRepository.findById("a1")).thenReturn(Optional.of(openAlert));
+        StockLevel level = StockLevel.builder()
+                .productId("p1").warehouseId("w1")
+                .currentStock(50).threshold(10).velocityPerDay(BigDecimal.ZERO).build();
+        when(stockLevelRepository.findByProductIdAndWarehouseId("p1", "w1")).thenReturn(Optional.of(level));
         when(alertRepository.save(any())).thenReturn(openAlert);
 
         alertService.resolve("a1", "user1");
@@ -117,9 +131,9 @@ class RestockAlertServiceTest {
 
     @Test
     void list_returnsAllAlerts() {
-        when(alertRepository.findAll()).thenReturn(List.of(openAlert));
+        when(alertRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(openAlert));
 
-        List<RestockAlertResponse> result = alertService.list();
+        List<RestockAlertResponse> result = alertService.list(null);
 
         assertThat(result).hasSize(1);
     }

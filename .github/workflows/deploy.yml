@@ -1,0 +1,203 @@
+name: CI / CD — InventAlert
+
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+    branches: [main, production]
+
+# Cancel any in-flight run for the same ref so pushes don't queue up
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: eu-west-1
+  CLUSTER_NAME: inventalert-cluster
+  NAMESPACE: inventalert-prod
+  JAVA_VERSION: "25"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 — CI: compile all services on every push and every PR
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  ci:
+    name: Build & Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Run unit tests
+        run: |
+          for dir in identityService inventoryService analyticsService notificationService; do
+            echo "▶ Testing $dir"
+            (cd "$dir" && mvn test -q)
+          done
+
+      - name: Package all services
+        run: |
+          for dir in identityService inventoryService analyticsService notificationService; do
+            echo "▶ Packaging $dir"
+            (cd "$dir" && mvn package -DskipTests -q)
+          done
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 2 — Deploy: build images and roll out to EKS (production branch only)
+  # ───────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/production' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Short 8-char SHA used as the immutable image tag for this release
+      - name: Set image tag
+        id: vars
+        run: echo "IMAGE_TAG=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      # ── Build JARs ──────────────────────────────────────────────────────────
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build JARs
+        run: |
+          for dir in identityService inventoryService analyticsService notificationService; do
+            echo "▶ Building JAR: $dir"
+            (cd "$dir" && mvn package -DskipTests -q)
+          done
+
+      # ── AWS / ECR ──────────────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Docker build & push ────────────────────────────────────────────────
+      - name: Build and push Docker images
+        env:
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
+        run: |
+          # Array of "sourceDir:ecr-repo-suffix" pairs — no associative arrays
+          # needed so this works with any POSIX shell.
+          services=(
+            "identityService:identity-service"
+            "inventoryService:inventory-service"
+            "analyticsService:analytics-service"
+            "notificationService:notification-service"
+          )
+          for entry in "${services[@]}"; do
+            dir="${entry%%:*}"
+            svc="${entry##*:}"
+            repo="$ECR_URI/inventalert-$svc"
+            echo "▶ Building $svc → $repo:$IMAGE_TAG"
+            docker build -t "$repo:$IMAGE_TAG" -t "$repo:latest" "./$dir"
+            docker push "$repo:$IMAGE_TAG"
+            docker push "$repo:latest"
+          done
+
+      # ── Kubernetes ─────────────────────────────────────────────────────────
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ env.CLUSTER_NAME }}" \
+            --region "${{ env.AWS_REGION }}"
+
+      - name: Apply k8s manifests
+        env:
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          for manifest in \
+            k8s/identity-deployment.yaml \
+            k8s/inventory-deployment.yaml \
+            k8s/analytics-deployment.yaml \
+            k8s/notification-deployment.yaml \
+            k8s/nginx-deployment.yaml; do
+            sed "s|<ECR_URI>|${ECR_URI}|g" "$manifest" | kubectl apply -f -
+          done
+
+      # Pin each container to the exact SHA tag (not :latest) so rollbacks
+      # are deterministic and we know exactly which commit is running.
+      - name: Pin images to SHA tag
+        env:
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.vars.outputs.IMAGE_TAG }}
+        run: |
+          services=(
+            "identity-service:identity-service"
+            "inventory-service:inventory-service"
+            "analytics-service:analytics-service"
+            "notification-service:notification-service"
+          )
+          for entry in "${services[@]}"; do
+            deploy="${entry%%:*}"
+            svc="${entry##*:}"
+            kubectl set image deployment/"$deploy" \
+              "$deploy=$ECR_URI/inventalert-$svc:$IMAGE_TAG" \
+              -n "${{ env.NAMESPACE }}"
+          done
+
+      - name: Wait for rollout
+        id: rollout
+        run: |
+          for deploy in identity-service inventory-service analytics-service notification-service; do
+            echo "▶ Waiting for $deploy..."
+            kubectl rollout status deployment/"$deploy" \
+              -n "${{ env.NAMESPACE }}" --timeout=480s
+          done
+
+      # If the rollout timed out or a pod crashed, undo to the previous revision
+      - name: Rollback on failure
+        if: failure() && steps.rollout.conclusion == 'failure'
+        run: |
+          echo "Rollout failed — rolling back..."
+          for deploy in identity-service inventory-service analytics-service notification-service; do
+            kubectl rollout undo deployment/"$deploy" -n "${{ env.NAMESPACE }}" || true
+          done
+
+      # ── Frontend → S3 ──────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: inventAlert-frontend/package-lock.json
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
+          VITE_CLOUDINARY_UPLOAD_PRESET: ${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
+        run: |
+          cd inventAlert-frontend
+          npm ci
+          npm run build
+
+      - name: Sync frontend to S3
+        run: |
+          aws s3 sync inventAlert-frontend/dist/ \
+            s3://${{ secrets.S3_BUCKET }} --delete

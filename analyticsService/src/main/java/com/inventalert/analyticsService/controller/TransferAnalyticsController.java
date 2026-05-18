@@ -3,7 +3,10 @@ package com.inventalert.analyticsService.controller;
 import com.inventalert.analyticsService.dto.response.TransferSummaryResponse;
 import com.inventalert.analyticsService.security.model.JwtUser;
 import com.inventalert.analyticsService.service.AnalyticsQueryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
+@Tag(name = "Transfer Analytics", description = "Inter-warehouse transfer efficiency: completion rate, average distance, and status distribution")
 @RestController
 @RequestMapping("/api/analytics/transfers")
 @RequiredArgsConstructor
@@ -24,6 +28,8 @@ public class TransferAnalyticsController {
 
     private final AnalyticsQueryService queryService;
 
+    @Operation(summary = "Transfer summary", description = "Total transfers suggested, approved, completed, and rejected for the period. Includes average distance (km) across completed transfers.")
+    @ApiResponse(responseCode = "200", description = "Transfer summary")
     @GetMapping("/summary")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<TransferSummaryResponse> getSummary(

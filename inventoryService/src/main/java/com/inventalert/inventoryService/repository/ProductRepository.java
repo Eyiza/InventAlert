@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, String> {
-    List<Product> findByIsActiveTrue();
+    List<Product> findByIsActiveTrueOrderByNameAsc();
     Optional<Product> findBySkuAndIsActiveTrue(String sku);
     Optional<Product> findByIdAndIsActiveTrue(String id);
     boolean existsBySku(String sku);

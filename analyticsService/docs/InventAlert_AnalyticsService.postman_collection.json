@@ -1,0 +1,548 @@
+{
+  "info": {
+    "name": "InventAlert — Analytics Service",
+    "description": "All endpoints for the AnalyticsService running on http://localhost:8084.\n\nAll analytics endpoints are read-only — data enters ClickHouse via Kafka, not through this API.\n\nWorkflow:\n1. Log in via the Identity Service (port 8081) and paste the returned token into the 'token' collection variable.\n2. The token's role determines what you can see:\n   - ADMIN / MANAGER   : stock, alert, transfer, notification analytics\n   - PROCUREMENT_OFFICER: alert analytics only\n   - SUPER_ADMIN        : company onboarding analytics only\n3. All date params accept ISO-8601 instants, e.g. 2025-01-01T00:00:00Z\n   Omit 'from' and 'to' to default to the last 30 days.\n\nAll endpoints require a Bearer JWT token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "token",   "value": "" },
+    { "key": "from",    "value": "2025-01-01T00:00:00Z" },
+    { "key": "to",      "value": "2025-12-31T23:59:59Z" }
+  ],
+  "item": [
+    {
+      "name": "Stock Analytics",
+      "item": [
+        {
+          "name": "Stock Summary (last 30 days)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has expected fields', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('totalIntake');",
+                  "  pm.expect(body).to.have.property('totalOutbound');",
+                  "  pm.expect(body).to.have.property('netChange');",
+                  "  pm.expect(body.totalIntake).to.be.a('number').and.at.least(0);",
+                  "  pm.expect(body.totalOutbound).to.be.a('number').and.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Stock Summary (custom date range)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has summary fields', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('totalIntake');",
+                  "  pm.expect(body).to.have.property('totalOutbound');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/summary?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "summary"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Top Moving Products (outbound, top 10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At most 10 results', () => pm.expect(pm.response.json().length).to.be.at.most(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/top-products?type=OUTBOUND_SALE&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "top-products"],
+              "query": [
+                { "key": "type",  "value": "OUTBOUND_SALE" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Top Moving Products (intake, top 5)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "pm.test('At most 5 results', () => pm.expect(pm.response.json().length).to.be.at.most(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/top-products?type=INTAKE&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "top-products"],
+              "query": [
+                { "key": "type",  "value": "INTAKE" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Daily Movement Trend",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));",
+                  "if (pm.response.json().length > 0) {",
+                  "  pm.test('Each row has date and quantity fields', () => {",
+                  "    const row = pm.response.json()[0];",
+                  "    pm.expect(row).to.have.property('date');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/movements/trend?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "movements", "trend"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Movement Breakdown by Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/movements/by-warehouse?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "movements", "by-warehouse"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alert Analytics",
+      "item": [
+        {
+          "name": "Alert Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has expected fields', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('totalAlerts');",
+                  "  pm.expect(body).to.have.property('resolvedAlerts');",
+                  "  pm.expect(body.totalAlerts).to.be.a('number').and.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/alerts/summary?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "alerts", "summary"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Alert Summary (last 30 days, no date params)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has totalAlerts field', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('totalAlerts');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/alerts/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "alerts", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Alerts by Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Response is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/alerts/by-warehouse?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "alerts", "by-warehouse"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transfer Analytics",
+      "item": [
+        {
+          "name": "Transfer Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has expected fields', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('totalSuggested');",
+                  "  pm.expect(body).to.have.property('totalCompleted');",
+                  "  pm.expect(body.totalSuggested).to.be.a('number').and.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/transfers/summary?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "transfers", "summary"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Transfer Summary (last 30 days)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has totalSuggested field', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('totalSuggested');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/transfers/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "transfers", "summary"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Company Analytics",
+      "item": [
+        {
+          "name": "Company Onboarding Summary (6 months)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has expected fields', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('totalOnboarded');",
+                  "  pm.expect(body).to.have.property('totalOffboarded');",
+                  "  pm.expect(body.totalOnboarded).to.be.a('number').and.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/companies/summary?months=6",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "companies", "summary"],
+              "query": [
+                { "key": "months", "value": "6" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Company Onboarding Summary (12 months)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has totalOnboarded', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('totalOnboarded');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/companies/summary?months=12",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "companies", "summary"],
+              "query": [
+                { "key": "months", "value": "12" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification Analytics",
+      "item": [
+        {
+          "name": "Notification Delivery Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has expected fields', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('totalSent');",
+                  "  pm.expect(body.totalSent).to.be.a('number').and.at.least(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/notifications/summary?from={{from}}&to={{to}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "notifications", "summary"],
+              "query": [
+                { "key": "from", "value": "{{from}}" },
+                { "key": "to",   "value": "{{to}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Notification Delivery Summary (last 30 days)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => pm.expect(pm.response.code).to.eql(200));",
+                  "pm.test('Has totalSent field', () => {",
+                  "  pm.expect(pm.response.json()).to.have.property('totalSent');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/notifications/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "notifications", "summary"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth Guard",
+      "item": [
+        {
+          "name": "Stock Summary — No Token (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 401', () => pm.expect(pm.response.code).to.eql(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Company Summary — ADMIN Token (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 403 — only SUPER_ADMIN allowed', () => pm.expect(pm.response.code).to.eql(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/companies/summary",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "companies", "summary"]
+            }
+          }
+        },
+        {
+          "name": "Stock Summary — Invalid Date Range (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 — from is after to', () => pm.expect(pm.response.code).to.eql(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}" }] },
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/stock/summary?from=2025-12-31T00:00:00Z&to=2025-01-01T00:00:00Z",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "stock", "summary"],
+              "query": [
+                { "key": "from", "value": "2025-12-31T00:00:00Z" },
+                { "key": "to",   "value": "2025-01-01T00:00:00Z" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

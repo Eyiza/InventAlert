@@ -1,69 +1,114 @@
-***InventAlert***  
-A multi-warehouse company manages stock levels across locations. Warehouse staff can record stock intake and dispatch events for products. The system tracks current stock levels per product per warehouse. When stock for any product falls below a configurable reorder threshold, the system automatically raises a restock alert and notifies the relevant procurement officer. Managers can view current stock levels, movement history, and pending alerts. Admins configure products, warehouses, thresholds, and user assignments. The system must handle stock adjustments and reconciliations without creating negative stock levels.  
-Actors: WarehouseStaff, ProcurementOfficer, Manager, Admin  
-Core Entities: Product, Warehouse, StockLevel, StockMovement, RestockAlert, User  
-Natural Kafka Trigger: Stock falls below threshold RestockAlertCreated event notifies →→procurement officer
+# InventAlert
 
-***Functional Requirements***
+A multi-tenant, multi-warehouse inventory management platform built with a microservices architecture. Companies self-register, manage warehouses and products, track real-time stock levels, and receive automated low-stock alerts with intelligent transfer suggestions between warehouses.
 
-1. A company shall be able to self-register their inventory system which creates a default admin user.  
-2. Registered users shall be able to log in with email and password  
-3. An Admin shall be able to create user accounts within their tenant and assign roles: Admin, Manager, WarehouseStaff, ProcurementOfficer.  
-4. An Admin shall be able to assign WarehouseStaff users to one or more specific warehouses.  
-5. An Admin should be able to manage warehouses, manage products and update user roles.  
-6. WarehouseStaff shall be able to record stock intake (goods received) specifying product, quantity, and reference number. Stock level shall increase immediately.  
-7. WarehouseStaff shall be able to record outbound sales (goods leaving the company) specifying product and quantity. The system shall reject the movement if it would result in negative stock.  
-8. When stock falls below the reorder threshold, the system should send an alert.  
-9. WarehouseStaff shall be able to submit a reconciliation request when physical count differs from system count, specifying the discrepancy and a reason.  
-10. A Manager shall be able to approve or reject reconciliation requests. Stock levels shall only adjust upon approval. All reconciliations shall retain a full audit trail.
+---
 
-***Non functional Requirements***
+## Architecture Overview
 
-1. Security on all actions.  
-2. Reconciliation adjustments shall require manager approval before affecting stock. No staff member can self-approve.  
-3. Performance \- less than 200ms latency  
-   
+```
+React / Vite Frontend
+        │
+        ▼
+  Nginx API Gateway (port 80)
+        │
+   ┌────┴──────────────────────────┐
+   │                               │
+   ▼                               ▼
+identityService              inventoryService
+(users, auth, JWT)           (stock, alerts, transfers)
+        │                               │
+        └──────────┬────────────────────┘
+                   │  Kafka (event bus)
+           ┌───────┴────────┐
+           ▼                ▼
+  notificationService   analyticsService
+  (Redis, WebSocket,    (ClickHouse,
+   email)               reports)
+```
 
-***Actors***
+All four services share one JWT secret, validate tokens independently, and communicate exclusively via Kafka — no direct service-to-service HTTP calls.
 
-- Admin  
-- Manager  
-- Warehouse Staff  
-- Procurement Officer  
-- Invent Alert Application
+---
 
-***Entities***
+## Tech Stack
 
-- Tenant  
-- User  
-- WarehouseAssignment  
-- Warehouse  
-- Product  
-- StockLevel  
-- StockMovement  
-- RestockAlert  
-- Reconciliation  
-- Notification
+| Layer | Technology |
+|---|---|
+| Backend services | Java 25, Spring Boot 4 |
+| Frontend | React 18, Vite, Redux Toolkit Query |
+| Auth | JWT (RS256 shared secret), Spring Security |
+| Primary DB | MySQL 8 (per-company schema isolation) |
+| Migrations | Flyway |
+| Cache / Notifications | Redis (sorted sets + hashes) |
+| Messaging | Apache Kafka |
+| Analytics | ClickHouse |
+| API Gateway | Nginx |
+| Maps / Distance | Google Maps Distance Matrix API (Haversine fallback) |
+| Containerisation | Docker, Docker Compose |
+| CI / CD | GitHub Actions → Amazon ECR → Amazon EKS |
+| Frontend hosting | Amazon S3 |
+| Monitoring | Prometheus + Grafana |
 
-***Design Diagrams:***
+---
 
-- ERD  
-- Use case  
-- Activity   
-- UML  
-- Sequence
+## Services
 
-***Additional:***
+### identityService (port 8081)
+Owns all identity and access concerns.
 
-- Batch upload products  
-- Platform customer care can be alerted of issues with the platform like the DeskFlow 
+- Company self-registration (creates default Admin user + publishes `company.created` Kafka event)
+- JWT login for all roles; separate super-admin login with no company scope
+- Password reset via email token
+- User CRUD, role management, warehouse assignments
+- Company suspension / reactivation
+- Publishes `company.offboarded` on suspension
 
-Future Core Entities:
+### inventoryService (port 8082)
+Contains the core business logic. Each company's data lives in an isolated MySQL schema (`company_<id>`).
 
-- TransferSuggestion  
-- DailyMovementSummary  
-- AlertFrequency  
-- TransferEfficiency
+- Warehouse management with Google Maps address autocomplete and lat/lng coordinates
+- Product catalogue with SKU, unit of measure, and per-warehouse thresholds
+- Stock movements: **INTAKE**, **OUTBOUND\_SALE**, **TRANSFER\_IN**, **TRANSFER\_OUT**
+- Negative stock guard on every outbound movement
+- CSV bulk intake import with row-level validation
+- Velocity tracking (units sold per day, days until empty)
+- **Threshold check** after every outbound sale:
+  - Finds the nearest surplus warehouse via Google Maps (Haversine fallback, configurable 150 km cap)
+  - Creates a transfer suggestion if a viable donor exists
+  - Falls back to a restock alert otherwise
+- Transfer lifecycle: `SUGGESTED → APPROVED → IN_TRANSIT → COMPLETED` (or `REJECTED` / `DELIVERY_REJECTED`)
+- Reconciliation workflow: staff submit discrepancy → manager approves → stock adjusts (self-approval blocked)
+- Optimistic locking + `@Retryable` on all stock-mutating operations
+
+### notificationService (port 8083)
+Event-driven notification delivery.
+
+- Consumes Kafka events from all services
+- Idempotent processing (Redis SET NX on `eventId`)
+- Stores notifications in Redis sorted sets (epoch-millis score = insertion order paging)
+- Unread count per user maintained as a Redis counter
+- Optional email delivery via SMTP (with retry)
+- Live push via STOMP/WebSocket; JWT verified on CONNECT frame
+
+### analyticsService (port 8084)
+Append-only event store for reporting.
+
+- Consumes all Kafka topics and writes to ClickHouse
+- Idempotent ingestion (existsByEventId guard before every insert)
+- Exposes aggregated query endpoints: stock summaries, alert trends, transfer status breakdown, company growth, notification volume
+
+---
+
+## Key Features
+
+- **Multi-tenancy** — each company gets its own MySQL schema; JWT `companyId` claim routes every request to the correct tenant
+- **RBAC** — four roles (Admin, Manager, Warehouse Staff, Procurement Officer) enforced at method level via `@PreAuthorize`
+- **Transfer suggestions** — system finds the cheapest internal restock before escalating to procurement
+- **Real-time notifications** — WebSocket push + email for alerts, transfers, and password resets
+- **Analytics dashboard** — charts for stock movement history, alert frequency, transfer efficiency, and company growth
+- **Reconciliation audit trail** — every stock correction is attributed to a reporter and an approver
+- **Monitoring** — Prometheus metrics scraped from all services; pre-built Grafana dashboards
 
 ---
 
@@ -71,15 +116,13 @@ Future Core Entities:
 
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Compose v2)
-- [Node.js 20+](https://nodejs.org/) and npm (for the frontend)
-- Java 21+ and Maven (only needed for Option B — local service dev)
-
----
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) with Compose v2
+- [Node.js 20+](https://nodejs.org/) and npm
+- Java 25 and Maven (only for local service development)
 
 ### Environment Setup
 
-Create a `.env` file in the project root by copying `.env.example` and filling in every value:
+Copy `.env.example` to `.env` in the project root and fill in every value:
 
 ```env
 # MySQL
@@ -93,7 +136,7 @@ MYSQL_INVENTORY_PASSWORD=inventory_password
 # JWT — must be identical across all 4 services (minimum 32 characters)
 JWT_SECRET=your-very-secret-key-at-least-32-chars
 
-# Super Admin — used only on first startup to seed the platform admin account
+# Super Admin — seeds the platform admin on first startup
 SUPER_ADMIN_EMAIL=admin@example.com
 SUPER_ADMIN_PASSWORD=StrongPassword123!
 SUPER_ADMIN_ID=superadmin-fixed-uuid-0001
@@ -109,11 +152,11 @@ SMTP_PASSWORD=your_smtp_password
 MAIL_FROM=noreply@inventalert.com
 NOTIFICATION_TTL_DAYS=90
 
-# CORS + Frontend URL (used by backend services)
+# CORS + Frontend URL
 CORS_ALLOWED_ORIGINS=http://localhost
 FRONTEND_URL=http://localhost
 
-# Optional — leave empty to use Haversine fallback for distance calculation
+# Google Maps — leave empty to use Haversine fallback for distance calculation
 GOOGLE_MAPS_API_KEY=
 ```
 
@@ -121,79 +164,76 @@ Create `inventAlert-frontend/.env` for the frontend:
 
 ```env
 VITE_API_BASE_URL=http://localhost
+VITE_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
 VITE_CLOUDINARY_UPLOAD_PRESET=your_upload_preset
-VITE_CLOUDINARY_API_KEY=your_api_key
-VITE_CLOUDINARY_API_SECRET=your_api_secret
-VITE_GOOGLE_MAPS_API_KEY=
 ```
 
-> **Note:** Both `.env` files are listed in `.gitignore` and must never be committed.
+> Both `.env` files are listed in `.gitignore` and must never be committed.
 
 ---
 
-### Option A — Full Docker Stack (recommended for end-to-end testing)
+### Option A — Full Docker Stack (recommended)
 
-All backend services and infrastructure run inside Docker. The frontend runs locally and connects through Nginx on port 80.
+All backend services and infrastructure run in Docker. The frontend runs locally and proxies through Nginx on port 80.
 
 ```bash
 # 1. Start infrastructure (MySQL, Redis, Kafka, ClickHouse)
 docker compose up -d
 
-# 2. Wait ~30 seconds for health checks, then start app services + Nginx
+# 2. Wait ~30 s for health checks, then start app services + Nginx
 docker compose --profile app up -d
 
-# To rebuild services after code changes:
+# Rebuild after code changes
 docker compose --profile app up -d --build
-docker compose --profile app up -d --build identity-service # rebuild just one service if needed
-docker compose --profile app up --build identity-service inventory-service notification-service # rebuild multiple services
+docker compose --profile app up -d --build identity-service   # single service
 
-# 3. Start the frontend (not included in Docker)
+# 3. Start the frontend
 cd inventAlert-frontend
-npm install        # first time only
+npm install      # first time only
 npm run dev
 ```
 
-Open the app at **http://localhost:5173** — all API calls route through Nginx at `http://localhost`.
-
-To stop everything:
+Open **http://localhost:5173** — all API calls route through Nginx at `http://localhost`.
 
 ```bash
+# Tear down
 docker compose --profile app down
-# also stop infrastructure if you want: docker compose down -v
+docker compose down -v   # also removes volumes
 ```
 
 ---
 
 ### Option B — Local Development (Docker infra + local services)
 
-Run infrastructure in Docker but each Spring Boot service locally, useful for faster iteration with hot-reload.
-
 ```bash
-# Terminal 1 — Infrastructure only
+# Terminal 1 — infrastructure only
 docker compose up -d
 
-# Terminal 2 — Identity Service (port 8081)
-cd identityService && ./mvnw spring-boot:run
+# Terminal 2-5 — one per service
+cd identityService    && ./mvnw spring-boot:run   # :8081
+cd inventoryService   && ./mvnw spring-boot:run   # :8082
+cd notificationService && ./mvnw spring-boot:run  # :8083
+cd analyticsService   && ./mvnw spring-boot:run   # :8084
 
-# Terminal 3 — Inventory Service (port 8082)
-cd inventoryService && ./mvnw spring-boot:run
-
-# Terminal 4 — Notification Service (port 8083)
-cd notificationService && ./mvnw spring-boot:run
-
-# Terminal 5 — Analytics Service (port 8084)
-cd analyticsService && ./mvnw spring-boot:run
-
-# Terminal 6 — Frontend (port 5173)
-cd inventAlert-frontend && npm run dev
+# Terminal 6 — frontend
+cd inventAlert-frontend && npm run dev             # :5173
 ```
 
-In this mode, set `VITE_API_BASE_URL=http://localhost:8081` in `inventAlert-frontend/.env` (or leave it unset — the fallback is `http://localhost:8081`).
+Set `VITE_API_BASE_URL=http://localhost` in `inventAlert-frontend/.env` (routes through Nginx) or point directly at a service port during single-service debugging.
 
 ---
 
-### Service & Port Reference
+### First Run Notes
+
+- **Super Admin** — the Identity Service seeds a platform-level super admin on first startup using `SUPER_ADMIN_*` env vars. This only runs once if no companies exist.
+- **Database migrations** — Flyway runs V1–V8 migrations automatically when the Identity Service starts. The Inventory Service creates per-company schemas programmatically on company registration.
+- **ClickHouse tables** — initialised from `docker/clickhouse-init.sql` on first container start.
+- **Seed data** — set `app.seed-data=true` in `inventoryService/src/main/resources/application.properties` to load demo companies, warehouses, products, and stock levels on startup.
+
+---
+
+## Service & Port Reference
 
 | Component | URL / Port |
 |---|---|
@@ -207,25 +247,65 @@ In this mode, set `VITE_API_BASE_URL=http://localhost:8081` in `inventAlert-fron
 | Redis | localhost:6379 |
 | Kafka | localhost:9092 |
 | ClickHouse HTTP | localhost:8123 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
 
 ---
 
-### API Gateway Routing (Nginx)
+## API Gateway Routing (Nginx)
 
-All frontend requests go through `http://localhost`. Nginx routes by path prefix:
-
-| Path Prefix | Routed To |
+| Path prefix | Routed to |
 |---|---|
-| `/api/auth/*`, `/api/users/*`, `/api/companies/*` | identity-service:8081 |
-| `/api/warehouses/*`, `/api/products/*`, `/api/stock/*`, `/api/movements/*`, `/api/transfers/*`, `/api/reconciliations/*`, `/api/alerts/*` | inventory-service:8082 |
-| `/api/notifications/*` | notification-service:8083 |
-| `/api/analytics/*` | analytics-service:8084 |
-| `/ws/*` | notification-service:8083 (WebSocket) |
+| `/api/auth/*`, `/api/users/*`, `/api/companies/*` | identityService:8081 |
+| `/api/warehouses/*`, `/api/products/*`, `/api/stock/*`, `/api/movements/*`, `/api/transfers/*`, `/api/reconciliations/*`, `/api/alerts/*` | inventoryService:8082 |
+| `/api/notifications/*` | notificationService:8083 |
+| `/api/analytics/*` | analyticsService:8084 |
+| `/ws/*` | notificationService:8083 (WebSocket upgrade) |
 
 ---
 
-### First Run Notes
+## Kafka Topics
 
-- **Super Admin:** On first startup the Identity Service seeds a platform-level super admin using `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, and `SUPER_ADMIN_ID`. This only runs once if no companies exist.
-- **Database migrations:** The Identity Service runs Flyway migrations (V1–V8) automatically on startup. The Inventory Service creates per-company schemas programmatically when a company is registered.
-- **ClickHouse tables:** Initialized from `docker/clickhouse-init.sql` on first container start.
+| Topic | Published by | Consumed by |
+|---|---|---|
+| `company.created` | identityService | inventoryService, analyticsService |
+| `company.offboarded` | identityService | inventoryService, analyticsService |
+| `stock.movement.created` | inventoryService | analyticsService |
+| `restock.alert.created` | inventoryService | notificationService, analyticsService |
+| `transfer.event` | inventoryService | notificationService, analyticsService |
+| `reconciliation.event` | inventoryService | analyticsService |
+| `notification.event` | notificationService | analyticsService |
+| `password.reset.requested` | identityService | notificationService |
+
+---
+
+## CI / CD
+
+Pushes to the `production` branch trigger the GitHub Actions pipeline:
+
+1. **CI** — compiles and unit-tests all four Java services
+2. **Build JARs** — Maven packages each service
+3. **Docker build & push** — images tagged with the short commit SHA and pushed to Amazon ECR
+4. **Deploy** — `kubectl apply` updates the EKS cluster; each deployment is pinned to the SHA tag
+5. **Rollback** — automatic `kubectl rollout undo` if the rollout times out or a pod crashes
+6. **Frontend** — `npm ci && npm run build` (with all `VITE_*` secrets injected) then synced to S3
+
+---
+
+## Running Tests
+
+```bash
+# Identity Service
+cd identityService && mvn test
+
+# Inventory Service
+cd inventoryService && mvn test
+
+# Notification Service
+cd notificationService && mvn test
+
+# Analytics Service
+cd analyticsService && mvn test
+```
+
+Integration tests (AuthControllerTest, InventoryServiceApplicationTests) use **Testcontainers** and require Docker to be running. Unit tests run without Docker.

@@ -19,6 +19,8 @@ import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStreamReader;
@@ -38,6 +40,7 @@ public class MovementServiceImpl implements MovementService {
     private final StockLevelService stockLevelService;
     private final VelocityCalculationService velocityService;
     private final ThresholdCheckService thresholdCheckService;
+    private final RestockAlertService restockAlertService;
     private final StockMovementProducer movementProducer;
     private final ProductRepository productRepository;
 
@@ -70,6 +73,10 @@ public class MovementServiceImpl implements MovementService {
         StockMovement saved = movementRepository.save(movement);
 
         level.setCurrentStock(level.getCurrentStock() + request.getQuantity());
+
+        if (level.getCurrentStock() >= level.getThreshold()) {
+            restockAlertService.autoResolveForProduct(request.getProductId(), request.getWarehouseId());
+        }
 
         movementProducer.publishMovementCreated(
                 companyId, saved.getId(), request.getProductId(),
@@ -123,8 +130,15 @@ public class MovementServiceImpl implements MovementService {
                 companyId, saved.getId(), request.getProductId(),
                 request.getWarehouseId(), MovementType.OUTBOUND_SALE, request.getQuantity());
 
-        velocityService.recalculate(request.getProductId(), request.getWarehouseId());
-        thresholdCheckService.checkThreshold(request.getProductId(), request.getWarehouseId(), companyId);
+        String productId = request.getProductId();
+        String warehouseId = request.getWarehouseId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                velocityService.recalculate(productId, warehouseId);
+                thresholdCheckService.checkThreshold(productId, warehouseId, companyId);
+            }
+        });
 
         return toResponse(saved);
     }
@@ -201,6 +215,10 @@ public class MovementServiceImpl implements MovementService {
                     .referenceId(row.getReferenceNumber()).createdBy(userId).build();
             StockMovement saved = movementRepository.save(movement);
             level.setCurrentStock(level.getCurrentStock() + row.getQuantity());
+
+            if (level.getCurrentStock() >= level.getThreshold()) {
+                restockAlertService.autoResolveForProduct(product.getId(), warehouseId);
+            }
 
             movementProducer.publishMovementCreated(
                     companyId, saved.getId(), product.getId(), warehouseId, MovementType.INTAKE, row.getQuantity());
