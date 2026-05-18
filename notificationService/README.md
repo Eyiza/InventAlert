@@ -149,4 +149,4 @@ WebSocket connection (for real-time push):
 ws://localhost:8083/ws
 ```
 
-Clients must pass a valid JWT as a query parameter or in the `Authorization` header on the WebSocket handshake. The `WebSocketAuthInterceptor` validates the token before allowing the connection.
+Clients must pass a valid JWT as a query parameter or in the `Authorization` header on the WebSocket handshake. The `WebSocketAuthInterceptor` validates the token before allowing the connections.

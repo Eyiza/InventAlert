@@ -1,0 +1,93 @@
+---
+# ── Prometheus ────────────────────────────────────────────────────────────────
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: inventalert-prod
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: identity-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['identity-service:8090']
+
+      - job_name: inventory-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['inventory-service:8090']
+
+      - job_name: notification-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['notification-service:8090']
+
+      - job_name: analytics-service
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['analytics-service:8090']
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: inventalert-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.53.0
+          args:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--storage.tsdb.retention.time=15d'
+            - '--web.enable-lifecycle'
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: inventalert-prod
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+

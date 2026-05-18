@@ -28,6 +28,7 @@ spec:
       containers:
         - name: inventory-service
           image: <ECR_URI>/inventalert-inventory-service:latest
+          imagePullPolicy: Always
           env:
             - name: MYSQL_INVENTORY_HOST
               value: "mysql"
@@ -76,14 +77,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /actuator/health
-              port: 8082
+              port: 8090
             initialDelaySeconds: 45
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /actuator/health
-              port: 8082
+              port: 8090
             initialDelaySeconds: 90
             periodSeconds: 20
 ---
@@ -96,5 +97,6 @@ spec:
   selector:
     app: inventory-service
   ports:
-    - port: 8082
+    - name: http
+      port: 8082
       targetPort: 8082

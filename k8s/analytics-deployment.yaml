@@ -28,6 +28,7 @@ spec:
       containers:
         - name: analytics-service
           image: <ECR_URI>/inventalert-analytics-service:latest
+          imagePullPolicy: Always
           env:
             - name: CLICKHOUSE_HOST
               value: "clickhouse"
@@ -70,14 +71,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /actuator/health
-              port: 8084
+              port: 8090
             initialDelaySeconds: 45
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /actuator/health
-              port: 8084
+              port: 8090
             initialDelaySeconds: 90
             periodSeconds: 20
 ---
@@ -90,5 +91,9 @@ spec:
   selector:
     app: analytics-service
   ports:
-    - port: 8084
+    - name: http
+      port: 8084
       targetPort: 8084
+    - name: management
+      port: 8090
+      targetPort: 8090

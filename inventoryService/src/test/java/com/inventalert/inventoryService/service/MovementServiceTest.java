@@ -15,10 +15,14 @@ import com.inventalert.inventoryService.service.impl.MovementServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -44,6 +48,9 @@ class MovementServiceTest {
 
     @Mock
     private ThresholdCheckService thresholdCheckService;
+
+    @Mock
+    private RestockAlertService restockAlertService;
 
     @Mock
     private StockMovementProducer movementProducer;
@@ -118,12 +125,22 @@ class MovementServiceTest {
         when(stockLevelService.getOrCreate("p1", "w1")).thenReturn(stockLevel);
         when(movementRepository.save(any())).thenReturn(saved);
 
-        StockMovementResponse response = movementService.recordOutboundSale(req, "user1", "w1", "company1");
+        try (MockedStatic<TransactionSynchronizationManager> txMock =
+                     mockStatic(TransactionSynchronizationManager.class)) {
 
-        assertThat(stockLevel.getCurrentStock()).isEqualTo(70);
-        assertThat(response.getId()).isEqualTo("m2");
-        verify(velocityService).recalculate("p1", "w1");
-        verify(thresholdCheckService).checkThreshold("p1", "w1", "company1");
+            ArgumentCaptor<TransactionSynchronization> syncCaptor =
+                    ArgumentCaptor.forClass(TransactionSynchronization.class);
+
+            StockMovementResponse response = movementService.recordOutboundSale(req, "user1", "w1", "company1");
+
+            txMock.verify(() -> TransactionSynchronizationManager.registerSynchronization(syncCaptor.capture()));
+            syncCaptor.getValue().afterCommit();
+
+            assertThat(stockLevel.getCurrentStock()).isEqualTo(70);
+            assertThat(response.getId()).isEqualTo("m2");
+            verify(velocityService).recalculate("p1", "w1");
+            verify(thresholdCheckService).checkThreshold("p1", "w1", "company1");
+        }
     }
 
     @Test

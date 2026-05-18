@@ -3,7 +3,10 @@ package com.inventalert.analyticsService.controller;
 import com.inventalert.analyticsService.dto.response.AlertSummaryResponse;
 import com.inventalert.analyticsService.security.model.JwtUser;
 import com.inventalert.analyticsService.service.AnalyticsQueryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "Alert Analytics", description = "Restock alert trends: total raised, resolved, average resolution time, and per-warehouse breakdowns")
 @RestController
 @RequestMapping("/api/analytics/alerts")
 @RequiredArgsConstructor
@@ -26,6 +30,8 @@ public class AlertAnalyticsController {
 
     private final AnalyticsQueryService queryService;
 
+    @Operation(summary = "Alert summary", description = "Total alerts raised, resolved, and average resolution time. Procurement officers see company-wide; managers see their warehouse only.")
+    @ApiResponse(responseCode = "200", description = "Alert summary")
     @GetMapping("/summary")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','PROCUREMENT_OFFICER')")
     public ResponseEntity<AlertSummaryResponse> getSummary(
@@ -37,6 +43,8 @@ public class AlertAnalyticsController {
         return ResponseEntity.ok(queryService.getAlertSummary(user.getCompanyId(), range[0], range[1], warehouseId));
     }
 
+    @Operation(summary = "Alerts by warehouse", description = "Alert counts broken down by warehouse to identify which locations experience the most stockouts.")
+    @ApiResponse(responseCode = "200", description = "Per-warehouse alert breakdown")
     @GetMapping("/by-warehouse")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','PROCUREMENT_OFFICER')")
     public ResponseEntity<List<Map<String, Object>>> getByWarehouse(
